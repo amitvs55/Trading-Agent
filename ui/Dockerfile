@@ -9,8 +9,12 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+ARG API_BASE_URL=http://localhost:8000
+ENV API_BASE_URL=$API_BASE_URL
+ARG NEXT_PUBLIC_API_URL=
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN npm run build 2>&1 || (echo "BUILD FAILED — see above" && exit 1)
+RUN npm run build
 
 # ── Stage 3: runtime ────────────────────────────────────────────────────────
 FROM node:20-alpine AS runner

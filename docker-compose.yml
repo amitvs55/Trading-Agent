@@ -24,7 +24,7 @@ services:
       - ./logs:/app/logs
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -34,6 +34,8 @@ services:
     build:
       context: ./ui
       dockerfile: Dockerfile
+      args:
+        API_BASE_URL: http://api:8000
     environment:
       - API_BASE_URL=http://api:8000
     ports:

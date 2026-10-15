@@ -1,5 +1,6 @@
 "use client";
 import useSWR from "swr";
+import { API_URL } from "@/lib/utils";
 
 const fetcher = (url: string) => fetch(url).then(r => r.json());
 
@@ -10,7 +11,7 @@ export function useTradeHistory(params?: { limit?: number; offset?: number; tick
   if (params?.ticker)  q.set("ticker", params.ticker);
   if (params?.status)  q.set("status", params.status);
 
-  const url = `/api/history?${q.toString()}`;
+  const url = `${API_URL}/api/history?${q.toString()}`;
   const { data, error, isLoading, mutate } = useSWR(url, fetcher, { refreshInterval: 30_000 });
 
   return {

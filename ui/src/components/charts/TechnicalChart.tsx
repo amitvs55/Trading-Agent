@@ -6,7 +6,7 @@ import {
 } from "recharts";
 import type { TradeProposal } from "@/types/pipeline";
 import type { Candle } from "@/types/pipeline";
-import { formatINR } from "@/lib/utils";
+import { formatINR, API_URL } from "@/lib/utils";
 
 interface Props {
   ticker:   string;
@@ -20,7 +20,7 @@ export function TechnicalChart({ ticker, proposal }: Props) {
   useEffect(() => {
     if (!ticker) return;
     setLoading(true);
-    fetch(`/api/pricehistory/${encodeURIComponent(ticker)}`)
+    fetch(`${API_URL}/api/pricehistory/${encodeURIComponent(ticker)}`)
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d?.candles) setCandles(d.candles); })
       .catch(() => {})
