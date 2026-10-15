@@ -13,9 +13,15 @@ app = FastAPI(
     version="1.0.0",
 )
 
+import os
+
+_raw = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:3001")
+_origins = [o.strip() for o in _raw.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3001", "http://ui:3000"],
+    allow_origins=_origins,
+    allow_origin_regex=r"https://.*\.railway\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
