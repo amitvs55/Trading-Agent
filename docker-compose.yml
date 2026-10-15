@@ -1,6 +1,7 @@
 services:
   tradingagents:
     build: .
+    entrypoint: ["python", "main.py"]
     env_file: .env
     volumes:
       - ./data:/app/data
@@ -13,9 +14,7 @@ services:
     # Usage: docker compose run test
 
   api:
-    build:
-      context: .
-      dockerfile: api/Dockerfile
+    build: .
     env_file: .env
     ports:
       - "8000:8000"

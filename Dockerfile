@@ -8,4 +8,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 RUN mkdir -p data logs
 
-ENTRYPOINT ["python", "main.py"]
+EXPOSE 8000
+
+# Default: FastAPI server. CLI: docker compose run tradingagents RELIANCE.NS
+CMD uvicorn api.main:app --host 0.0.0.0 --port ${PORT:-8000}

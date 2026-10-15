@@ -8,3 +8,6 @@ logs/
 .pytest_cache/
 .venv/
 venv/
+.claude/
+ui/
+ui-design/
