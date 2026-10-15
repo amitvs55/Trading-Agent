@@ -1,0 +1,979 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TradingAgents — Indian Market Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            bg:      '#0b0f1a',
+            surface: '#111827',
+            card:    '#1a2233',
+            border:  '#1e2d45',
+            cyan:    '#00e5ff',
+            green:   '#22c55e',
+            red:     '#ef4444',
+            yellow:  '#f59e0b',
+            muted:   '#64748b',
+            saffron: '#ff9933',
+          },
+          fontFamily: {
+            mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
+          },
+          keyframes: {
+            'pulse-glow': {
+              '0%, 100%': { boxShadow: '0 0 0 0 rgba(0,229,255,0)' },
+              '50%':       { boxShadow: '0 0 0 6px rgba(0,229,255,0.25)' },
+            },
+          },
+        },
+      },
+    }
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #0b0f1a; color: #e2e8f0; font-family: 'Inter', sans-serif; min-height: 100vh; }
+
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #111827; }
+    ::-webkit-scrollbar-thumb { background: #1e2d45; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #2d3e58; }
+
+    .glow-cyan   { box-shadow: 0 0 8px 2px rgba(0,229,255,0.3); }
+    .glow-green  { box-shadow: 0 0 8px 2px rgba(34,197,94,0.3); }
+    .glow-red    { box-shadow: 0 0 8px 2px rgba(239,68,68,0.3); }
+    .glow-saffron{ box-shadow: 0 0 8px 2px rgba(255,153,51,0.3); }
+
+    @keyframes stagePulse {
+      0%, 100% { border-color: rgba(0,229,255,0.3); box-shadow: 0 0 0 0 rgba(0,229,255,0); }
+      50%       { border-color: rgba(0,229,255,0.9); box-shadow: 0 0 10px 4px rgba(0,229,255,0.2); }
+    }
+    .stage-running { animation: stagePulse 1.6s ease-in-out infinite; }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner { animation: spin 1s linear infinite; }
+
+    .stage-card { transition: border-color 0.2s, box-shadow 0.2s; }
+    .stage-card:hover { border-color: #2d3e58; }
+
+    .accordion-body { overflow: hidden; transition: max-height 0.35s ease, opacity 0.35s ease; }
+    .accordion-body.closed { max-height: 0 !important; opacity: 0; }
+
+    .nav-link.active { color: #00e5ff; border-bottom: 2px solid #00e5ff; }
+
+    tr:hover td { background: rgba(30,45,69,0.4); }
+
+    .chart-line { fill: none; stroke-width: 2; stroke-linecap: round; }
+
+    /* Indian flag stripe accent */
+    .india-stripe {
+      background: linear-gradient(90deg, #ff9933 0%, #ff9933 33%, #ffffff33 33%, #ffffff33 66%, #138808 66%, #138808 100%);
+      height: 2px;
+    }
+
+    @keyframes shimmer {
+      0%   { background-position: -200% 0; }
+      100% { background-position:  200% 0; }
+    }
+    .shimmer {
+      background: linear-gradient(90deg, #1a2233, #1e2d45, #1a2233);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+    }
+
+    /* Circuit breaker badge */
+    .circuit-badge {
+      font-size: 9px; font-weight: 700; padding: 2px 6px; border-radius: 3px;
+      font-family: monospace; letter-spacing: 0.5px;
+    }
+  </style>
+</head>
+<body class="dark">
+
+<!-- ─── NAVBAR ─────────────────────────────────────────────────── -->
+<nav style="background:#111827; border-bottom:1px solid #1e2d45;" class="sticky top-0 z-50">
+  <!-- Indian stripe accent at top -->
+  <div class="india-stripe"></div>
+  <div class="max-w-screen-2xl mx-auto px-6 h-14 flex items-center justify-between">
+    <!-- Logo -->
+    <div class="flex items-center gap-3">
+      <div style="background:linear-gradient(135deg,#ff993322,#ff993344); border:1px solid #ff993355; border-radius:8px;" class="w-8 h-8 flex items-center justify-center">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <polyline points="1,12 5,7 9,9 15,3" stroke="#ff9933" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="15" cy="3" r="1.5" fill="#ff9933"/>
+        </svg>
+      </div>
+      <div>
+        <span class="font-bold text-sm tracking-wide" style="color:#ff9933;">TradingAgents</span>
+        <span class="text-xs ml-1" style="color:#64748b;">India</span>
+      </div>
+      <span style="background:#1a2233;color:#64748b;font-size:10px;padding:2px 6px;border-radius:4px;font-family:monospace;">v1.0</span>
+    </div>
+
+    <!-- Index Tickers -->
+    <div class="flex items-center gap-5">
+      <div class="flex items-center gap-2">
+        <span class="text-xs" style="color:#64748b;">NIFTY 50</span>
+        <span class="text-xs font-mono font-bold" style="color:#22c55e;">22,147.90</span>
+        <span class="text-xs" style="color:#22c55e;">▲ +0.48%</span>
+      </div>
+      <div style="width:1px;height:14px;background:#1e2d45;"></div>
+      <div class="flex items-center gap-2">
+        <span class="text-xs" style="color:#64748b;">SENSEX</span>
+        <span class="text-xs font-mono font-bold" style="color:#22c55e;">73,088.33</span>
+        <span class="text-xs" style="color:#22c55e;">▲ +0.42%</span>
+      </div>
+      <div style="width:1px;height:14px;background:#1e2d45;"></div>
+      <div class="flex items-center gap-2">
+        <span class="text-xs" style="color:#64748b;">BANK NIFTY</span>
+        <span class="text-xs font-mono font-bold" style="color:#ef4444;">47,832.15</span>
+        <span class="text-xs" style="color:#ef4444;">▼ −0.31%</span>
+      </div>
+    </div>
+
+    <!-- Nav Links -->
+    <div class="flex items-center gap-1">
+      <a href="#" class="nav-link active px-4 py-1 text-sm font-medium" style="padding-bottom:2px;">Dashboard</a>
+      <a href="#history-section" class="nav-link px-4 py-1 text-sm font-medium" style="color:#94a3b8;">History</a>
+      <a href="#" class="nav-link px-4 py-1 text-sm font-medium" style="color:#94a3b8;">Settings</a>
+    </div>
+
+    <!-- Right side -->
+    <div class="flex items-center gap-3">
+      <!-- Market status -->
+      <div style="background:#1a2233;border:1px solid #1e2d45;border-radius:6px;padding:4px 10px;" class="flex items-center gap-2">
+        <div class="w-2 h-2 rounded-full" style="background:#22c55e;animation:stagePulse 2s infinite;"></div>
+        <span class="text-xs" style="color:#22c55e;">NSE Open</span>
+        <span class="text-xs font-mono" style="color:#64748b;">9:15–15:30 IST</span>
+      </div>
+      <div style="background:#1a2233;border:1px solid #1e2d45;border-radius:6px;padding:4px 10px;font-size:12px;color:#94a3b8;" class="flex items-center gap-2">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+        Trader
+      </div>
+    </div>
+  </div>
+</nav>
+
+<!-- ─── MAIN CONTENT ──────────────────────────────────────────── -->
+<main class="max-w-screen-2xl mx-auto px-6 py-6">
+
+  <!-- ── TICKER FORM ── -->
+  <section class="mb-6">
+    <div style="background:#111827;border:1px solid #1e2d45;border-radius:12px;padding:20px 24px;" class="flex items-center gap-4">
+      <div class="flex-shrink-0">
+        <h1 class="text-lg font-bold" style="color:#e2e8f0;">Indian Market Analysis</h1>
+        <p class="text-xs mt-0.5" style="color:#64748b;">NSE/BSE · Enter symbol (e.g. RELIANCE, TCS, INFY) · SEBI regulated</p>
+      </div>
+
+      <div style="width:1px;height:36px;background:#1e2d45;margin:0 8px;"></div>
+
+      <div class="flex items-center gap-3 flex-1">
+        <!-- Exchange selector -->
+        <select style="background:#0b0f1a;border:1px solid #1e2d45;border-radius:8px;padding:10px 12px;color:#94a3b8;font-size:12px;font-weight:600;outline:none;cursor:pointer;">
+          <option>NSE</option>
+          <option>BSE</option>
+        </select>
+
+        <!-- Ticker input -->
+        <div class="relative flex-1 max-w-xs">
+          <input
+            id="tickerInput"
+            type="text"
+            placeholder="RELIANCE"
+            maxlength="20"
+            value="RELIANCE"
+            style="background:#0b0f1a;border:1px solid #1e2d45;border-radius:8px;padding:10px 12px;color:#ff9933;font-family:monospace;font-size:15px;font-weight:700;letter-spacing:2px;width:100%;outline:none;transition:border-color 0.2s;"
+            onfocus="this.style.borderColor='#ff993344'"
+            onblur="this.style.borderColor='#1e2d45'"
+            oninput="this.value=this.value.toUpperCase()"
+          />
+        </div>
+
+        <button
+          id="analyzeBtn"
+          onclick="startPipeline()"
+          style="background:linear-gradient(135deg,#ff9933,#cc6600);color:#fff;border:none;border-radius:8px;padding:10px 24px;font-weight:700;font-size:14px;cursor:pointer;display:flex;align-items:center;gap:8px;transition:opacity 0.2s;"
+          onmouseover="this.style.opacity='0.85'"
+          onmouseout="this.style.opacity='1'"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          Analyse
+        </button>
+      </div>
+
+      <!-- Quick picks -->
+      <div class="flex items-center gap-2 ml-2">
+        <span class="text-xs" style="color:#475569;">Quick:</span>
+        <button onclick="setTicker('RELIANCE')" class="text-xs font-mono px-2 py-1 rounded" style="background:#1a2233;color:#ff9933;border:1px solid #ff993322;">RELIANCE</button>
+        <button onclick="setTicker('TCS')" class="text-xs font-mono px-2 py-1 rounded" style="background:#1a2233;color:#ff9933;border:1px solid #ff993322;">TCS</button>
+        <button onclick="setTicker('INFY')" class="text-xs font-mono px-2 py-1 rounded" style="background:#1a2233;color:#ff9933;border:1px solid #ff993322;">INFY</button>
+        <button onclick="setTicker('HDFCBANK')" class="text-xs font-mono px-2 py-1 rounded" style="background:#1a2233;color:#ff9933;border:1px solid #ff993322;">HDFCBANK</button>
+      </div>
+
+      <!-- Stats -->
+      <div style="width:1px;height:36px;background:#1e2d45;"></div>
+      <div class="flex items-center gap-6">
+        <div class="text-center">
+          <div class="text-xs" style="color:#64748b;">Last Run</div>
+          <div class="text-sm font-semibold" style="color:#e2e8f0;">TCS · 4m ago</div>
+        </div>
+        <div class="text-center">
+          <div class="text-xs" style="color:#64748b;">Duration</div>
+          <div class="text-sm font-semibold font-mono" style="color:#e2e8f0;">51.2s</div>
+        </div>
+        <div class="text-center">
+          <div class="text-xs" style="color:#64748b;">Total Runs</div>
+          <div class="text-sm font-semibold" style="color:#e2e8f0;">31</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── PIPELINE PROGRESS ── -->
+  <section class="mb-6">
+    <div style="background:#111827;border:1px solid #1e2d45;border-radius:12px;padding:16px 24px;">
+      <div class="flex items-center justify-between mb-3">
+        <span class="text-xs font-semibold" style="color:#64748b;letter-spacing:1px;">PIPELINE PROGRESS — RELIANCE.NS</span>
+        <div class="flex items-center gap-2">
+          <div class="spinner" style="width:12px;height:12px;border:2px solid #1e2d45;border-top-color:#ff9933;border-radius:50%;"></div>
+          <span class="text-xs font-mono" style="color:#ff9933;">Stage 3 · 26.8s elapsed</span>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-0">
+        <!-- Stage 1 complete -->
+        <div class="flex items-center gap-0 flex-1">
+          <div class="flex flex-col items-center gap-1">
+            <div style="width:32px;height:32px;border-radius:50%;background:#22c55e22;border:2px solid #22c55e;" class="flex items-center justify-center glow-green">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <span class="text-xs font-medium" style="color:#22c55e;white-space:nowrap;">Data Collection</span>
+            <span class="text-xs font-mono" style="color:#64748b;">9.1s</span>
+          </div>
+          <div style="flex:1;height:2px;background:#22c55e;margin-bottom:24px;margin:0 4px 24px 4px;"></div>
+        </div>
+        <!-- Stage 2 complete -->
+        <div class="flex items-center gap-0 flex-1">
+          <div class="flex flex-col items-center gap-1">
+            <div style="width:32px;height:32px;border-radius:50%;background:#22c55e22;border:2px solid #22c55e;" class="flex items-center justify-center glow-green">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <span class="text-xs font-medium" style="color:#22c55e;white-space:nowrap;">Research Debate</span>
+            <span class="text-xs font-mono" style="color:#64748b;">14.3s</span>
+          </div>
+          <div style="flex:1;height:2px;background:#22c55e;margin:0 4px 24px 4px;"></div>
+        </div>
+        <!-- Stage 3 running -->
+        <div class="flex items-center gap-0 flex-1">
+          <div class="flex flex-col items-center gap-1">
+            <div class="stage-running" style="width:32px;height:32px;border-radius:50%;background:#ff993311;border:2px solid #ff9933;" class="flex items-center justify-center">
+              <div class="spinner" style="width:12px;height:12px;border:2px solid #ff993333;border-top-color:#ff9933;border-radius:50%;"></div>
+            </div>
+            <span class="text-xs font-medium" style="color:#ff9933;white-space:nowrap;">Trade Proposal</span>
+            <span class="text-xs font-mono" style="color:#ff9933;">Running…</span>
+          </div>
+          <div style="flex:1;height:2px;background:linear-gradient(to right,#ff993344,#1e2d45);margin:0 4px 24px 4px;"></div>
+        </div>
+        <!-- 4 pending -->
+        <div class="flex items-center gap-0 flex-1">
+          <div class="flex flex-col items-center gap-1">
+            <div style="width:32px;height:32px;border-radius:50%;background:#1a2233;border:2px solid #1e2d45;" class="flex items-center justify-center">
+              <span class="text-xs font-bold" style="color:#64748b;">4</span>
+            </div>
+            <span class="text-xs" style="color:#64748b;white-space:nowrap;">Risk Assessment</span>
+            <span class="text-xs" style="color:#475569;">Pending</span>
+          </div>
+          <div style="flex:1;height:2px;background:#1e2d45;margin:0 4px 24px 4px;"></div>
+        </div>
+        <!-- 5 pending -->
+        <div class="flex items-center gap-0 flex-1">
+          <div class="flex flex-col items-center gap-1">
+            <div style="width:32px;height:32px;border-radius:50%;background:#1a2233;border:2px solid #1e2d45;" class="flex items-center justify-center">
+              <span class="text-xs font-bold" style="color:#64748b;">5</span>
+            </div>
+            <span class="text-xs" style="color:#64748b;white-space:nowrap;">Portfolio Mgr</span>
+            <span class="text-xs" style="color:#475569;">Pending</span>
+          </div>
+          <div style="flex:1;height:2px;background:#1e2d45;margin:0 4px 24px 4px;"></div>
+        </div>
+        <!-- 6 pending -->
+        <div class="flex flex-col items-center gap-1">
+          <div style="width:32px;height:32px;border-radius:50%;background:#1a2233;border:2px solid #1e2d45;" class="flex items-center justify-center">
+            <span class="text-xs font-bold" style="color:#64748b;">6</span>
+          </div>
+          <span class="text-xs" style="color:#64748b;white-space:nowrap;">Execution</span>
+          <span class="text-xs" style="color:#475569;">Pending</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── TWO-COLUMN LAYOUT ── -->
+  <div class="grid gap-5" style="grid-template-columns:1fr 390px;">
+
+    <!-- LEFT: Stage Cards -->
+    <div class="flex flex-col gap-4">
+
+      <!-- STAGE 1: Data Collection ✅ -->
+      <div class="stage-card" style="background:#111827;border:1px solid #22c55e44;border-radius:12px;overflow:hidden;">
+        <div class="flex items-center justify-between px-5 py-4 cursor-pointer" onclick="toggleCard('s1')">
+          <div class="flex items-center gap-3">
+            <div style="width:28px;height:28px;border-radius:8px;background:#22c55e22;border:1px solid #22c55e44;" class="flex items-center justify-center">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="font-semibold text-sm">Stage 1</span>
+                <span style="background:#22c55e22;color:#22c55e;font-size:10px;padding:2px 7px;border-radius:4px;font-weight:600;">COMPLETE</span>
+              </div>
+              <div class="text-xs mt-0.5" style="color:#64748b;">Data Collection · 4 agents · NSE Feed · 9.1s</div>
+            </div>
+          </div>
+          <div class="flex items-center gap-3">
+            <span style="background:#0b0f1a;color:#ff9933;font-family:monospace;font-size:12px;font-weight:700;padding:4px 10px;border-radius:6px;border:1px solid #ff993333;">RELIANCE.NS</span>
+            <svg id="s1-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2" style="transition:transform 0.3s;"><polyline points="6 9 12 15 18 9"/></svg>
+          </div>
+        </div>
+
+        <div id="s1" class="accordion-body" style="max-height:700px;">
+          <div style="border-top:1px solid #1e2d45;">
+            <!-- Tabs -->
+            <div class="flex" style="border-bottom:1px solid #1e2d45;">
+              <button onclick="switchTab('s1','market')" id="s1-market-tab" class="px-5 py-2.5 text-xs font-semibold" style="color:#ff9933;border-bottom:2px solid #ff9933;">Market Data</button>
+              <button onclick="switchTab('s1','sentiment')" id="s1-sentiment-tab" class="px-5 py-2.5 text-xs font-semibold" style="color:#64748b;border-bottom:2px solid transparent;">Sentiment</button>
+              <button onclick="switchTab('s1','news')" id="s1-news-tab" class="px-5 py-2.5 text-xs font-semibold" style="color:#64748b;border-bottom:2px solid transparent;">News</button>
+              <button onclick="switchTab('s1','fundamentals')" id="s1-fundamentals-tab" class="px-5 py-2.5 text-xs font-semibold" style="color:#64748b;border-bottom:2px solid transparent;">Fundamentals</button>
+            </div>
+
+            <!-- Market Data Tab -->
+            <div id="s1-market" class="p-5">
+              <div class="flex items-start justify-between mb-4">
+                <div>
+                  <div class="flex items-baseline gap-3">
+                    <span class="text-3xl font-bold font-mono" style="color:#e2e8f0;">₹2,941.60</span>
+                    <span style="background:#22c55e22;color:#22c55e;font-size:12px;padding:3px 8px;border-radius:5px;font-weight:600;">▲ +1.84%</span>
+                    <span style="background:#22c55e22;color:#22c55e;font-size:11px;padding:3px 6px;border-radius:4px;">+₹53.10</span>
+                  </div>
+                  <div class="text-xs mt-1" style="color:#64748b;">Reliance Industries Ltd · NSE · Cap: ₹19.92L Cr</div>
+                </div>
+                <div class="flex gap-3">
+                  <!-- Circuit limits -->
+                  <div style="background:#ff930011;border:1px solid #ff993344;border-radius:8px;padding:8px 12px;text-align:center;">
+                    <div class="text-xs mb-1" style="color:#64748b;">Circuit Limit</div>
+                    <div class="text-xs font-mono" style="color:#f59e0b;">↑ ₹3,235.75</div>
+                    <div class="text-xs font-mono" style="color:#ef4444;">↓ ₹2,647.45</div>
+                  </div>
+                  <div style="background:#22c55e22;border:1px solid #22c55e44;border-radius:8px;padding:8px 16px;text-align:center;">
+                    <div class="text-xs mb-1" style="color:#64748b;">Trend Signal</div>
+                    <div class="font-bold text-sm" style="color:#22c55e;">BULLISH</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- OHLC row -->
+              <div class="grid grid-cols-4 gap-2 mb-4">
+                <div style="background:#0b0f1a;border:1px solid #1e2d45;border-radius:7px;padding:10px;text-align:center;">
+                  <div class="text-xs mb-1" style="color:#64748b;">Open</div>
+                  <div class="font-mono text-sm font-semibold" style="color:#e2e8f0;">₹2,901.00</div>
+                </div>
+                <div style="background:#0b0f1a;border:1px solid #1e2d45;border-radius:7px;padding:10px;text-align:center;">
+                  <div class="text-xs mb-1" style="color:#64748b;">High</div>
+                  <div class="font-mono text-sm font-semibold" style="color:#22c55e;">₹2,958.40</div>
+                </div>
+                <div style="background:#0b0f1a;border:1px solid #1e2d45;border-radius:7px;padding:10px;text-align:center;">
+                  <div class="text-xs mb-1" style="color:#64748b;">Low</div>
+                  <div class="font-mono text-sm font-semibold" style="color:#ef4444;">₹2,887.50</div>
+                </div>
+                <div style="background:#0b0f1a;border:1px solid #1e2d45;border-radius:7px;padding:10px;text-align:center;">
+                  <div class="text-xs mb-1" style="color:#64748b;">Prev Close</div>
+                  <div class="font-mono text-sm font-semibold" style="color:#94a3b8;">₹2,888.50</div>
+                </div>
+              </div>
+
+              <!-- Indicators -->
+              <div class="grid grid-cols-3 gap-3 mb-4">
+                <div style="background:#0b0f1a;border:1px solid #1e2d45;border-radius:8px;padding:12px;">
+                  <div class="text-xs mb-2" style="color:#64748b;">RSI (14)</div>
+                  <div class="text-xl font-bold font-mono" style="color:#f59e0b;">58.7</div>
+                  <div class="text-xs mt-1" style="color:#64748b;">Moderate momentum</div>
+                  <div style="height:4px;background:#1e2d45;border-radius:2px;margin-top:8px;">
+                    <div style="height:4px;width:58.7%;background:linear-gradient(to right,#22c55e,#f59e0b);border-radius:2px;"></div>
+                  </div>
+                </div>
+                <div style="background:#0b0f1a;border:1px solid #1e2d45;border-radius:8px;padding:12px;">
+                  <div class="text-xs mb-2" style="color:#64748b;">MACD</div>
+                  <div class="text-xl font-bold font-mono" style="color:#22c55e;">+18.42</div>
+                  <div class="text-xs mt-1" style="color:#64748b;">Signal: 11.83 · Hist: +6.59</div>
+                  <div class="text-xs mt-2" style="color:#22c55e;">▲ Bullish crossover</div>
+                </div>
+                <div style="background:#0b0f1a;border:1px solid #1e2d45;border-radius:8px;padding:12px;">
+                  <div class="text-xs mb-2" style="color:#64748b;">Volume</div>
+                  <div class="text-xl font-bold font-mono" style="color:#e2e8f0;">1.24Cr</div>
+                  <div class="text-xs mt-1" style="color:#64748b;">Avg: 98.4L (10d)</div>
+                  <div class="text-xs mt-2" style="color:#22c55e;">+26% above avg</div>
+                </div>
+              </div>
+
+              <!-- Bollinger + SMAs -->
+              <div class="grid grid-cols-2 gap-3 mb-4">
+                <div style="background:#0b0f1a;border:1px solid #1e2d45;border-radius:8px;padding:12px;">
+                  <div class="text-xs mb-2" style="color:#64748b;">Bollinger Bands (20)</div>
+                  <div class="flex justify-between text-xs font-mono">
+                    <span style="color:#ef4444;">↓ ₹2,802</span>
+                    <span style="color:#64748b;">Mid: ₹2,881</span>
+                    <span style="color:#22c55e;">↑ ₹2,961</span>
+                  </div>
+                  <div style="height:6px;background:#1e2d45;border-radius:3px;margin-top:8px;position:relative;">
+                    <div style="height:6px;background:#ff993322;border-radius:3px;width:100%;"></div>
+                    <div style="position:absolute;top:0;height:6px;width:3px;background:#ff9933;border-radius:2px;left:88%;box-shadow:0 0 6px #ff9933;"></div>
+                  </div>
+                  <div class="text-xs mt-1.5" style="color:#64748b;">Price near upper band</div>
+                </div>
+                <div style="background:#0b0f1a;border:1px solid #1e2d45;border-radius:8px;padding:12px;">
+                  <div class="text-xs mb-2" style="color:#64748b;">Moving Averages</div>
+                  <div class="flex flex-col gap-1.5">
+                    <div class="flex justify-between text-xs font-mono">
+                      <span style="color:#64748b;">SMA 20</span><span style="color:#f59e0b;">₹2,881</span>
+                      <span style="color:#22c55e;font-size:10px;">▲ Above</span>
+                    </div>
+                    <div class="flex justify-between text-xs font-mono">
+                      <span style="color:#64748b;">SMA 50</span><span style="color:#f59e0b;">₹2,755</span>
+                      <span style="color:#22c55e;font-size:10px;">▲ Above</span>
+                    </div>
+                    <div class="flex justify-between text-xs font-mono">
+                      <span style="color:#64748b;">EMA 12</span><span style="color:#ff9933;">₹2,912</span>
+                      <span></span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 52-week range -->
+              <div style="background:#0b0f1a;border:1px solid #1e2d45;border-radius:8px;padding:12px;">
+                <div class="flex justify-between text-xs mb-2">
+                  <span style="color:#64748b;">52-Week Range</span>
+                  <span class="font-mono" style="color:#64748b;">₹2,220.30 — ₹3,024.90</span>
+                </div>
+                <div style="height:6px;background:#1e2d45;border-radius:3px;position:relative;">
+                  <div style="height:6px;background:linear-gradient(to right,#ef444444,#22c55e44);border-radius:3px;width:100%;"></div>
+                  <div style="position:absolute;top:-2px;height:10px;width:3px;background:#ff9933;border-radius:2px;left:88%;box-shadow:0 0 6px #ff9933;"></div>
+                </div>
+                <div class="flex justify-between text-xs font-mono mt-1.5">
+                  <span style="color:#ef4444;">₹2,220.30</span>
+                  <span style="color:#ff9933;">₹2,941.60 (88th pct)</span>
+                  <span style="color:#22c55e;">₹3,024.90</span>
+                </div>
+              </div>
+
+              <!-- India-specific: F&O info -->
+              <div class="mt-3 flex items-center gap-3">
+                <div style="background:#1a2233;border:1px solid #1e2d45;border-radius:6px;padding:6px 12px;font-size:11px;color:#94a3b8;">
+                  F&amp;O Lot Size: <span class="font-mono font-bold" style="color:#ff9933;">250</span>
+                </div>
+                <div style="background:#1a2233;border:1px solid #1e2d45;border-radius:6px;padding:6px 12px;font-size:11px;color:#94a3b8;">
+                  Delivery: <span style="color:#22c55e;">65.2%</span>
+                </div>
+                <div style="background:#1a2233;border:1px solid #1e2d45;border-radius:6px;padding:6px 12px;font-size:11px;color:#94a3b8;">
+                  Promoter Holding: <span class="font-mono" style="color:#e2e8f0;">50.32%</span>
+                </div>
+                <div style="background:#22c55e22;border:1px solid #22c55e44;border-radius:6px;padding:6px 12px;font-size:11px;" class="circuit-badge" style="color:#22c55e;">
+                  ✓ SEBI Compliant
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- STAGE 2: Research Debate ✅ -->
+      <div class="stage-card" style="background:#111827;border:1px solid #22c55e44;border-radius:12px;overflow:hidden;">
+        <div class="flex items-center justify-between px-5 py-4 cursor-pointer" onclick="toggleCard('s2')">
+          <div class="flex items-center gap-3">
+            <div style="width:28px;height:28px;border-radius:8px;background:#22c55e22;border:1px solid #22c55e44;" class="flex items-center justify-center">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="font-semibold text-sm">Stage 2</span>
+                <span style="background:#22c55e22;color:#22c55e;font-size:10px;padding:2px 7px;border-radius:4px;font-weight:600;">COMPLETE</span>
+              </div>
+              <div class="text-xs mt-0.5" style="color:#64748b;">Research Debate · Bull vs Bear · 14.3s</div>
+            </div>
+          </div>
+          <div class="flex items-center gap-3">
+            <span style="background:#22c55e22;color:#22c55e;font-size:11px;font-weight:700;padding:3px 10px;border-radius:5px;">BUY</span>
+            <svg id="s2-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2" style="transition:transform 0.3s;transform:rotate(-90deg)"><polyline points="6 9 12 15 18 9"/></svg>
+          </div>
+        </div>
+
+        <div id="s2" class="accordion-body closed" style="max-height:0;">
+          <div style="border-top:1px solid #1e2d45;padding:20px;">
+            <div class="grid grid-cols-2 gap-4 mb-4">
+              <!-- Bull -->
+              <div style="background:#22c55e0d;border:1px solid #22c55e33;border-radius:10px;padding:16px;">
+                <div class="flex items-center gap-2 mb-3">
+                  <span style="background:#22c55e;color:#0b0f1a;font-size:10px;font-weight:800;padding:2px 8px;border-radius:4px;">BULL</span>
+                  <span class="text-xs font-mono" style="color:#22c55e;">Confidence: 78%</span>
+                </div>
+                <p class="text-xs mb-3" style="color:#94a3b8;line-height:1.6;">Jio platforms 5G expansion driving subscriber growth. Reliance Retail is India's largest retailer with accelerating EBITDA margins. Strong promoter holding provides stability.</p>
+                <div class="flex flex-col gap-1.5">
+                  <div class="flex items-start gap-2 text-xs" style="color:#94a3b8;"><span style="color:#22c55e;">▲</span>New Energy (green hydrogen) capex cycle beginning</div>
+                  <div class="flex items-start gap-2 text-xs" style="color:#94a3b8;"><span style="color:#22c55e;">▲</span>Jio AirFiber adding 1L+ subscribers/week</div>
+                  <div class="flex items-start gap-2 text-xs" style="color:#94a3b8;"><span style="color:#22c55e;">▲</span>Retail IPO expected — significant unlocking value</div>
+                </div>
+                <div class="mt-3 pt-3" style="border-top:1px solid #22c55e22;">
+                  <div class="flex justify-between text-xs">
+                    <span style="color:#64748b;">Score</span>
+                    <span class="font-bold font-mono" style="color:#22c55e;">7.8 / 10</span>
+                  </div>
+                </div>
+              </div>
+              <!-- Bear -->
+              <div style="background:#ef44440d;border:1px solid #ef444433;border-radius:10px;padding:16px;">
+                <div class="flex items-center gap-2 mb-3">
+                  <span style="background:#ef4444;color:#fff;font-size:10px;font-weight:800;padding:2px 8px;border-radius:4px;">BEAR</span>
+                  <span class="text-xs font-mono" style="color:#ef4444;">Confidence: 38%</span>
+                </div>
+                <p class="text-xs mb-3" style="color:#94a3b8;line-height:1.6;">Stock near 52-week high with stretched valuation. Global crude price volatility impacts O2C margins. FII selling pressure in large-caps persists.</p>
+                <div class="flex flex-col gap-1.5">
+                  <div class="flex items-start gap-2 text-xs" style="color:#94a3b8;"><span style="color:#ef4444;">▼</span>P/E at 28x — premium to sector average</div>
+                  <div class="flex items-start gap-2 text-xs" style="color:#94a3b8;"><span style="color:#ef4444;">▼</span>Debt of ₹3.06L Cr remains elevated</div>
+                  <div class="flex items-start gap-2 text-xs" style="color:#94a3b8;"><span style="color:#ef4444;">▼</span>SEBI margin rules tightening F&O activity</div>
+                </div>
+                <div class="mt-3 pt-3" style="border-top:1px solid #ef444422;">
+                  <div class="flex justify-between text-xs">
+                    <span style="color:#64748b;">Score</span>
+                    <span class="font-bold font-mono" style="color:#ef4444;">4.2 / 10</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- Verdict -->
+            <div style="background:#0b0f1a;border:1px solid #1e2d45;border-radius:10px;padding:16px;">
+              <div class="flex items-center justify-between mb-3">
+                <span class="text-xs font-semibold" style="color:#64748b;letter-spacing:1px;">MODERATOR VERDICT</span>
+                <div class="flex items-center gap-2">
+                  <span style="background:#22c55e22;color:#22c55e;font-size:11px;font-weight:700;padding:3px 12px;border-radius:5px;border:1px solid #22c55e44;">BUY</span>
+                  <span style="color:#64748b;font-size:11px;">Winner: BULL</span>
+                </div>
+              </div>
+              <p class="text-xs" style="color:#94a3b8;line-height:1.6;">Bull case dominates — Jio + Retail digital flywheel is India's strongest consumer story. Near-term crude headwind is manageable given O2C hedges. Buy with SL below ₹2,800 support.</p>
+              <div class="flex gap-4 mt-3">
+                <div class="text-xs" style="color:#64748b;">Consensus: <span style="color:#22c55e;">Jio 5G + Retail IPO narrative intact</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- STAGE 3: Trade Proposal (RUNNING) -->
+      <div class="stage-card stage-running" style="background:#111827;border:2px solid #ff993344;border-radius:12px;overflow:hidden;">
+        <div class="flex items-center justify-between px-5 py-4">
+          <div class="flex items-center gap-3">
+            <div style="width:28px;height:28px;border-radius:8px;background:#ff993311;border:1px solid #ff993344;" class="flex items-center justify-center">
+              <div class="spinner" style="width:12px;height:12px;border:2px solid #ff993322;border-top-color:#ff9933;border-radius:50%;"></div>
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="font-semibold text-sm">Stage 3</span>
+                <span style="background:#ff993311;color:#ff9933;font-size:10px;padding:2px 7px;border-radius:4px;font-weight:600;border:1px solid #ff993333;">RUNNING</span>
+              </div>
+              <div class="text-xs mt-0.5" style="color:#64748b;">TraderAgent generating NSE trade proposal…</div>
+            </div>
+          </div>
+          <div class="flex gap-1.5 items-center">
+            <div style="height:4px;width:4px;border-radius:50%;background:#ff9933;animation:stagePulse 0.8s ease-in-out infinite;animation-delay:0s;"></div>
+            <div style="height:4px;width:4px;border-radius:50%;background:#ff9933;animation:stagePulse 0.8s ease-in-out infinite;animation-delay:0.2s;"></div>
+            <div style="height:4px;width:4px;border-radius:50%;background:#ff9933;animation:stagePulse 0.8s ease-in-out infinite;animation-delay:0.4s;"></div>
+          </div>
+        </div>
+        <!-- Skeleton -->
+        <div style="border-top:1px solid #1e2d45;padding:20px;">
+          <div class="flex flex-col gap-3">
+            <div class="shimmer w-1/3" style="height:16px;border-radius:4px;"></div>
+            <div class="shimmer w-2/3" style="height:12px;border-radius:4px;"></div>
+            <div class="grid grid-cols-4 gap-3 mt-2">
+              <div class="shimmer" style="height:64px;border-radius:8px;"></div>
+              <div class="shimmer" style="height:64px;border-radius:8px;"></div>
+              <div class="shimmer" style="height:64px;border-radius:8px;"></div>
+              <div class="shimmer" style="height:64px;border-radius:8px;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- STAGE 4 pending -->
+      <div class="stage-card" style="background:#111827;border:1px solid #1e2d45;border-radius:12px;opacity:0.5;overflow:hidden;">
+        <div class="flex items-center justify-between px-5 py-4">
+          <div class="flex items-center gap-3">
+            <div style="width:28px;height:28px;border-radius:8px;background:#1a2233;border:1px solid #1e2d45;" class="flex items-center justify-center">
+              <span class="text-xs font-bold" style="color:#475569;">4</span>
+            </div>
+            <div>
+              <span class="font-semibold text-sm">Stage 4</span>
+              <div class="text-xs mt-0.5" style="color:#475569;">Risk Assessment · Aggressive / Neutral / Conservative</div>
+            </div>
+          </div>
+          <span style="background:#1a2233;color:#475569;font-size:10px;padding:2px 7px;border-radius:4px;">PENDING</span>
+        </div>
+      </div>
+
+      <!-- STAGE 5 pending -->
+      <div class="stage-card" style="background:#111827;border:1px solid #1e2d45;border-radius:12px;opacity:0.5;overflow:hidden;">
+        <div class="flex items-center justify-between px-5 py-4">
+          <div class="flex items-center gap-3">
+            <div style="width:28px;height:28px;border-radius:8px;background:#1a2233;border:1px solid #1e2d45;" class="flex items-center justify-center">
+              <span class="text-xs font-bold" style="color:#475569;">5</span>
+            </div>
+            <div>
+              <span class="font-semibold text-sm">Stage 5</span>
+              <div class="text-xs mt-0.5" style="color:#475569;">Portfolio Manager · Final decision</div>
+            </div>
+          </div>
+          <span style="background:#1a2233;color:#475569;font-size:10px;padding:2px 7px;border-radius:4px;">PENDING</span>
+        </div>
+      </div>
+
+      <!-- STAGE 6 pending -->
+      <div class="stage-card" style="background:#111827;border:1px solid #1e2d45;border-radius:12px;opacity:0.5;overflow:hidden;">
+        <div class="flex items-center justify-between px-5 py-4">
+          <div class="flex items-center gap-3">
+            <div style="width:28px;height:28px;border-radius:8px;background:#1a2233;border:1px solid #1e2d45;" class="flex items-center justify-center">
+              <span class="text-xs font-bold" style="color:#475569;">6</span>
+            </div>
+            <div>
+              <span class="font-semibold text-sm">Stage 6</span>
+              <div class="text-xs mt-0.5" style="color:#475569;">Execution Engine · Simulated trade (NSE paper)</div>
+            </div>
+          </div>
+          <span style="background:#1a2233;color:#475569;font-size:10px;padding:2px 7px;border-radius:4px;">PENDING</span>
+        </div>
+      </div>
+
+    </div><!-- /LEFT -->
+
+    <!-- RIGHT: Charts Panel -->
+    <div class="flex flex-col gap-4">
+
+      <!-- Price Chart -->
+      <div style="background:#111827;border:1px solid #1e2d45;border-radius:12px;overflow:hidden;">
+        <div class="flex items-center justify-between px-4 py-3" style="border-bottom:1px solid #1e2d45;">
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-semibold" style="color:#e2e8f0;">Price Chart</span>
+            <span style="background:#0b0f1a;color:#ff9933;font-size:10px;font-weight:700;padding:1px 6px;border-radius:3px;font-family:monospace;border:1px solid #ff993322;">RELIANCE.NS</span>
+            <span style="font-size:10px;color:#64748b;">3 months · 1D</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <div class="flex items-center gap-1"><div style="width:8px;height:2px;background:#ff9933;border-radius:1px;"></div><span class="text-xs" style="color:#64748b;">Price</span></div>
+            <div class="flex items-center gap-1"><div style="width:8px;height:2px;border-top:2px dashed #f59e0b;"></div><span class="text-xs" style="color:#64748b;">SMA20</span></div>
+            <div class="flex items-center gap-1"><div style="width:8px;height:2px;border-top:2px dashed #f97316;"></div><span class="text-xs" style="color:#64748b;">SMA50</span></div>
+          </div>
+        </div>
+        <div style="padding:12px 16px;">
+          <svg viewBox="0 0 355 165" style="width:100%;overflow:visible;">
+            <!-- Bollinger fill -->
+            <path d="M0,125 C30,118 60,105 90,98 C120,91 150,84 180,78 C210,72 240,62 270,55 C300,48 325,44 355,41 L355,22 C325,20 300,18 270,15 C240,12 210,13 180,16 C150,19 120,25 90,32 C60,39 30,50 0,60 Z" fill="#ff9933" opacity="0.07"/>
+            <!-- Upper BB -->
+            <path d="M0,60 C30,50 60,39 90,32 C120,25 150,19 180,16 C210,13 240,12 270,15 C300,18 325,20 355,22" fill="none" stroke="#ff9933" stroke-width="1" stroke-dasharray="3,3" opacity="0.35"/>
+            <!-- Lower BB -->
+            <path d="M0,125 C30,118 60,105 90,98 C120,91 150,84 180,78 C210,72 240,62 270,55 C300,48 325,44 355,41" fill="none" stroke="#ff9933" stroke-width="1" stroke-dasharray="3,3" opacity="0.35"/>
+            <!-- SMA50 -->
+            <path d="M0,135 C30,128 60,118 90,110 C120,102 150,95 180,90 C210,85 240,76 270,70 C300,64 325,59 355,56" fill="none" stroke="#f97316" stroke-width="1.5" stroke-dasharray="5,3"/>
+            <!-- SMA20 -->
+            <path d="M0,115 C30,107 60,96 90,89 C120,82 150,75 180,70 C210,65 240,56 270,50 C300,44 325,40 355,37" fill="none" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="5,3"/>
+            <!-- Price -->
+            <path d="M0,112 C25,103 50,92 75,86 C100,80 125,73 150,65 C175,57 200,50 225,44 C250,38 280,33 310,29 C330,27 343,25 355,23" fill="none" stroke="#ff9933" stroke-width="2"/>
+            <!-- Area under price -->
+            <path d="M0,112 C25,103 50,92 75,86 C100,80 125,73 150,65 C175,57 200,50 225,44 C250,38 280,33 310,29 C330,27 343,25 355,23 L355,165 L0,165 Z" fill="url(#priceGradIN)" opacity="0.12"/>
+            <!-- Entry line -->
+            <line x1="0" y1="24" x2="355" y2="24" stroke="#22c55e" stroke-width="1" stroke-dasharray="4,4" opacity="0.6"/>
+            <text x="4" y="21" fill="#22c55e" font-size="8" font-family="monospace">Entry ₹2,960</text>
+            <!-- TP -->
+            <line x1="0" y1="8" x2="355" y2="8" stroke="#22c55e" stroke-width="1" stroke-dasharray="4,4" opacity="0.4"/>
+            <text x="4" y="6" fill="#22c55e" font-size="8" font-family="monospace" opacity="0.7">TP ₹3,150</text>
+            <!-- SL -->
+            <line x1="0" y1="82" x2="355" y2="82" stroke="#ef4444" stroke-width="1" stroke-dasharray="4,4" opacity="0.4"/>
+            <text x="4" y="94" fill="#ef4444" font-size="8" font-family="monospace" opacity="0.7">SL ₹2,800</text>
+            <defs>
+              <linearGradient id="priceGradIN" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#ff9933"/>
+                <stop offset="100%" stop-color="#ff9933" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            <!-- X labels -->
+            <text x="0"   y="163" fill="#475569" font-size="7" font-family="monospace">Jan</text>
+            <text x="82"  y="163" fill="#475569" font-size="7" font-family="monospace">Feb</text>
+            <text x="172" y="163" fill="#475569" font-size="7" font-family="monospace">Mar</text>
+            <text x="262" y="163" fill="#475569" font-size="7" font-family="monospace">Apr</text>
+          </svg>
+        </div>
+      </div>
+
+      <!-- Market Sentiment -->
+      <div style="background:#111827;border:1px solid #1e2d45;border-radius:12px;overflow:hidden;">
+        <div class="px-4 py-3" style="border-bottom:1px solid #1e2d45;">
+          <span class="text-xs font-semibold" style="color:#e2e8f0;">Market Sentiment</span>
+          <span class="text-xs ml-2" style="color:#64748b;">Dalal Street · Hindi/English news analysis</span>
+        </div>
+        <div class="p-4 flex items-center gap-4">
+          <div style="position:relative;width:140px;flex-shrink:0;">
+            <svg viewBox="0 0 140 80" style="width:140px;overflow:visible;">
+              <path d="M10,70 A60,60 0 0,1 130,70" fill="none" stroke="#1e2d45" stroke-width="12" stroke-linecap="round"/>
+              <path d="M10,70 A60,60 0 0,1 70,10" fill="none" stroke="#ef4444" stroke-width="12" stroke-linecap="round" opacity="0.5"/>
+              <path d="M70,10 A60,60 0 0,1 130,70" fill="none" stroke="#22c55e" stroke-width="12" stroke-linecap="round" opacity="0.5"/>
+              <!-- +0.65 sentiment needle -->
+              <path d="M10,70 A60,60 0 0,1 119,31" fill="none" stroke="url(#sentGradIN)" stroke-width="12" stroke-linecap="round"/>
+              <line x1="70" y1="70" x2="108" y2="20" stroke="#e2e8f0" stroke-width="2" stroke-linecap="round" opacity="0.9"/>
+              <circle cx="70" cy="70" r="5" fill="#1a2233" stroke="#ff9933" stroke-width="2"/>
+              <text x="70" y="66" text-anchor="middle" fill="#22c55e" font-size="13" font-weight="bold" font-family="monospace">+0.65</text>
+              <text x="4" y="82" fill="#ef4444" font-size="8">Bearish</text>
+              <text x="103" y="82" fill="#22c55e" font-size="8">Bullish</text>
+              <defs>
+                <linearGradient id="sentGradIN" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stop-color="#ef4444"/>
+                  <stop offset="50%" stop-color="#f59e0b"/>
+                  <stop offset="100%" stop-color="#22c55e"/>
+                </linearGradient>
+              </defs>
+            </svg>
+          </div>
+          <div class="flex flex-col gap-2 flex-1">
+            <div class="flex justify-between text-xs"><span style="color:#64748b;">Overall</span><span class="font-mono font-bold" style="color:#22c55e;">+0.65</span></div>
+            <div class="flex justify-between text-xs"><span style="color:#64748b;">ET / Mint news</span><span class="font-mono" style="color:#22c55e;">+0.71</span></div>
+            <div class="flex justify-between text-xs"><span style="color:#64748b;">Social / Twitter</span><span class="font-mono" style="color:#f59e0b;">+0.52</span></div>
+            <div class="flex justify-between text-xs"><span style="color:#64748b;">BSE announcements</span><span class="font-mono" style="color:#22c55e;">+0.78</span></div>
+            <div style="border-top:1px solid #1e2d45;padding-top:8px;margin-top:2px;">
+              <div class="text-xs" style="color:#94a3b8;">LLM estimated from NSE/BSE corp filings + news</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Debate Scores -->
+      <div style="background:#111827;border:1px solid #1e2d45;border-radius:12px;padding:16px;">
+        <div class="text-xs font-semibold mb-3" style="color:#e2e8f0;">Research Debate Scores</div>
+        <div class="mb-3">
+          <div class="flex justify-between text-xs mb-1.5">
+            <div class="flex items-center gap-2">
+              <span style="background:#22c55e;color:#0b0f1a;font-size:9px;font-weight:800;padding:1px 6px;border-radius:3px;">BULL</span>
+              <span style="color:#64748b;">Confidence 78%</span>
+            </div>
+            <span class="font-mono font-bold" style="color:#22c55e;">7.8 / 10</span>
+          </div>
+          <div style="height:8px;background:#1e2d45;border-radius:4px;">
+            <div style="height:8px;width:78%;background:linear-gradient(to right,#22c55e88,#22c55e);border-radius:4px;box-shadow:0 0 8px #22c55e55;"></div>
+          </div>
+        </div>
+        <div>
+          <div class="flex justify-between text-xs mb-1.5">
+            <div class="flex items-center gap-2">
+              <span style="background:#ef4444;color:#fff;font-size:9px;font-weight:800;padding:1px 6px;border-radius:3px;">BEAR</span>
+              <span style="color:#64748b;">Confidence 38%</span>
+            </div>
+            <span class="font-mono font-bold" style="color:#ef4444;">4.2 / 10</span>
+          </div>
+          <div style="height:8px;background:#1e2d45;border-radius:4px;">
+            <div style="height:8px;width:42%;background:linear-gradient(to right,#ef444488,#ef4444);border-radius:4px;box-shadow:0 0 8px #ef444455;"></div>
+          </div>
+        </div>
+        <div class="mt-3 pt-3 flex items-center gap-2" style="border-top:1px solid #1e2d45;">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+          <span class="text-xs" style="color:#22c55e;">Bull wins · Recommendation: <strong>BUY</strong></span>
+        </div>
+      </div>
+
+      <!-- Risk Radar placeholder -->
+      <div style="background:#111827;border:1px solid #1e2d45;border-radius:12px;padding:16px;opacity:0.4;">
+        <div class="text-xs font-semibold mb-3" style="color:#e2e8f0;">Risk Assessment Comparison</div>
+        <div class="flex items-center justify-center" style="height:110px;">
+          <div class="text-center">
+            <div class="spinner mx-auto mb-2" style="width:20px;height:20px;border:2px solid #1e2d45;border-top-color:#64748b;border-radius:50%;"></div>
+            <div class="text-xs" style="color:#475569;">Awaiting Stage 4…</div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /RIGHT -->
+  </div><!-- /grid -->
+
+  <!-- ── TRADE HISTORY ── -->
+  <section id="history-section" class="mt-8">
+    <div class="flex items-center justify-between mb-4">
+      <div>
+        <h2 class="font-bold text-base" style="color:#e2e8f0;">Trade History</h2>
+        <p class="text-xs mt-0.5" style="color:#64748b;">Simulated NSE paper trades · <span class="font-mono">logs/trades.jsonl</span> · All prices in ₹</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <div class="relative">
+          <svg style="position:absolute;left:10px;top:50%;transform:translateY(-50%);" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" placeholder="Search symbol or order ID…" style="background:#111827;border:1px solid #1e2d45;border-radius:7px;padding:8px 12px 8px 30px;font-size:12px;color:#e2e8f0;width:230px;outline:none;" onfocus="this.style.borderColor='#ff993344'" onblur="this.style.borderColor='#1e2d45'"/>
+        </div>
+        <select style="background:#111827;border:1px solid #1e2d45;border-radius:7px;padding:8px 12px;font-size:12px;color:#94a3b8;outline:none;cursor:pointer;">
+          <option>All statuses</option>
+          <option>Executed</option>
+          <option>Held</option>
+          <option>Rejected</option>
+        </select>
+        <select style="background:#111827;border:1px solid #1e2d45;border-radius:7px;padding:8px 12px;font-size:12px;color:#94a3b8;outline:none;cursor:pointer;">
+          <option>NSE + BSE</option>
+          <option>NSE only</option>
+          <option>BSE only</option>
+        </select>
+        <button style="background:#1a2233;border:1px solid #1e2d45;border-radius:7px;padding:8px 14px;font-size:12px;color:#94a3b8;cursor:pointer;display:flex;align-items:center;gap:6px;">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Export
+        </button>
+      </div>
+    </div>
+
+    <div style="background:#111827;border:1px solid #1e2d45;border-radius:12px;overflow:hidden;">
+      <table style="width:100%;border-collapse:collapse;">
+        <thead>
+          <tr style="border-bottom:1px solid #1e2d45;">
+            <th style="padding:12px 16px;text-align:left;font-size:10px;color:#64748b;font-weight:600;letter-spacing:1px;">ORDER ID</th>
+            <th style="padding:12px 16px;text-align:left;font-size:10px;color:#64748b;font-weight:600;letter-spacing:1px;">SYMBOL</th>
+            <th style="padding:12px 16px;text-align:left;font-size:10px;color:#64748b;font-weight:600;letter-spacing:1px;">EXCHANGE</th>
+            <th style="padding:12px 16px;text-align:left;font-size:10px;color:#64748b;font-weight:600;letter-spacing:1px;">STATUS</th>
+            <th style="padding:12px 16px;text-align:left;font-size:10px;color:#64748b;font-weight:600;letter-spacing:1px;">DIRECTION</th>
+            <th style="padding:12px 16px;text-align:left;font-size:10px;color:#64748b;font-weight:600;letter-spacing:1px;">ENTRY (₹)</th>
+            <th style="padding:12px 16px;text-align:left;font-size:10px;color:#64748b;font-weight:600;letter-spacing:1px;">DATE (IST)</th>
+            <th style="padding:12px 16px;text-align:left;font-size:10px;color:#64748b;font-weight:600;letter-spacing:1px;">DETAILS</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="border-bottom:1px solid #1e2d4540;cursor:pointer;transition:background 0.15s;">
+            <td style="padding:13px 16px;font-family:monospace;font-size:11px;color:#64748b;">IN-79b52501</td>
+            <td style="padding:13px 16px;"><span style="background:#0b0f1a;color:#ff9933;font-family:monospace;font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;border:1px solid #ff993322;">RELIANCE</span></td>
+            <td style="padding:13px 16px;"><span style="background:#1a2233;color:#64748b;font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;">NSE</span></td>
+            <td style="padding:13px 16px;"><span style="background:#22c55e22;color:#22c55e;font-size:10px;font-weight:600;padding:3px 8px;border-radius:4px;">EXECUTED</span></td>
+            <td style="padding:13px 16px;"><span style="background:#22c55e22;color:#22c55e;font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;">LONG</span></td>
+            <td style="padding:13px 16px;font-family:monospace;font-size:12px;color:#e2e8f0;">₹2,941.60</td>
+            <td style="padding:13px 16px;font-size:11px;color:#64748b;">25 Apr 2026, 10:14 IST</td>
+            <td style="padding:13px 16px;font-size:11px;color:#64748b;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Long RELIANCE, SL ₹2,800, TP ₹3,150, 5% portfolio</td>
+          </tr>
+          <tr style="border-bottom:1px solid #1e2d4540;cursor:pointer;transition:background 0.15s;">
+            <td style="padding:13px 16px;font-family:monospace;font-size:11px;color:#64748b;">IN-3f8a2c11</td>
+            <td style="padding:13px 16px;"><span style="background:#0b0f1a;color:#ff9933;font-family:monospace;font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;border:1px solid #ff993322;">TCS</span></td>
+            <td style="padding:13px 16px;"><span style="background:#1a2233;color:#64748b;font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;">NSE</span></td>
+            <td style="padding:13px 16px;"><span style="background:#f59e0b22;color:#f59e0b;font-size:10px;font-weight:600;padding:3px 8px;border-radius:4px;">HELD</span></td>
+            <td style="padding:13px 16px;"><span style="background:#64748b22;color:#94a3b8;font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;">HOLD</span></td>
+            <td style="padding:13px 16px;font-family:monospace;font-size:12px;color:#e2e8f0;">—</td>
+            <td style="padding:13px 16px;font-size:11px;color:#64748b;">24 Apr 2026, 13:42 IST</td>
+            <td style="padding:13px 16px;font-size:11px;color:#64748b;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Mixed signals, IT sector FII outflows, hold decision</td>
+          </tr>
+          <tr style="border-bottom:1px solid #1e2d4540;cursor:pointer;transition:background 0.15s;">
+            <td style="padding:13px 16px;font-family:monospace;font-size:11px;color:#64748b;">IN-a2d91e83</td>
+            <td style="padding:13px 16px;"><span style="background:#0b0f1a;color:#ff9933;font-family:monospace;font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;border:1px solid #ff993322;">HDFCBANK</span></td>
+            <td style="padding:13px 16px;"><span style="background:#1a2233;color:#64748b;font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;">NSE</span></td>
+            <td style="padding:13px 16px;"><span style="background:#ef444422;color:#ef4444;font-size:10px;font-weight:600;padding:3px 8px;border-radius:4px;">REJECTED</span></td>
+            <td style="padding:13px 16px;"><span style="background:#ef444422;color:#ef4444;font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;">SHORT</span></td>
+            <td style="padding:13px 16px;font-family:monospace;font-size:12px;color:#e2e8f0;">₹1,622.40</td>
+            <td style="padding:13px 16px;font-size:11px;color:#64748b;">23 Apr 2026, 09:22 IST</td>
+            <td style="padding:13px 16px;font-size:11px;color:#64748b;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Conservative risk manager vetoed, RBI policy risk 9.2/10</td>
+          </tr>
+          <tr style="border-bottom:1px solid #1e2d4540;cursor:pointer;transition:background 0.15s;">
+            <td style="padding:13px 16px;font-family:monospace;font-size:11px;color:#64748b;">IN-c5f3b740</td>
+            <td style="padding:13px 16px;"><span style="background:#0b0f1a;color:#ff9933;font-family:monospace;font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;border:1px solid #ff993322;">INFY</span></td>
+            <td style="padding:13px 16px;"><span style="background:#1a2233;color:#64748b;font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;">BSE</span></td>
+            <td style="padding:13px 16px;"><span style="background:#22c55e22;color:#22c55e;font-size:10px;font-weight:600;padding:3px 8px;border-radius:4px;">EXECUTED</span></td>
+            <td style="padding:13px 16px;"><span style="background:#22c55e22;color:#22c55e;font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;">LONG</span></td>
+            <td style="padding:13px 16px;font-family:monospace;font-size:12px;color:#e2e8f0;">₹1,478.20</td>
+            <td style="padding:13px 16px;font-size:11px;color:#64748b;">22 Apr 2026, 11:05 IST</td>
+            <td style="padding:13px 16px;font-size:11px;color:#64748b;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Long INFY, Q4 earnings beat, AI deal pipeline strong</td>
+          </tr>
+          <tr style="cursor:pointer;transition:background 0.15s;">
+            <td style="padding:13px 16px;font-family:monospace;font-size:11px;color:#64748b;">IN-71e0d294</td>
+            <td style="padding:13px 16px;"><span style="background:#0b0f1a;color:#ff9933;font-family:monospace;font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;border:1px solid #ff993322;">WIPRO</span></td>
+            <td style="padding:13px 16px;"><span style="background:#1a2233;color:#64748b;font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;">NSE</span></td>
+            <td style="padding:13px 16px;"><span style="background:#f59e0b22;color:#f59e0b;font-size:10px;font-weight:600;padding:3px 8px;border-radius:4px;">HELD</span></td>
+            <td style="padding:13px 16px;"><span style="background:#64748b22;color:#94a3b8;font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;">HOLD</span></td>
+            <td style="padding:13px 16px;font-family:monospace;font-size:12px;color:#e2e8f0;">—</td>
+            <td style="padding:13px 16px;font-size:11px;color:#64748b;">21 Apr 2026, 14:18 IST</td>
+            <td style="padding:13px 16px;font-size:11px;color:#64748b;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Guidance miss risk, bear and bull tied, neutral stance</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="flex items-center justify-between px-4 py-3" style="border-top:1px solid #1e2d45;">
+        <span class="text-xs" style="color:#64748b;">Showing 5 of 31 trades · All times in IST</span>
+        <div class="flex items-center gap-1">
+          <button style="background:#1a2233;border:1px solid #1e2d45;border-radius:5px;padding:4px 10px;font-size:11px;color:#64748b;cursor:pointer;">← Prev</button>
+          <button style="background:#ff993322;border:1px solid #ff993344;border-radius:5px;padding:4px 10px;font-size:11px;color:#ff9933;cursor:pointer;">1</button>
+          <button style="background:#1a2233;border:1px solid #1e2d45;border-radius:5px;padding:4px 10px;font-size:11px;color:#64748b;cursor:pointer;">2</button>
+          <button style="background:#1a2233;border:1px solid #1e2d45;border-radius:5px;padding:4px 10px;font-size:11px;color:#64748b;cursor:pointer;">3</button>
+          <button style="background:#1a2233;border:1px solid #1e2d45;border-radius:5px;padding:4px 10px;font-size:11px;color:#64748b;cursor:pointer;">Next →</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- FOOTER -->
+<footer style="border-top:1px solid #1e2d45;margin-top:40px;padding:16px 24px;">
+  <div class="india-stripe mb-3"></div>
+  <div class="max-w-screen-2xl mx-auto flex items-center justify-between">
+    <span class="text-xs" style="color:#475569;">TradingAgents India · NSE/BSE · Multi-Agent LLM Pipeline · GPT-4o-mini · SEBI Disclaimer: For educational/simulation purposes only. Not financial advice.</span>
+    <span class="text-xs font-mono" style="color:#475569;">v1.0.0 · 13 agents · 6 stages · IST (UTC+5:30)</span>
+  </div>
+</footer>
+
+<script>
+  function toggleCard(id) {
+    const body = document.getElementById(id);
+    const chevron = document.getElementById(id + '-chevron');
+    if (!body) return;
+    if (body.classList.contains('closed')) {
+      body.classList.remove('closed');
+      if (chevron) chevron.style.transform = 'rotate(0deg)';
+    } else {
+      body.classList.add('closed');
+      if (chevron) chevron.style.transform = 'rotate(-90deg)';
+    }
+  }
+
+  function switchTab(card, tab) {
+    const tabs = ['market','sentiment','news','fundamentals'];
+    tabs.forEach(t => {
+      const btn = document.getElementById(card + '-' + t + '-tab');
+      const panel = document.getElementById(card + '-' + t);
+      if (btn) {
+        btn.style.color = t === tab ? '#ff9933' : '#64748b';
+        btn.style.borderBottom = t === tab ? '2px solid #ff9933' : '2px solid transparent';
+      }
+      if (panel) panel.style.display = t === tab ? 'block' : 'none';
+    });
+  }
+
+  function setTicker(t) {
+    document.getElementById('tickerInput').value = t;
+  }
+
+  function startPipeline() {
+    const btn = document.getElementById('analyzeBtn');
+    btn.innerHTML = `<div class="spinner" style="width:14px;height:14px;border:2px solid rgba(255,255,255,0.3);border-top-color:#fff;border-radius:50%;"></div> Analysing…`;
+    btn.disabled = true;
+    setTimeout(() => {
+      btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg> Analyse`;
+      btn.disabled = false;
+    }, 3000);
+  }
+
+  document.querySelectorAll('tbody tr').forEach(row => {
+    row.addEventListener('mouseenter', () => row.style.background = 'rgba(30,45,69,0.4)');
+    row.addEventListener('mouseleave', () => row.style.background = '');
+  });
+
+  // s2 starts closed
+  document.getElementById('s2').classList.add('closed');
+  document.getElementById('s2-chevron').style.transform = 'rotate(-90deg)';
+</script>
+</body>
+</html>

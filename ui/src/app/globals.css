@@ -1,0 +1,53 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #0b0f1a;
+  --surface:    #111827;
+  --card:       #1a2233;
+  --border:     #1e2d45;
+  --accent:     #ff9933;
+  --green:      #22c55e;
+  --red:        #ef4444;
+  --yellow:     #f59e0b;
+  --muted:      #64748b;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background: var(--background);
+  color: #e2e8f0;
+  font-family: 'Inter', sans-serif;
+  min-height: 100vh;
+}
+
+/* Scrollbars */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: #111827; }
+::-webkit-scrollbar-thumb { background: #1e2d45; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #2d3e58; }
+
+/* India stripe */
+.india-stripe {
+  background: linear-gradient(90deg, #ff9933 0 33%, #fff3 33% 66%, #138808 66% 100%);
+  height: 2px;
+}
+
+/* Shimmer skeleton */
+.skeleton {
+  background: linear-gradient(90deg, #1a2233, #1e2d45, #1a2233);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* Stage running border */
+.stage-running-border {
+  animation: stage-pulse 1.6s ease-in-out infinite;
+}
+
+/* Smooth accordion */
+.accordion-open  { max-height: 2000px; opacity: 1; overflow: hidden; transition: max-height .4s ease, opacity .3s ease; }
+.accordion-close { max-height: 0;      opacity: 0; overflow: hidden; transition: max-height .35s ease, opacity .25s ease; }
