@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from api.routes.analyze import router as analyze_router
 from api.routes.history import router as history_router
+from api.routes.options import router as options_router
 from api.routes.pricehistory import router as pricehistory_router
 from api.routes.usage import router as usage_router
 
@@ -32,6 +33,7 @@ app.include_router(analyze_router, prefix="/api")
 app.include_router(history_router, prefix="/api")
 app.include_router(pricehistory_router, prefix="/api")
 app.include_router(usage_router, prefix="/api")
+app.include_router(options_router)  # /kite/* login flow + /api/options/*
 
 
 @app.get("/health")

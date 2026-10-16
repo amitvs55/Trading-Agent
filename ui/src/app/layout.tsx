@@ -5,7 +5,7 @@ import { Navbar } from "@/components/layout/Navbar";
 
 export const metadata: Metadata = {
   title: "TradingAgents India",
-  description: "Multi-agent LLM trading analysis — NSE/BSE",
+  description: "Live NIFTY options signals and multi-agent research for NSE",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
@@ -16,12 +16,12 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         {children}
         <footer className="border-t border-[#1e2d45] mt-10 py-4 px-6">
           <div className="india-stripe mb-3" />
-          <div className="max-w-screen-2xl mx-auto flex items-center justify-between text-xs text-[#475569]">
+          <div className="max-w-screen-2xl mx-auto flex flex-wrap items-center justify-between gap-2 text-xs text-[#475569]">
             <span>
-              TradingAgents India · NSE/BSE · Multi-Agent LLM Pipeline · GPT-4o-mini ·{" "}
-              <span className="text-[#ff993388]">For educational/simulation purposes only. Not financial advice.</span>
+              TradingAgents India · NSE · Live options signals + research pipeline ·{" "}
+              <span className="text-[#ff993388]">For personal research and education. Not investment advice.</span>
             </span>
-            <span className="font-mono">v1.0.0 · 13 agents · 6 stages · IST (UTC+5:30)</span>
+            <span className="font-mono">All times IST (UTC+5:30)</span>
           </div>
         </footer>
       </body>

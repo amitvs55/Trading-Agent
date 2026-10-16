@@ -17,7 +17,8 @@ class Settings(BaseSettings):
     TRADE_LOG_FILE: str = "logs/trades.jsonl"
     DATA_DIR: str = "data"
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    # extra="ignore": .env also holds the options tool's KITE_/TELEGRAM_/OPTIONS_ settings
+    model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 
 
 settings = Settings()
