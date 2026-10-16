@@ -67,6 +67,7 @@ class Supervisor:
         self.last_exit_code: int | None = None
         self.last_command: str | None = None
         self._handled_command: str | None = None
+        self._announced: datetime | None = None     # next start already written to the log
 
     # ── Database (best effort: scheduling must survive a database outage) ──
 
@@ -130,9 +131,15 @@ class Supervisor:
         self.handle_command(now)
         if self.proc is None and next_start(now, self.calendar, self.last_run) <= now:
             self._start(now)
+        if self.proc is None:
+            target = next_start(now, self.calendar, self.last_run)
+            if target != self._announced:
+                logger.info("Waiting: next session %s", target.isoformat(timespec="minutes"))
+                self._announced = target
         self._heartbeat(now)
 
     def run(self, sleep: Callable[[float], None] = _time.sleep, steps: int | None = None) -> None:
+        logger.info("Recorder supervisor started (database %s)", "connected" if self.repo else "unavailable")
         n = 0
         while steps is None or n < steps:
             self.step(self.now_fn())
