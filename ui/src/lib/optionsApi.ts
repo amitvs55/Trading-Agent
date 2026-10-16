@@ -102,7 +102,7 @@ export async function apiJson<T>(path: string, init: RequestInit = {}): Promise<
   return res.json() as Promise<T>;
 }
 
-export function sendJson<T>(path: string, method: "POST" | "PUT", body: unknown): Promise<T> {
+export function sendJson<T>(path: string, method: "POST" | "PUT" | "PATCH" | "DELETE", body: unknown): Promise<T> {
   return apiJson<T>(path, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
 }
 

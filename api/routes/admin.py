@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 
 from api.deps import base_settings, current_user, get_cfg, get_repo, get_store, invalidate_cfg, require_admin
 from options.admin import connectors, health, security
-from options.admin.repo import AdminRepo
+from options.admin.repo import ROLES, AdminRepo, LastAdmin, UserExists
 from options.config import OptionsSettings
 from options.core.calendar import NseCalendar, now_ist
 from options.daemon import COMMAND_KEY, can_start_now
@@ -128,6 +128,104 @@ def auth_password(body: PasswordBody, user: dict = Depends(current_user), repo: 
         raise HTTPException(422, {"code": "weak_password", "message": problem})
     repo.set_password(user["id"], body.new_password)
     repo.revoke_user_sessions(user["id"], keep_token=user["token"])     # sign out every other device
+    return {"ok": True}
+
+
+class ProfileBody(BaseModel):
+    full_name: str = Field(max_length=80)
+
+
+@router.patch("/api/auth/profile")
+def auth_profile(body: ProfileBody, user: dict = Depends(current_user), repo: AdminRepo = Depends(get_repo)) -> dict:
+    if not user["id"]:
+        raise HTTPException(400, {"code": "no_profile", "message": "The API token has no profile to edit."})
+    return repo.update_user(user["id"], full_name=body.full_name)
+
+
+# ── Users (admin) ────────────────────────────────────────────────────────────
+
+class NewUserBody(BaseModel):
+    full_name: str = Field(min_length=1, max_length=80)
+    username: str = Field(min_length=3, max_length=40, pattern=r"^[A-Za-z0-9_.-]+$")
+    password: str = Field(min_length=1, max_length=200)
+    role: str = "viewer"
+
+
+class UserPatchBody(BaseModel):
+    full_name: str | None = Field(None, max_length=80)
+    role: str | None = None
+    disabled: bool | None = None
+
+
+class ResetPasswordBody(BaseModel):
+    new_password: str = Field(min_length=1, max_length=200)
+
+
+def _user_or_404(repo: AdminRepo, user_id: int) -> dict:
+    target = repo.get_user(user_id)
+    if target is None:
+        raise HTTPException(404, {"code": "unknown_user", "message": "No such user."})
+    return target
+
+
+@router.get("/api/admin/users")
+def admin_users(_: dict = Depends(require_admin), repo: AdminRepo = Depends(get_repo)) -> dict:
+    return {"users": repo.list_users(), "roles": list(ROLES)}
+
+
+@router.post("/api/admin/users")
+def admin_create_user(body: NewUserBody, user: dict = Depends(require_admin), repo: AdminRepo = Depends(get_repo)) -> dict:
+    if body.role not in ROLES:
+        raise HTTPException(422, {"code": "invalid", "message": f"Role must be one of {', '.join(ROLES)}."})
+    if problem := security.password_problem(body.password, body.username):
+        raise HTTPException(422, {"code": "weak_password", "message": problem})
+    try:
+        new_id = repo.create_user(body.username, body.password, role=body.role, full_name=body.full_name)
+    except UserExists as e:
+        raise HTTPException(409, {"code": "username_taken", "message": str(e)})
+    logger.info("%s created %s user %s", user["username"], body.role, body.username.lower())
+    return repo.get_user(new_id)
+
+
+@router.patch("/api/admin/users/{user_id}")
+def admin_update_user(user_id: int, body: UserPatchBody, user: dict = Depends(require_admin),
+                      repo: AdminRepo = Depends(get_repo)) -> dict:
+    _user_or_404(repo, user_id)
+    if user_id == user["id"] and (body.disabled or (body.role is not None and body.role != user["role"])):
+        raise HTTPException(422, {"code": "self_change", "message": "You can't disable your own account or change "
+                                  "your own role. Ask another admin to do it."})
+    try:
+        updated = repo.update_user(user_id, full_name=body.full_name, role=body.role, disabled=body.disabled)
+    except LastAdmin as e:
+        raise HTTPException(409, {"code": "last_admin", "message": str(e)})
+    except ValueError as e:
+        raise HTTPException(422, {"code": "invalid", "message": str(e)})
+    logger.info("%s updated user %s", user["username"], updated["username"])
+    return updated
+
+
+@router.post("/api/admin/users/{user_id}/password")
+def admin_reset_password(user_id: int, body: ResetPasswordBody, user: dict = Depends(require_admin),
+                         repo: AdminRepo = Depends(get_repo)) -> dict:
+    target = _user_or_404(repo, user_id)
+    if problem := security.password_problem(body.new_password, target["username"]):
+        raise HTTPException(422, {"code": "weak_password", "message": problem})
+    repo.set_password(user_id, body.new_password)
+    repo.revoke_user_sessions(user_id, keep_token=user["token"] if user_id == user["id"] else None)
+    logger.info("%s reset the password of %s", user["username"], target["username"])
+    return {"ok": True}
+
+
+@router.delete("/api/admin/users/{user_id}")
+def admin_delete_user(user_id: int, user: dict = Depends(require_admin), repo: AdminRepo = Depends(get_repo)) -> dict:
+    target = _user_or_404(repo, user_id)
+    if user_id == user["id"]:
+        raise HTTPException(422, {"code": "self_change", "message": "You can't delete the account you're signed in with."})
+    try:
+        repo.delete_user(user_id)
+    except LastAdmin as e:
+        raise HTTPException(409, {"code": "last_admin", "message": str(e)})
+    logger.info("%s deleted user %s", user["username"], target["username"])
     return {"ok": True}
 
 

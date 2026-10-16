@@ -3,9 +3,16 @@
 export interface User {
   id: number;
   username: string;
-  role: "admin" | string;
+  role: "admin" | "viewer" | string;
+  full_name?: string | null;
+  disabled?: boolean;
   created_at?: string;
   last_login_at?: string | null;
+}
+
+export interface UsersResponse {
+  users: User[];
+  roles: string[];
 }
 
 export interface SessionResponse {

@@ -8,7 +8,7 @@ import { ageSeconds, fmtAge, fmtDateTime, fmtNum } from "@/lib/optionsFormat";
 import { Button } from "./ConnectorCard";
 import { LiveAge } from "@/components/common/LiveAge";
 
-function Panel({ icon, title, children, subtitle }: { icon: ReactNode; title: string; subtitle?: string; children: ReactNode }) {
+export function Panel({ icon, title, children, subtitle }: { icon: ReactNode; title: string; subtitle?: string; children: ReactNode }) {
   return (
     <section className="bg-surface border border-[#1e2d45] rounded-xl overflow-hidden">
       <div className="px-5 py-3.5 border-b border-[#1e2d45]">
@@ -20,7 +20,7 @@ function Panel({ icon, title, children, subtitle }: { icon: ReactNode; title: st
   );
 }
 
-function Note({ note }: { note: { tone: "ok" | "err"; text: string } | null }) {
+export function Note({ note }: { note: { tone: "ok" | "err"; text: string } | null }) {
   if (!note) return null;
   return (
     <div role="status" className={cn("mt-3 rounded-lg border px-3 py-2 text-xs",
@@ -56,7 +56,7 @@ function Num({ id, label, value, onChange, suffix, hint }: {
   );
 }
 
-function Pw({ id, label, value, onChange, auto }: {
+export function Pw({ id, label, value, onChange, auto }: {
   id: string; label: string; value: string; onChange: (v: string) => void; auto: string;
 }) {
   return (

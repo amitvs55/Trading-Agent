@@ -2,9 +2,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, LogOut, PlugZap, TrendingUp } from "lucide-react";
+import { ChevronDown, LogOut, PlugZap, TrendingUp, UserRound } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthGate";
 import { cn } from "@/lib/utils";
+import { displayName, initials, ROLE_LABEL } from "@/lib/people";
 import { useOptionsApi } from "@/lib/optionsApi";
 import { fmtNum } from "@/lib/optionsFormat";
 import type { BoardResponse } from "@/types/options";
@@ -37,25 +38,31 @@ function UserMenu() {
     // Same footprint as the real button, so nothing moves when the profile arrives
     return <div className="flex-shrink-0 h-[34px] w-[50px] 2xl:w-[96px] rounded-lg border border-[#1e2d45] bg-card" aria-hidden />;
   }
-  const initial = user.username.slice(0, 1).toUpperCase();
+  const name = displayName(user);
   return (
     <div className="relative flex-shrink-0" ref={ref}>
-      <button onClick={() => setOpen(o => !o)} aria-haspopup="menu" aria-expanded={open}
+      <button onClick={() => setOpen(o => !o)} aria-haspopup="menu" aria-expanded={open} aria-label={`Account menu for ${name}`}
               className="flex items-center gap-2 h-[34px] rounded-lg border border-[#1e2d45] bg-card pl-1 pr-2 hover:border-[#2d3e58] transition-colors">
-        <span className="w-6 h-6 rounded-md grid place-items-center bg-[#ff993326] text-[#ff9933] text-xs font-bold">{initial}</span>
-        <span className="hidden 2xl:inline text-xs text-[#e2e8f0]">{user.username}</span>
+        <span className="w-6 h-6 rounded-md grid place-items-center bg-[#ff993326] text-[#ff9933] text-[10px] font-bold tracking-wide">{initials(user)}</span>
+        <span className="hidden 2xl:inline text-xs text-[#e2e8f0] max-w-[120px] truncate">{name}</span>
         <ChevronDown size={12} className={cn("text-[#64748b] transition-transform duration-200", open && "rotate-180")} />
       </button>
       {open && (
         <div role="menu" className="menu-pop absolute right-0 mt-2 w-56 rounded-xl border border-[#1e2d45] bg-surface shadow-[0_16px_40px_rgba(0,0,0,.5)] p-1.5 z-50">
           <div className="px-3 py-2 border-b border-[#1e2d45] mb-1">
-            <div className="text-sm font-semibold text-[#e2e8f0]">{user.username}</div>
-            <div className="text-[10px] tracking-widest text-[#64748b] uppercase">{user.role}</div>
+            <div className="text-sm font-semibold text-[#e2e8f0] truncate">{name}</div>
+            <div className="text-[10px] tracking-widest text-[#64748b] uppercase">@{user.username} · {ROLE_LABEL[user.role] ?? user.role}</div>
           </div>
-          <Link href="/connectors" role="menuitem" onClick={() => setOpen(false)}
+          <Link href="/account" role="menuitem" onClick={() => setOpen(false)}
                 className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-[#94a3b8] hover:bg-card hover:text-[#e2e8f0]">
-            <PlugZap size={14} /> Connectors &amp; health
+            <UserRound size={14} /> {user.role === "admin" ? "Your account & users" : "Your account"}
           </Link>
+          {user.role === "admin" && (
+            <Link href="/connectors" role="menuitem" onClick={() => setOpen(false)}
+                  className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-[#94a3b8] hover:bg-card hover:text-[#e2e8f0]">
+              <PlugZap size={14} /> Connectors &amp; health
+            </Link>
+          )}
           <button role="menuitem" onClick={() => auth.logout()}
                   className="w-full flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-[#94a3b8] hover:bg-card hover:text-[#fca5a5]">
             <LogOut size={14} /> Sign out

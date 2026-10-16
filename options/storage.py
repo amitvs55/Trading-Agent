@@ -131,6 +131,8 @@ users = Table(
     Column("role", String(16), nullable=False),
     Column("created_at", DateTime(timezone=True), nullable=False),
     Column("last_login_at", DateTime(timezone=True)),
+    Column("full_name", String(80)),                               # shown in the navbar, e.g. "Amit Shinde"
+    Column("disabled", Integer, nullable=False, server_default="0"),
 )
 
 user_sessions = Table(
@@ -187,7 +189,27 @@ def make_engine(url: str) -> Engine:
         Path(url[len("sqlite:///"):]).parent.mkdir(parents=True, exist_ok=True)
     engine = create_engine(url, pool_pre_ping=True)
     metadata.create_all(engine)
+    _add_missing_columns(engine)
     return engine
+
+
+# Columns added after a table already existed in production: create_all() only creates
+# missing tables, so these are added in place (nullable or with a default, so it is safe).
+_LATER_COLUMNS = {"users": [("full_name", "VARCHAR(80)"), ("disabled", "INTEGER NOT NULL DEFAULT 0")]}
+
+
+def _add_missing_columns(engine: Engine) -> None:
+    from sqlalchemy import inspect, text
+
+    insp = inspect(engine)
+    for table, cols in _LATER_COLUMNS.items():
+        if not insp.has_table(table):
+            continue
+        have = {c["name"] for c in insp.get_columns(table)}
+        for name, ddl in cols:
+            if name not in have:
+                with engine.begin() as conn:
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}"))
 
 
 class Store:

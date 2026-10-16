@@ -15,6 +15,16 @@ from utils.logger import setup_logger
 logger = setup_logger("options.admin")
 
 SESSION_TTL = timedelta(days=14)
+ROLES = ("admin", "viewer")          # viewers see every page but cannot change settings or accounts
+
+
+class UserExists(ValueError):
+    pass
+
+
+class LastAdmin(ValueError):
+    pass
+
 _DUMMY_HASH: str | None = None
 TOUCH_EVERY = timedelta(minutes=5)          # don't write last_seen_at on every request
 
@@ -87,12 +97,61 @@ class AdminRepo:
         with self.engine.connect() as conn:
             return bool(conn.execute(select(func.count()).select_from(users).where(users.c.role == "admin")).scalar())
 
-    def create_user(self, username: str, password: str, role: str = "admin") -> int:
+    def _active_admins(self, conn) -> int:
+        return int(conn.execute(select(func.count()).select_from(users)
+                                .where(users.c.role == "admin", users.c.disabled == 0)).scalar())
+
+    def create_user(self, username: str, password: str, role: str = "admin", full_name: str | None = None) -> int:
+        if role not in ROLES:
+            raise ValueError(f"role must be one of {', '.join(ROLES)}")
+        name = username.strip().lower()
         with self.engine.begin() as conn:
-            res = conn.execute(users.insert().values(username=username.strip().lower(),
-                                                     password_hash=security.hash_password(password),
-                                                     role=role, created_at=self.now()))
+            if conn.execute(select(users.c.id).where(users.c.username == name)).first():
+                raise UserExists(f"The username {name} is already taken.")
+            res = conn.execute(users.insert().values(username=name, password_hash=security.hash_password(password),
+                                                     role=role, created_at=self.now(), disabled=0,
+                                                     full_name=(full_name or "").strip() or None))
             return int(res.inserted_primary_key[0])
+
+    def list_users(self) -> list[dict]:
+        with self.engine.connect() as conn:
+            return [_public(r) for r in conn.execute(select(users).order_by(users.c.created_at))]
+
+    def update_user(self, user_id: int, *, full_name: str | None = None, role: str | None = None,
+                    disabled: bool | None = None) -> dict:
+        """Change a user's name, role or access. The last active admin can never be demoted or disabled."""
+        values: dict = {}
+        if full_name is not None:
+            values["full_name"] = full_name.strip() or None
+        if role is not None:
+            if role not in ROLES:
+                raise ValueError(f"role must be one of {', '.join(ROLES)}")
+            values["role"] = role
+        if disabled is not None:
+            values["disabled"] = 1 if disabled else 0
+        with self.engine.begin() as conn:
+            row = conn.execute(select(users).where(users.c.id == user_id)).first()
+            if row is None:
+                raise KeyError(user_id)
+            loses_admin = row.role == "admin" and not row.disabled and (
+                (role is not None and role != "admin") or disabled is True)
+            if loses_admin and self._active_admins(conn) <= 1:
+                raise LastAdmin("There must always be at least one active admin.")
+            if values:
+                conn.execute(update(users).where(users.c.id == user_id).values(**values))
+        if disabled:
+            self.revoke_user_sessions(user_id)
+        return self.get_user(user_id)
+
+    def delete_user(self, user_id: int) -> None:
+        with self.engine.begin() as conn:
+            row = conn.execute(select(users).where(users.c.id == user_id)).first()
+            if row is None:
+                raise KeyError(user_id)
+            if row.role == "admin" and not row.disabled and self._active_admins(conn) <= 1:
+                raise LastAdmin("There must always be at least one active admin.")
+            conn.execute(delete(user_sessions).where(user_sessions.c.user_id == user_id))
+            conn.execute(delete(users).where(users.c.id == user_id))
 
     def get_user(self, user_id: int) -> dict | None:
         with self.engine.connect() as conn:
@@ -105,7 +164,7 @@ class AdminRepo:
         if row is None:
             security.verify_password(password, _dummy_hash())     # same cost as a real check: no username probing
             return None
-        if not security.verify_password(password, row.password_hash):
+        if not security.verify_password(password, row.password_hash) or row.disabled:
             return None
         with self.engine.begin() as conn:
             conn.execute(update(users).where(users.c.id == row.id).values(last_login_at=self.now()))
@@ -132,11 +191,14 @@ class AdminRepo:
             row = conn.execute(select(user_sessions).where(user_sessions.c.token_digest == digest)).first()
         if row is None or _aware(row.expires_at) <= now:
             return None
+        user = self.get_user(row.user_id)
+        if user is None or user["disabled"]:
+            return None
         if now - _aware(row.last_seen_at) > TOUCH_EVERY:
             with self.engine.begin() as conn:
                 conn.execute(update(user_sessions).where(user_sessions.c.token_digest == digest)
                              .values(last_seen_at=now, expires_at=now + SESSION_TTL))
-        return self.get_user(row.user_id)
+        return user
 
     def revoke_session(self, token: str) -> None:
         with self.engine.begin() as conn:
@@ -232,6 +294,7 @@ def _dummy_hash() -> str:
 
 
 def _public(row) -> dict:
-    return {"id": row.id, "username": row.username, "role": row.role,
+    return {"id": row.id, "username": row.username, "role": row.role, "full_name": row.full_name,
+            "disabled": bool(row.disabled),
             "created_at": _aware(row.created_at).isoformat(),
             "last_login_at": _aware(row.last_login_at).isoformat() if row.last_login_at else None}
