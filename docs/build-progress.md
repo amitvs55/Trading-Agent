@@ -3,7 +3,7 @@
 **Resume instruction for a new session:** read this file and `docs/index-options-plan.md`, then continue with the first unchecked item. Each item lists its files.
 
 **Decisions locked in (16 Oct 2026):**
-- **Broker:** Zerodha Kite Connect, data only, no orders.
+- **Broker:** **Angel One SmartAPI** (free), data only, no orders. Switched from Kite on 16 Oct 2026 because Kite's data plan costs ₹500/month. `DATA_PROVIDER=angel` (default) or `kite`; both adapters hand data over in Kite's shapes, so nothing downstream knows which is in use.
 - **Alerts:** Telegram. WhatsApp can be added later behind `options/notify`.
 - **How to set up and deploy:** `docs/options-runbook.md`.
 - **Scope:** NIFTY first. Intraday + positional, **buy-only** (BUY CE / BUY PE / EXIT).
@@ -66,12 +66,15 @@
 ## Phase E — Validation and deploy
 - [x] Replay harness over recorded bars through the live engine — `options/backtest/replay.py` (deterministic; separate output DB)
 - [x] Railway (16 Oct 2026): Postgres added; `recorder` service (always-on daemon, `SERVICE_ROLE=recorder`); `DATABASE_URL` wired to api and recorder; api, ui and recorder deployed and verified. **Secrets still to be set by the user** (see below).
+- [x] Angel One adapter (16 Oct 2026) — `options/brokers/angel.py`, chosen by `options/brokers/make_broker`; automatic login (MPIN + TOTP, retries until 15:00) in `options/session.py`; status fields `data_provider*` in the API and the dashboard's connection chip. Tests: `tests/options/test_angel.py` and the auto-login cases in `test_session.py` (180 passing). Checked against Angel's live scrip master: NIFTY lot 65, step 50, weekly 19 Oct; BANKNIFTY lot 30, step 100; all 13 heavyweights found. **Not yet run against a live Angel login** (needs the user's credentials).
 - [ ] Shadow mode for 4–6 weeks, then LIVE per setup
 
 ## User setup still pending
-- **Railway variables on `api`:** `DASHBOARD_TOKEN` (set this first: the dashboard is public until it's set), `KITE_API_KEY`, `KITE_API_SECRET`, `KITE_USER_ID`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`.
-- **Railway variables on `recorder`:** `KITE_API_KEY`, `KITE_API_SECRET`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`.
+- **Angel One:** account, TOTP secret and SmartAPI app (runbook §2.1).
+- **Railway variables on `api`:** `DASHBOARD_TOKEN` (set this first: the dashboard is public until it's set), `ANGEL_API_KEY`, `ANGEL_CLIENT_CODE`, `ANGEL_PIN`, `ANGEL_TOTP_SECRET`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`.
+- **Railway variables on `recorder`:** `ANGEL_API_KEY`, `ANGEL_CLIENT_CODE`, `ANGEL_PIN`, `ANGEL_TOTP_SECRET`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`.
+- **Deploy** `api`, `recorder` and `ui` with the Angel adapter (not yet deployed).
 - **Before 1 Dec 2026:** set Builder = Dockerfile (and Healthcheck = /health on `api`) in the dashboard for `api` and `ui`, because railway.json stops working then (runbook §8).
 - **Rotate the OpenAI API key:** a Railway config dump printed it into the 16 Oct session log.
-- **Kite Connect:** create the app (Appendix A of the plan) and set `KITE_API_KEY`, `KITE_API_SECRET` and `KITE_USER_ID` on Railway.
+- **Kite Connect (optional, later):** only if switching back with `DATA_PROVIDER=kite`.
 - **Telegram:** create the bot (Appendix C of the plan) and set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`.

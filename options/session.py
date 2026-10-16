@@ -1,4 +1,7 @@
-"""One trading day: wait for the Kite login, load contracts, record the market, report.
+"""One trading day: log in to the data provider, load contracts, record the market, report.
+
+Angel One logs in by itself (MPIN + TOTP). Kite needs the person's daily login, prompted on
+Telegram.
 
 options.daemon starts this in a fresh process at 08:30 IST on each trading day; it exits
 after the close, so every day starts with a fresh process and WebSocket.
@@ -35,6 +38,32 @@ LOGIN_REMINDERS = (time(9, 5), time(9, 20))
 LOGIN_DEADLINE = time(15, 0)
 RECORD_UNTIL = time(15, 31)
 MAX_LOGIN_ATTEMPTS = 3
+AUTO_LOGIN_RETRY_S = (30, 60, 120, 300, 600)    # waits between automatic login attempts
+
+
+def auto_login(broker, store: Store, notifier: Notifier, today: date, now_fn: Callable[[], datetime],
+               sleep: Callable[[float], None]) -> bool:
+    """Log in without the person (Angel One), retrying with backoff until the deadline."""
+    deadline = at_ist(today, LOGIN_DEADLINE)
+    reason = "no attempt made"
+    for attempt, wait in enumerate((0, *AUTO_LOGIN_RETRY_S), start=1):
+        if wait:
+            if now_fn() + timedelta(seconds=wait) >= deadline:
+                break
+            sleep(wait)
+        try:
+            user_id = broker.login()
+        except Exception as e:
+            reason = str(e)[:200] or type(e).__name__
+            logger.warning("%s login attempt %d failed: %s", broker.name, attempt, reason)
+            if attempt == 2:
+                notifier.send(f"⚠️ {escape(broker.name)} login failed ({escape(reason)}). Retrying.")
+            continue
+        store.save_access_token(today, "auto-login", user_id, now_fn())   # marks the day as connected
+        return True
+    notifier.send(f"🔴 <b>{escape(broker.name)} login failed</b>: {escape(reason)}. "
+                  "Nothing is being recorded today. Check the ANGEL_* variables on Railway.")
+    return False
 
 
 def wait_for_login(store: Store, notifier: Notifier, login_url: str, today: date,
@@ -90,30 +119,36 @@ def run(cfg: OptionsSettings = default_settings, *, now_fn: Callable[[], datetim
 
     notifier = notifier or make_notifier(cfg)
     if broker is None:
-        if not (cfg.KITE_API_KEY and cfg.KITE_API_SECRET):
-            notifier.send("⚠️ KITE_API_KEY / KITE_API_SECRET are not set, so today's session can't start.")
+        missing = cfg.missing_provider_keys()
+        if missing:
+            notifier.send(f"⚠️ {' / '.join(missing)} {'is' if len(missing) == 1 else 'are'} not set, "
+                          "so today's session can't start.")
             return 2
-        from options.brokers.kite import KiteBroker
-        broker = KiteBroker(cfg.KITE_API_KEY, cfg.KITE_API_SECRET)
+        from options.brokers import make_broker
+        broker = make_broker(cfg)
     store = store or Store(make_engine(cfg.DATABASE_URL))
 
-    # Log in, and make sure the token actually works before relying on it
-    rejected = None
-    for _ in range(MAX_LOGIN_ATTEMPTS):
-        token = wait_for_login(store, notifier, broker.login_url(), today, now_fn, sleep, reject=rejected)
-        if token is None:
-            notifier.send("🔴 No Kite login by 15:00, so nothing was recorded today.")
+    if getattr(broker, "auto_login", False):
+        if not auto_login(broker, store, notifier, today, now_fn, sleep):
             return 1
-        broker.set_access_token(token)
-        try:
-            broker.profile()
-            break
-        except Exception as e:
-            logger.warning("Saved Kite token rejected: %s", type(e).__name__)
-            rejected = token
     else:
-        notifier.send("🔴 Kite kept rejecting the login, so nothing was recorded today.")
-        return 1
+        # Kite: wait for the person's login, and make sure the token works before relying on it
+        rejected = None
+        for _ in range(MAX_LOGIN_ATTEMPTS):
+            token = wait_for_login(store, notifier, broker.login_url(), today, now_fn, sleep, reject=rejected)
+            if token is None:
+                notifier.send("🔴 No Kite login by 15:00, so nothing was recorded today.")
+                return 1
+            broker.set_access_token(token)
+            try:
+                broker.profile()
+                break
+            except Exception as e:
+                logger.warning("Saved Kite token rejected: %s", type(e).__name__)
+                rejected = token
+        else:
+            notifier.send("🔴 Kite kept rejecting the login, so nothing was recorded today.")
+            return 1
 
     # Contracts for today, straight from the instrument dump
     nse, nfo = broker.instruments("NSE"), broker.instruments("NFO")
@@ -179,7 +214,7 @@ DAILY_DAYS = 400             # ~1 year of daily candles for VIX percentile, RV20
 
 def load_history(broker, refs: list[IndexReference], vix_token: int, state: MarketState,
                  calendar: NseCalendar, now: datetime, pause: Callable[[float], None] = _time.sleep) -> list[float]:
-    """Warm the market state from Kite historical data; returns VIX daily closes (~1y).
+    """Warm the market state from the broker's historical data; returns VIX daily closes (~1y).
 
     Failures are logged, not fatal: without history the agents report "warming up" and the
     engine sends no signals until enough live data has built up.
@@ -207,7 +242,7 @@ def load_history(broker, refs: list[IndexReference], vix_token: int, state: Mark
                 vix_closes = [float(c["close"]) for c in candles if pd.Timestamp(c["date"]).date() < now.date()]
         else:
             state.load_history(token, [c for c in candles if pd.Timestamp(c["date"]) < pd.Timestamp(now).floor("min")])
-        pause(0.4)              # Kite allows ~3 historical requests per second
+        pause(0.4)              # Kite and Angel allow ~3 historical requests per second
     return vix_closes
 
 

@@ -11,25 +11,29 @@ How to set up, deploy, run and validate the live NIFTY options signal tool. The 
  ┌──────────────────────────┐   writes bars, signals, board   ┌────────────┐
  │ recorder (always on)     │ ───────────────────────────────▶│  Postgres  │
  │ python -m options.daemon │                                 └─────┬──────┘
- │ session 08:30–15:31 IST  │◀── Kite WebSocket + REST              │ reads
- │ sends Telegram messages  │                                       ▼
+ │ session 08:30–15:31 IST  │◀── Angel One WebSocket + REST         │ reads
+ │ sends Telegram messages  │    (logs in by itself: MPIN + TOTP)   ▼
  └──────────────────────────┘                          ┌──────────────────────────┐
                                                        │ api (FastAPI)            │
-   You ── Telegram ── tap "Login to Kite" ───────────▶ │ /kite/login, /kite/callback│
    You ── browser ──▶ ui (Next.js) ── /api/options/* ▶ │ /api/options/* (password)  │
                                                        └──────────────────────────┘
 ```
 
-- **recorder:** a small always-on service (`SERVICE_ROLE=recorder`, same Docker image as the API) running `options.daemon`. On each trading day at 08:30 IST it starts the session in a fresh process. The session waits for your Kite login, records the market, runs the signal engine, sends the morning brief, signals and end-of-day report to Telegram, and exits after the close. If the service restarts during market hours, it starts that day's session immediately. A cron service isn't used because Railway's config-as-code is deprecated for new services.
-- **api:** your existing FastAPI service. It now also handles the Kite login redirect and serves the dashboard data.
+- **Data provider:** **Angel One SmartAPI** (free) by default, set by `DATA_PROVIDER=angel`. Zerodha Kite (paid data plan, daily login from Telegram) still works with `DATA_PROVIDER=kite`; its login routes `/kite/login` and `/kite/callback` stay in the API for that.
+- **recorder:** a small always-on service (`SERVICE_ROLE=recorder`, same Docker image as the API) running `options.daemon`. On each trading day at 08:30 IST it starts the session in a fresh process. The session logs in to Angel One by itself, records the market, runs the signal engine, sends the morning brief, signals and end-of-day report to Telegram, and exits after the close. If the service restarts during market hours, it starts that day's session immediately. A cron service isn't used because Railway's config-as-code is deprecated for new services.
+- **api:** your existing FastAPI service. It serves the dashboard data (and the Kite login redirect, when Kite is the provider).
 - **ui:** your existing Next.js service. The new pages are **Signals** and **Performance**.
 
 ## 2. One-time setup
 
 ### 2.1 Accounts (only you can do these)
-1. **Kite Connect app:** follow Appendix A of the plan. Set the redirect URL to `https://api-production-fea2.up.railway.app/kite/callback`.
-2. **Telegram bot:** follow Appendix C of the plan.
-3. **Dashboard password:** choose a long random string. This becomes `DASHBOARD_TOKEN`.
+1. **Angel One account:** a free Angel One demat/trading account. Your **client code** (e.g. `A123456`) becomes `ANGEL_CLIENT_CODE`, and your 4-digit **MPIN** becomes `ANGEL_PIN`.
+2. **TOTP for that account:** open `https://smartapi.angelone.in/enable-totp`, sign in with your client code and MPIN, and enable TOTP. The page shows a QR code **and the secret as text**: copy the text into `ANGEL_TOTP_SECRET`. Also scan the QR code into an authenticator app so you can still sign in yourself.
+3. **SmartAPI app:** sign in at `https://smartapi.angelone.in`, choose **Create an App**, pick the Trading APIs app type (market data comes with it), and enter any redirect URL (e.g. `https://api-production-fea2.up.railway.app/health`; it isn't used). Copy the app's **API key** into `ANGEL_API_KEY`. If history requests later fail with an invalid-key error, create a separate **Historical** app too and put its key in `ANGEL_HISTORICAL_API_KEY`.
+4. **Telegram bot:** follow Appendix C of the plan.
+5. **Dashboard password:** choose a long random string. This becomes `DASHBOARD_TOKEN`.
+
+The tool only reads market data; it places no orders, so SEBI's static-IP rule for order APIs doesn't apply. (Kite instead: Appendix A of the plan, redirect URL `https://api-production-fea2.up.railway.app/kite/callback`.)
 
 ### 2.2 Railway
 1. **Postgres:** add a **PostgreSQL** database to the `trading-agent` project.
@@ -40,8 +44,10 @@ How to set up, deploy, run and validate the live NIFTY options signal tool. The 
 |---|---|---|---|
 | `DATABASE_URL` | ✅ | ✅ | `${{Postgres.DATABASE_URL}}` (a reference variable) |
 | `SERVICE_ROLE` | | ✅ | `recorder` |
-| `KITE_API_KEY`, `KITE_API_SECRET` | ✅ | ✅ | From the Kite developer console. Keep the secret secret. |
-| `KITE_USER_ID` | ✅ | | Your Zerodha client ID; logins from other accounts are rejected |
+| `ANGEL_API_KEY`, `ANGEL_CLIENT_CODE`, `ANGEL_PIN`, `ANGEL_TOTP_SECRET` | ✅ | ✅ | §2.1 steps 1–3. All four are secrets. (On `api` they only let the status chip say "configured".) |
+| `ANGEL_HISTORICAL_API_KEY` | | ✅ | Only if your account needs a separate key for historical data |
+| `DATA_PROVIDER` | ✅ | ✅ | `angel` (default) or `kite` |
+| `KITE_API_KEY`, `KITE_API_SECRET`, `KITE_USER_ID` | ✅ | ✅ | Only with `DATA_PROVIDER=kite` |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | ✅ | ✅ | Appendix C |
 | `DASHBOARD_TOKEN` | ✅ | | Protects `/api/options/*`. **Required** on a public URL. |
 | `OPTIONS_LIVE_SETUPS` | | ✅ | JSON list of setups promoted to LIVE, e.g. `["S1_TREND_PULLBACK"]`. Default `[]` (all SHADOW). |
@@ -52,7 +58,7 @@ How to set up, deploy, run and validate the live NIFTY options signal tool. The 
 ## 3. Daily use
 | Time (IST) | What happens | What you do |
 |---|---|---|
-| 08:30 | Telegram: "Good morning! Log in to Kite…" with a button | Tap **Login to Kite** and sign in. The bot replies "Kite connected". |
+| 08:30 | The recorder logs in to Angel One by itself (it retries for a few minutes if Angel refuses) | Nothing. (With Kite: tap **Login to Kite** in the Telegram message.) |
 | ~08:35 | Recorder loads contracts and 10 days of history; Telegram: "Recording started" plus the **morning brief** | Read the brief |
 | 09:30–15:00 | Signals on 5-minute closes, with follow-ups (filled, T1, stop, exit) on the same ID | Decide whether to take each signal; you place any order yourself |
 | 15:10 | Positional (P1) evaluation | — |
@@ -89,13 +95,14 @@ Bars are replayed minute by minute with the engine clock 4 seconds after each cl
 ```
 - API: `.venv\Scripts\python -m uvicorn api.main:app --port 8000` (uses `sqlite:///data/options.db` unless `DATABASE_URL` is set).
 - UI: `npm --prefix ui run dev`, then open http://localhost:3000/signals.
-- A full session needs Kite credentials: `python -m options.session` (it exits immediately on holidays and weekends).
+- A full session needs the `ANGEL_*` credentials in `.env`: `python -m options.session` (it exits immediately on holidays and weekends).
 
 ## 7. Yearly and monthly upkeep
 - **December:** add next year's NSE holidays to `options/core/holidays.py`. Until then, every weekday counts as a trading day and a warning is logged.
 - **As announced:** add RBI policy, Budget and Fed dates to `options/core/events.py`.
 - **Monthly:** refresh the approximate NIFTY heavyweight weights in `options/core/constituents.py` from NSE's factsheet. Also update them after the semi-annual rebalance.
-- **Nothing to do:** lot sizes, expiries and strike steps update automatically from Kite's instrument list every morning.
+- **Nothing to do:** lot sizes, expiries and strike steps update automatically from the provider's instrument list every morning.
+- **If you ever change your MPIN or reset TOTP:** update `ANGEL_PIN` / `ANGEL_TOTP_SECRET` on the recorder, or the next morning's login fails (Telegram tells you).
 
 ## 8. Railway config-as-code deprecation (before 1 Dec 2026)
 Railway stops honouring `railway.json` on **1 Dec 2026**. The `api` and `ui` services currently get their Dockerfile builder (and the API's `/health` check) from those files. Before that date:
@@ -108,9 +115,12 @@ The recorder already doesn't depend on them.
 ## 9. Troubleshooting
 | Symptom | Likely cause |
 |---|---|
-| "KITE_API_KEY / KITE_API_SECRET are not set" on Telegram | Variables missing on the recorder service |
-| Login page says "Wrong account" | `KITE_USER_ID` doesn't match the Zerodha account you logged in with |
+| "ANGEL_… are not set" on Telegram | Variables missing on the recorder service |
+| "Angel One login failed … totp …" | Wrong `ANGEL_TOTP_SECRET`, or TOTP was reset. Copy the secret text again from the enable-TOTP page. The message quotes Angel's own error code and text. |
+| "Angel One login failed" naming the MPIN or client code | Wrong `ANGEL_PIN` or `ANGEL_CLIENT_CODE` |
+| "historical candles failed …" in the recorder logs, board stays "warming up" | Your app's key can't read history: create a Historical app and set `ANGEL_HISTORICAL_API_KEY` |
 | "No market data for …s" alert | WebSocket dropped; it reconnects automatically, and signals pause meanwhile |
 | Dashboard asks for a password | That's `DASHBOARD_TOKEN`; it's stored only in that browser |
-| Board says "No analysis yet" | Before the first 5-minute close (09:20), not logged in to Kite, or the recorder isn't running |
+| Board says "No analysis yet" | Before the first 5-minute close (09:20), the login failed, or the recorder isn't running |
+| (Kite only) Login page says "Wrong account" | `KITE_USER_ID` doesn't match the Zerodha account you logged in with |
 | "Signal engine error" alert | Recording continues; check the recorder logs on Railway |

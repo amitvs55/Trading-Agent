@@ -33,18 +33,25 @@ export function SessionBar({ status }: { status: OptionsStatus | undefined }) {
         {!status.trading_day && <span className="text-[#64748b]">· next session {fmtDate(status.next_trading_day)}</span>}
       </Chip>
 
-      {status.kite_connected_today ? (
-        <Chip tone="good"><Wifi size={13} className="text-green" /><span className="text-green font-medium">Kite connected</span></Chip>
-      ) : status.kite_configured ? (
+      {status.data_connected_today ? (
+        <Chip tone="good"><Wifi size={13} className="text-green" /><span className="text-green font-medium">{status.data_provider_name} connected</span></Chip>
+      ) : !status.data_configured ? (
+        <Chip tone="bad"><WifiOff size={13} className="text-red" /><span className="text-red font-medium">{status.data_provider_name} keys not set</span></Chip>
+      ) : status.data_needs_manual_login ? (
         <a href={`${API_URL}/kite/login`} className="group">
           <Chip tone={status.trading_day ? "warn" : "neutral"}>
             <WifiOff size={13} className="text-yellow" />
-            <span className="text-yellow font-medium">Kite not logged in today</span>
+            <span className="text-yellow font-medium">{status.data_provider_name} not logged in today</span>
             <span className="flex items-center gap-1 text-[#ff9933] group-hover:underline"><LogIn size={12} /> Log in</span>
           </Chip>
         </a>
       ) : (
-        <Chip tone="bad"><WifiOff size={13} className="text-red" /><span className="text-red font-medium">Kite API keys not set</span></Chip>
+        <Chip tone={open ? "warn" : "neutral"}>
+          <WifiOff size={13} className={open ? "text-yellow" : "text-[#64748b]"} />
+          <span className={open ? "text-yellow font-medium" : "text-[#94a3b8]"}>
+            {open ? `${status.data_provider_name} not connected yet` : `${status.data_provider_name} logs in at 08:30`}
+          </span>
+        </Chip>
       )}
 
       <Chip tone={fresh ? "good" : open ? "warn" : "neutral"}>

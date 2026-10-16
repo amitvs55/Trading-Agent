@@ -76,6 +76,57 @@ def test_rejected_token_triggers_a_new_login(store):
 
 def test_missing_kite_keys(store):
     notifier = RecordingNotifier()
-    code = session.run(OptionsSettings(KITE_API_KEY="", KITE_API_SECRET=""), now_fn=Clock(ist(2026, 10, 16, 8, 30)),
-                       sleep=lambda s: None, store=store, notifier=notifier)
+    code = session.run(OptionsSettings(DATA_PROVIDER="kite", KITE_API_KEY="", KITE_API_SECRET=""),
+                       now_fn=Clock(ist(2026, 10, 16, 8, 30)), sleep=lambda s: None, store=store, notifier=notifier)
     assert code == 2 and "KITE_API_KEY" in notifier.texts()[0]
+
+
+def test_missing_angel_keys(store):
+    notifier = RecordingNotifier()
+    cfg = OptionsSettings(DATA_PROVIDER="angel", ANGEL_API_KEY="k", ANGEL_CLIENT_CODE="A123", ANGEL_PIN="",
+                          ANGEL_TOTP_SECRET="")
+    code = session.run(cfg, now_fn=Clock(ist(2026, 10, 16, 8, 30)), sleep=lambda s: None, store=store,
+                       notifier=notifier)
+    assert code == 2 and "ANGEL_PIN / ANGEL_TOTP_SECRET are not set" in notifier.texts()[0]
+
+
+class AutoLoginBroker(FakeBroker):
+    """Angel One's shape: logs in by itself, no login link."""
+    auto_login = True
+    name = "Angel One"
+
+    def __init__(self, fail_times=0):
+        super().__init__()
+        self.fail_times = fail_times
+        self.logins = 0
+
+    def login(self):
+        self.logins += 1
+        if self.logins <= self.fail_times:
+            raise RuntimeError("login refused (AB1050): Invalid totp")
+        return "A123"
+
+
+def test_auto_login_needs_no_prompt(store):
+    broker = AutoLoginBroker()
+    code, notifier = run(store, Clock(ist(2026, 10, 16, 15, 30, 50)), broker)
+    assert code == 0 and broker.logins == 1
+    assert not any("Good morning" in t or "Kite" in t for t in notifier.texts())
+    assert any("Recording started" in t for t in notifier.texts())
+    assert store.load_access_token(TODAY) == "auto-login"         # the dashboard shows "connected"
+
+
+def test_auto_login_retries_then_records(store):
+    broker = AutoLoginBroker(fail_times=2)
+    code, notifier = run(store, Clock(ist(2026, 10, 16, 14, 57)), broker)
+    texts = notifier.texts()
+    assert code == 0 and broker.logins == 3
+    assert sum("Retrying" in t for t in texts) == 1 and "Invalid totp" in texts[0]
+    assert any("Recording started" in t for t in texts)
+
+
+def test_auto_login_gives_up_at_the_deadline(store):
+    broker = AutoLoginBroker(fail_times=99)
+    code, notifier = run(store, Clock(ist(2026, 10, 16, 14, 50)), broker)
+    assert code == 1 and broker.logins == 5        # 14:50, 14:50:30, 14:51:30, 14:53:30, 14:58:30; next would pass 15:00
+    assert "Angel One login failed" in notifier.texts()[-1] and "AB1050" in notifier.texts()[-1]

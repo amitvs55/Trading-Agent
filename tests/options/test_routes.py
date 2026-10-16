@@ -64,6 +64,8 @@ def test_status(ctx):
     client, *_ = ctx
     body = client.get("/api/options/status").json()
     assert {"trading_day", "session_phase", "kite_connected_today", "bars_today", "risk"} <= body.keys()
+    assert body["data_provider"] in ("angel", "kite") and body["data_provider_name"] in ("Angel One", "Kite")
+    assert {"data_configured", "data_connected_today", "data_needs_manual_login"} <= body.keys()
     assert body["risk"]["risk_per_trade_pct"] == 3.0 and body["risk"]["daily_loss_stop_pct"] == 10.0
 
 

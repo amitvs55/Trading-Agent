@@ -62,7 +62,7 @@ export default function SignalsPage() {
                 <Satellite size={28} className="mx-auto text-[#334155] mb-3" />
                 <div className="text-sm font-semibold text-[#e2e8f0]">No analysis yet</div>
                 <p className="text-xs text-[#64748b] mt-1.5 max-w-md mx-auto leading-relaxed">
-                  The board fills in after the first 5-minute close of a session (09:20 IST), once Kite is logged in and
+                  The board fills in after the first 5-minute close of a session (09:20 IST), once market data is connected and
                   the recorder is running.
                 </p>
               </section>

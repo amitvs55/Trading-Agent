@@ -6,6 +6,19 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class OptionsSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
+    # Where market data comes from: "angel" (Angel One SmartAPI, free, logs in by itself)
+    # or "kite" (Zerodha Kite Connect, paid data plan, daily login from Telegram)
+    DATA_PROVIDER: str = "angel"
+
+    # Angel One SmartAPI app (smartapi.angelone.in): the app's API key, your client code,
+    # your 4-digit MPIN and the TOTP secret shown when you enable TOTP for the account
+    ANGEL_API_KEY: str = ""
+    ANGEL_CLIENT_CODE: str = ""
+    ANGEL_PIN: str = ""
+    ANGEL_TOTP_SECRET: str = ""
+    # Only if your SmartAPI account gave historical data a key of its own; else leave empty
+    ANGEL_HISTORICAL_API_KEY: str = ""
+
     # Zerodha Kite Connect app (developers.kite.trade). KITE_USER_ID is your Zerodha client ID;
     # when set, logins from any other account are rejected at /kite/callback.
     KITE_API_KEY: str = ""
@@ -37,6 +50,23 @@ class OptionsSettings(BaseSettings):
     OPTIONS_STRIKE_WINDOW: int = 15          # strikes each side of ATM, per expiry
     OPTIONS_EXPIRIES_TRACKED: int = 2        # nearest N option expiries
     OPTIONS_STALE_AFTER_S: int = 60          # alert when no ticks arrive for this long in market hours
+
+    @property
+    def provider(self) -> str:
+        return (self.DATA_PROVIDER or "angel").strip().lower()
+
+    @property
+    def provider_name(self) -> str:
+        return "Kite" if self.provider == "kite" else "Angel One"
+
+    def missing_provider_keys(self) -> list[str]:
+        """Names of the credentials the chosen data provider still needs."""
+        if self.provider == "kite":
+            needed = {"KITE_API_KEY": self.KITE_API_KEY, "KITE_API_SECRET": self.KITE_API_SECRET}
+        else:
+            needed = {"ANGEL_API_KEY": self.ANGEL_API_KEY, "ANGEL_CLIENT_CODE": self.ANGEL_CLIENT_CODE,
+                      "ANGEL_PIN": self.ANGEL_PIN, "ANGEL_TOTP_SECRET": self.ANGEL_TOTP_SECRET}
+        return [name for name, value in needed.items() if not value]
 
 
 settings = OptionsSettings()

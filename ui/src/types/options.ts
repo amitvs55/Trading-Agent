@@ -127,6 +127,11 @@ export interface OptionsStatus {
   next_trading_day: string;
   session_phase: string;
   indices: string[];
+  data_provider: "angel" | "kite";
+  data_provider_name: string;
+  data_configured: boolean;
+  data_connected_today: boolean;
+  data_needs_manual_login: boolean;
   kite_configured: boolean;
   telegram_configured: boolean;
   kite_connected_today: boolean;
