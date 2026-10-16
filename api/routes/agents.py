@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from api.deps import current_user, get_cfg, get_repo, get_store, require_admin
+from api.deps import get_cfg, get_repo, get_store, require_admin
 from options.admin.health import recorder_status
 from options.admin.repo import AdminRepo
 from options.agents import health, selftest
@@ -28,7 +28,7 @@ def _research(store: Store) -> list[dict]:
     return rows
 
 
-@router.get("/api/agents", dependencies=[Depends(current_user)])
+@router.get("/api/agents", dependencies=[Depends(require_admin)])
 def agents(store: Store = Depends(get_store), repo: AdminRepo = Depends(get_repo),
            cfg: OptionsSettings = Depends(get_cfg)) -> dict:
     return {

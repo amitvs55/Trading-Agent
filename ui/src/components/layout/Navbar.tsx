@@ -10,17 +10,8 @@ import { useOptionsApi } from "@/lib/optionsApi";
 import { fmtNum } from "@/lib/optionsFormat";
 import type { BoardResponse } from "@/types/options";
 import { LiveClock } from "./LiveClock";
+import { isActive, navFor } from "./nav";
 
-const LINKS = [
-  { href: "/signals",     label: "Signals"     },
-  { href: "/paper",       label: "Paper"       },
-  { href: "/performance", label: "Performance" },
-  { href: "/agents",      label: "Agents"      },
-  { href: "/",            label: "Research"    },
-  { href: "/history",     label: "History"     },
-  { href: "/usage",       label: "Usage"       },
-  { href: "/connectors",  label: "Connectors"  },
-];
 
 function UserMenu() {
   const auth = useAuth();
@@ -106,36 +97,38 @@ function LiveIndices() {
 
 export function Navbar() {
   const path = usePathname();
-  const active = (href: string) => (href === "/" ? path === "/" : path === href || path.startsWith(`${href}/`));
+  const auth = useAuth();
+  const links = navFor(auth?.user?.role);
 
   return (
-    <nav className="sticky top-0 z-50 bg-surface border-b border-[#1e2d45]">
+    <nav className="sticky top-0 z-50 bg-surface border-b border-[#1e2d45] pt-[env(safe-area-inset-top)]">
       <div className="india-stripe" />
       <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
 
-        {/* Logo */}
-        <div className="flex items-center gap-3 flex-shrink-0">
+        {/* Logo (on phones the bar has room for the name; on laptops the links need it) */}
+        <Link href="/signals" className="flex items-center gap-3 flex-shrink-0" aria-label="TradingAgents India, live signals">
           <div className="w-8 h-8 rounded-lg flex items-center justify-center"
                style={{ background: "rgba(255,153,51,.15)", border: "1px solid rgba(255,153,51,.35)" }}>
             <TrendingUp size={15} className="text-[#ff9933]" />
           </div>
-          <div className="hidden 2xl:block">
+          <div className="block lg:hidden 2xl:block">
             <span className="font-bold text-sm tracking-wide text-[#ff9933]">TradingAgents</span>
-            <span className="text-[#64748b] text-xs ml-1.5">India</span>
+            <span className="text-[#64748b] text-xs ml-1.5 hidden min-[400px]:inline">India</span>
           </div>
-        </div>
+        </Link>
 
         <div className="hidden 2xl:flex flex-1 min-w-0 justify-center"><LiveIndices /></div>
 
-        {/* Nav links */}
-        <div className="flex items-center gap-0.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [mask-image:linear-gradient(90deg,#000_82%,transparent)] lg:[mask-image:none]">
-          {LINKS.map(({ href, label }) => (
+        {/* Nav links: desktop only (phones and tablets use MobileNav's bottom bar) */}
+        <div className="hidden lg:flex items-center gap-0.5">
+          {links.map(({ href, label }) => (
             <Link
               key={href}
               href={href}
+              aria-current={isActive(path, href) ? "page" : undefined}
               className={cn(
                 "px-2 xl:px-2.5 2xl:px-3 py-1 text-sm font-medium transition-colors border-b-2 whitespace-nowrap",
-                active(href)
+                isActive(path, href)
                   ? "text-[#ff9933] border-[#ff9933]"
                   : "text-[#94a3b8] border-transparent hover:text-[#e2e8f0]"
               )}
@@ -148,7 +141,7 @@ export function Navbar() {
         {/* Right */}
         <div className="flex items-center gap-3 flex-shrink-0">
           <LiveClock />
-          <UserMenu />
+          <div className="hidden lg:block"><UserMenu /></div>
         </div>
       </div>
     </nav>

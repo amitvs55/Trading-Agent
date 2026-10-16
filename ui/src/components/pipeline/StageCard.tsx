@@ -103,7 +103,7 @@ function SkeletonBlock() {
     <div className="flex flex-col gap-3">
       <div className="skeleton h-4 w-1/3 rounded" />
       <div className="skeleton h-3 w-2/3 rounded" />
-      <div className="grid grid-cols-4 gap-3 mt-2">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-2">
         {[1,2,3,4].map(i => <div key={i} className="skeleton h-16 rounded-lg" />)}
       </div>
     </div>

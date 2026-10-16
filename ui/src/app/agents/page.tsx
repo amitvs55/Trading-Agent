@@ -192,7 +192,25 @@ export default function AgentsPage() {
             <span className="text-[10px] font-normal text-[#64748b]">the 13-step stock analysis on the <Link href="/" className="text-[#ff9933] hover:underline">Research</Link> page</span></span>
           {data && !data.openai_configured && <span className="text-[11px] text-yellow">OpenAI key not set: they can&apos;t run (<Link href="/connectors" className="underline">Connectors</Link>)</span>}
         </div>
-        <div className="overflow-x-auto">
+        <ul className="md:hidden divide-y divide-[#1e2d45]">
+          {!data ? Array.from({ length: 4 }, (_, i) => <li key={i} className="px-4 py-3"><div className="skeleton h-9 rounded" /></li>) :
+            research.map(r => (
+              <li key={r.id} className="px-4 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-[13px] text-[#e2e8f0] truncate">{r.label}</div>
+                    <div className="text-[11px] text-[#64748b] mt-0.5">
+                      stage {r.stage} · {r.last_run_at ? <LiveAge iso={r.last_run_at} prefix="ran " /> : "never ran"}
+                      {r.seconds != null && <> · <span className="font-mono">{r.seconds.toFixed(1)} s</span></>} · {r.runs} runs / {r.errors} errors
+                    </div>
+                  </div>
+                  <StatusPill status={r.status} />
+                </div>
+                {r.error && <p className="text-[11px] text-[#fca5a5] font-mono mt-1.5 break-words">{r.error}</p>}
+              </li>
+            ))}
+        </ul>
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-[12px]">
             <thead><tr className="text-[10px] tracking-widest text-[#64748b] text-left">
               <th className="px-4 py-2 font-medium">STAGE</th><th className="px-2 py-2 font-medium">AGENT</th>

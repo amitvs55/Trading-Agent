@@ -7,7 +7,7 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 
-from api.deps import current_user, get_repo, get_store
+from api.deps import current_user, get_repo, get_store, require_admin
 from api.routes.admin import router as admin_router
 from api.routes.agents import install_research_sink, router as agents_router
 from api.routes.analyze import router as analyze_router
@@ -65,14 +65,16 @@ app.add_middleware(
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 # Everything except /health, the auth endpoints and the Kite login redirect needs a signed-in user
-signed_in = [Depends(current_user)]
-app.include_router(analyze_router, prefix="/api", dependencies=signed_in)
-app.include_router(history_router, prefix="/api", dependencies=signed_in)
-app.include_router(pricehistory_router, prefix="/api", dependencies=signed_in)
-app.include_router(usage_router, prefix="/api", dependencies=signed_in)
+# The research pipeline (it spends OpenAI credit), its history and its usage are for admins only;
+# viewers get the signal pages: /api/options/*, /api/paper and their own /api/auth/* profile.
+admins_only = [Depends(require_admin)]
+app.include_router(analyze_router, prefix="/api", dependencies=admins_only)
+app.include_router(history_router, prefix="/api", dependencies=admins_only)
+app.include_router(pricehistory_router, prefix="/api", dependencies=admins_only)
+app.include_router(usage_router, prefix="/api", dependencies=admins_only)
 app.include_router(options_router)  # /kite/* login flow + /api/options/* (signed-in)
 app.include_router(admin_router)    # /api/auth/* + /api/admin/* (admin)
-app.include_router(agents_router)   # /api/agents (signed-in) + /api/admin/agents/selftest
+app.include_router(agents_router)   # /api/agents + /api/admin/agents/selftest (admin)
 app.include_router(paper_router)    # /api/paper (signed-in) + /api/admin/paper
 
 

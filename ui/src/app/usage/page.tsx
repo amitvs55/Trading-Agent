@@ -20,7 +20,7 @@ export default function UsagePage() {
   const maxAgentCost = Math.max(...agents.map(a => a.cost_usd), 0);
 
   return (
-    <main className="max-w-screen-2xl mx-auto px-6 py-6">
+    <main className="max-w-screen-2xl mx-auto px-4 sm:px-6 py-6">
       <div className="mb-6 flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-[#e2e8f0]">OpenAI Usage</h1>

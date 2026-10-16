@@ -62,7 +62,7 @@ export function TokenUsageCard({ usage, status }: Props) {
         )}
 
         {/* Token counts */}
-        <div className="grid grid-cols-4 gap-2 mb-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
           {[
             { label: "Input",  val: usage?.prompt_tokens },
             { label: "Output", val: usage?.completion_tokens },

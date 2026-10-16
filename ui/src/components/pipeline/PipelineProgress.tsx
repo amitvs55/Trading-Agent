@@ -28,8 +28,8 @@ export function PipelineProgress({ status, currentStage, elapsed, ticker }: Prop
 
   return (
     <section className="mb-6">
-      <div className="bg-surface border border-[#1e2d45] rounded-xl px-6 py-4">
-        <div className="flex items-center justify-between mb-4">
+      <div className="bg-surface border border-[#1e2d45] rounded-xl px-4 sm:px-6 py-4">
+        <div className="flex items-center justify-between gap-2 flex-wrap mb-4">
           <span className="text-xs font-semibold text-[#64748b] tracking-widest">
             PIPELINE PROGRESS{ticker ? ` — ${ticker}` : ""}
           </span>
@@ -37,7 +37,7 @@ export function PipelineProgress({ status, currentStage, elapsed, ticker }: Prop
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded-full border-2 border-[#1e2d45] border-t-[#ff9933] animate-spin" />
               <span className="text-xs font-mono text-[#ff9933]">
-                Stage {currentStage} · {elapsed.toFixed(1)}s elapsed
+                Stage {currentStage}<span className="md:hidden"> · {STAGES.find(x => x.n === currentStage)?.label}</span> · {elapsed.toFixed(1)}s
               </span>
             </div>
           )}
@@ -65,14 +65,14 @@ export function PipelineProgress({ status, currentStage, elapsed, ticker }: Prop
                   </div>
                   {/* Label */}
                   <span className={cn(
-                    "text-xs whitespace-nowrap",
+                    "hidden md:block text-xs whitespace-nowrap",
                     st === "done"    && "text-green font-medium",
                     st === "running" && "text-[#ff9933] font-medium",
                     st === "pending" && "text-[#64748b]",
                   )}>
                     {s.label}
                   </span>
-                  <span className={cn("text-xs font-mono",
+                  <span className={cn("hidden md:block text-xs font-mono",
                     st === "done"    && "text-[#64748b]",
                     st === "running" && "text-[#ff9933]",
                     st === "pending" && "text-[#475569]",
@@ -84,7 +84,7 @@ export function PipelineProgress({ status, currentStage, elapsed, ticker }: Prop
                 {/* Connector line */}
                 {i < STAGES.length - 1 && (
                   <div className={cn(
-                    "flex-1 h-0.5 mx-2 mb-8 transition-colors",
+                    "flex-1 h-0.5 mx-1 md:mx-2 md:mb-8 transition-colors",
                     st === "done" ? "bg-green" : "bg-[#1e2d45]",
                   )} />
                 )}

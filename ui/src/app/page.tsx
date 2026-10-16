@@ -45,7 +45,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <main className="max-w-screen-2xl mx-auto px-6 py-6">
+    <main className="max-w-screen-2xl mx-auto px-4 sm:px-6 py-6">
 
       {/* Ticker form */}
       <TickerForm
@@ -79,7 +79,7 @@ export default function DashboardPage() {
         <div className="grid gap-5 grid-cols-1 xl:grid-cols-[minmax(0,1fr)_390px]">
 
           {/* ── Left: Stage cards ── */}
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-4 min-w-0">
 
             {/* Stage 1 */}
             <StageCard
@@ -185,7 +185,7 @@ export default function DashboardPage() {
           </div>
 
           {/* ── Right: Charts panel ── */}
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-4 min-w-0">
 
             {/* OpenAI token usage + cost */}
             <TokenUsageCard usage={state.usage} status={status} />

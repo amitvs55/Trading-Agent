@@ -24,7 +24,21 @@ function StatsTable({ title, rows, labels }: { title: string; rows: Record<strin
     <section className="bg-surface border border-[#1e2d45] rounded-xl overflow-hidden">
       <div className="px-4 py-3 border-b border-[#1e2d45] text-xs font-semibold text-[#e2e8f0]">{title}</div>
       {entries.length === 0 ? <div className="px-4 py-6 text-xs text-[#475569] text-center">No signals yet</div> : (
-        <div className="overflow-x-auto">
+        <>
+        <ul className="md:hidden divide-y divide-[#1e2d45]">
+          {entries.map(([k, st]) => (
+            <li key={k} className="px-4 py-2.5 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-[13px] text-[#e2e8f0] truncate">{labels?.[k] ?? k}</div>
+                <div className="text-[11px] text-[#64748b] font-mono mt-0.5">{st.trades} trades · {fmtPct(st.win_rate)} won · {fmtR(st.avg_r)}</div>
+              </div>
+              <div className={cn("font-mono font-semibold text-sm flex-shrink-0", st.total_rupees > 0 ? "text-[#93c5fd]" : st.total_rupees < 0 ? "text-[#fca5a5]" : "text-[#94a3b8]")}>
+                {fmtRupees(st.total_rupees, true)}
+              </div>
+            </li>
+          ))}
+        </ul>
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-[12px] tabular-nums">
             <thead><tr className="text-[10px] tracking-widest text-[#64748b] text-left">
               <th className="px-4 py-2 font-medium"> </th><th className="px-2 py-2 font-medium text-right">TRADES</th>
@@ -44,6 +58,7 @@ function StatsTable({ title, rows, labels }: { title: string; rows: Record<strin
             </tbody>
           </table>
         </div>
+        </>
       )}
     </section>
   );
@@ -113,7 +128,32 @@ export default function PerformancePage() {
 
         <section className="bg-surface border border-[#1e2d45] rounded-xl overflow-hidden">
           <div className="px-4 py-3 border-b border-[#1e2d45] text-xs font-semibold text-[#e2e8f0]">Every signal</div>
-          <div className="overflow-x-auto">
+          <ul className="lg:hidden divide-y divide-[#1e2d45]">
+            {(log.data?.signals ?? []).map(s => {
+              const net = s.pnl_rupees ?? 0;
+              return (
+                <li key={s.signal_id}>
+                  <Link href={`/signals/${s.signal_id}`} className="flex items-start justify-between gap-3 px-4 py-3 active:bg-[#ffffff06]">
+                    <div className="min-w-0">
+                      <div className="text-[11px] text-[#64748b]"><span className="font-mono text-[#ff9933]">{s.signal_id}</span> · {fmtDateTime(s.created_at)}</div>
+                      <div className="font-mono text-[13px] text-[#e2e8f0] truncate mt-0.5">{s.contract.tradingsymbol}</div>
+                      <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                        <GradeBadge grade={s.grade} score={s.score} /><ModeTag mode={s.mode} />
+                        <span className="text-[11px] text-[#94a3b8] truncate">{labels[s.setup] ?? s.setup}</span>
+                      </div>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <div className={cn("font-mono font-semibold text-sm", net > 0 ? "text-[#93c5fd]" : net < 0 ? "text-[#fca5a5]" : "text-[#64748b]")}>{fmtRupees(s.pnl_rupees, true)}</div>
+                      <div className="font-mono text-[11px] text-[#94a3b8]">{fmtR(s.r_multiple)}</div>
+                      <div className="text-[11px] text-[#64748b] mt-1 max-w-[120px] truncate">{s.exit_reason ? EXIT_LABELS[s.exit_reason] ?? s.exit_reason : s.state.replace("_", " ").toLowerCase()}</div>
+                    </div>
+                  </Link>
+                </li>
+              );
+            })}
+            {!(log.data?.signals ?? []).length && <li className="px-4 py-8 text-center text-xs text-[#475569]">No signals yet. They appear here the moment they are sent.</li>}
+          </ul>
+          <div className="hidden lg:block overflow-x-auto">
             <table className="w-full text-[12px] tabular-nums">
               <thead><tr className="text-[10px] tracking-widest text-[#64748b] text-left">
                 <th className="px-4 py-2 font-medium">SENT</th><th className="px-2 py-2 font-medium">ID</th>

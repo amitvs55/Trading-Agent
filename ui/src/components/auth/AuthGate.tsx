@@ -27,9 +27,8 @@ const useBeforePaint = typeof window === "undefined" ? useEffect : useLayoutEffe
 // What the pages need first. Fetched once the browser is idle after sign-in, so moving between
 // pages shows real data at once instead of a skeleton (SWR revalidates it on arrival anyway).
 const PREFETCH = ["/api/options/status", "/api/options/board", "/api/options/signals?days=7",
-  "/api/options/evaluations?hours=12", "/api/options/performance", "/api/options/signals?days=3650", "/api/paper",
-  "/api/agents"];
-const PREFETCH_ADMIN = ["/api/admin/connectors", "/api/admin/health"];
+  "/api/options/evaluations?hours=12", "/api/options/performance", "/api/options/signals?days=3650", "/api/paper"];
+const PREFETCH_ADMIN = ["/api/agents", "/api/admin/connectors", "/api/admin/health"];
 
 function whenIdle(fn: () => void): () => void {
   const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number;

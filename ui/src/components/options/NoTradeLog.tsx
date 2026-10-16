@@ -15,17 +15,36 @@ const OUTCOME: Record<Evaluation["outcome"], { label: string; cls: string }> = {
 export function NoTradeLog({ rows, labels, loading = false }: { rows: Evaluation[]; labels: Record<string, string>; loading?: boolean }) {
   return (
     <section className="bg-surface border border-[#1e2d45] rounded-xl overflow-hidden">
-      <div className="px-4 py-3 border-b border-[#1e2d45] flex items-center gap-2">
-        <ListFilter size={13} className="text-[#ff9933]" />
-        <span className="text-xs font-semibold text-[#e2e8f0]">Decision log</span>
-        <span className="text-[10px] text-[#64748b]">every trigger that fired today, and why it did or didn't become a signal</span>
+      <div className="px-4 py-3 border-b border-[#1e2d45] flex items-start sm:items-center gap-2">
+        <ListFilter size={13} className="text-[#ff9933] mt-0.5 sm:mt-0 flex-shrink-0" />
+        <div className="flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-2 min-w-0">
+          <span className="text-xs font-semibold text-[#e2e8f0]">Decision log</span>
+          <span className="text-[10px] text-[#64748b]">every trigger that fired today, and why it did or didn&apos;t become a signal</span>
+        </div>
       </div>
       {loading ? (
         <div className="px-4 py-[22px] flex flex-col gap-2" aria-hidden><div className="skeleton h-3 rounded" /><div className="skeleton h-3 w-2/3 rounded" /></div>
       ) : rows.length === 0 ? (
         <div className="fade-in px-4 py-8 text-center text-xs text-[#475569]">No setup has triggered yet today.</div>
       ) : (
-        <div className="overflow-x-auto">
+        <>
+        <ul className="md:hidden divide-y divide-[#1e2d45]">
+          {rows.map(r => (
+            <li key={r.id} className="px-4 py-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="flex items-center gap-2 min-w-0 text-[12px]">
+                  <span className="font-mono text-[#94a3b8] tabular-nums">{fmtTime(r.ts)}</span>
+                  {r.side > 0 ? <span className="inline-flex items-center gap-0.5 text-green"><ArrowUpRight size={12} />CE</span>
+                              : <span className="inline-flex items-center gap-0.5 text-red"><ArrowDownRight size={12} />PE</span>}
+                  <span className="text-[#e2e8f0] truncate">{labels[r.setup] ?? r.setup}</span>
+                </span>
+                <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded border flex-shrink-0", OUTCOME[r.outcome].cls)}>{OUTCOME[r.outcome].label}</span>
+              </div>
+              <p className="text-[11px] text-[#94a3b8] mt-1 leading-snug">{r.score != null && <span className="font-mono text-[#64748b]">score {r.score.toFixed(0)} · </span>}{r.reasons}</p>
+            </li>
+          ))}
+        </ul>
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-[12px]">
             <thead>
               <tr className="text-[10px] tracking-widest text-[#64748b] text-left">
@@ -56,6 +75,7 @@ export function NoTradeLog({ rows, labels, loading = false }: { rows: Evaluation
             </tbody>
           </table>
         </div>
+        </>
       )}
     </section>
   );

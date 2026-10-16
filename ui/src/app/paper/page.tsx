@@ -57,6 +57,53 @@ function ClosedRow({ t }: { t: PaperTrade }) {
   );
 }
 
+// Phones: one card per position or trade instead of a wide table
+function OpenCard({ t }: { t: PaperTrade }) {
+  return (
+    <li>
+      <Link href={`/signals/${t.signal_id}`} className="block px-4 py-3 active:bg-[#ffffff06]">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2"><DirectionPill action={t.action} /><span className="text-[11px] text-[#64748b]">{t.lots} lot · {t.units} qty</span></div>
+            <div className="font-mono text-[13px] text-[#e2e8f0] truncate mt-1">{t.symbol}</div>
+          </div>
+          <div className="text-right flex-shrink-0">
+            <div className={cn("font-mono font-bold text-base", pnlTone(t.unrealised))}>{fmtRupees(t.unrealised, true)}</div>
+            <div className="text-[10px] text-[#64748b]">open P&amp;L</div>
+          </div>
+        </div>
+        <dl className="grid grid-cols-4 gap-2 mt-2.5 text-[11px]">
+          {([["Entry", fmtPremium(t.entry), "text-[#e2e8f0]"], ["Bid", t.bid != null ? fmtPremium(t.bid) : "—", "text-[#e2e8f0]"],
+             ["Stop", fmtPremium(t.stop), "text-[#fca5a5]"], ["T1", fmtPremium(t.t1), "text-[#93c5fd]"]] as const).map(([k, v, tone]) => (
+            <div key={k}><dt className="text-[10px] text-[#64748b]">{k}</dt><dd className={cn("font-mono", tone)}>{v}</dd></div>
+          ))}
+        </dl>
+      </Link>
+    </li>
+  );
+}
+
+function ClosedCard({ t }: { t: PaperTrade }) {
+  return (
+    <li>
+      <Link href={`/signals/${t.signal_id}`} className="flex items-start justify-between gap-3 px-4 py-3 active:bg-[#ffffff06]">
+        <div className="min-w-0">
+          <div className="text-[11px] text-[#64748b]">{fmtDateTime(t.exit_at)} · <span className="font-mono">{t.signal_id}</span></div>
+          <div className="font-mono text-[13px] text-[#e2e8f0] truncate mt-0.5">{t.symbol}</div>
+          <div className="text-[11px] text-[#94a3b8] mt-1">
+            <span className="font-mono">{fmtPremium(t.entry)} → {fmtPremium(t.exit)}</span> · {t.exit_reason ? EXIT_LABELS[t.exit_reason] ?? t.exit_reason : "—"}
+          </div>
+        </div>
+        <div className="text-right flex-shrink-0">
+          <div className={cn("font-mono font-semibold text-sm", pnlTone(t.pnl))}>{fmtRupees(t.pnl, true)}</div>
+          <div className="font-mono text-[11px] text-[#94a3b8]">{fmtR(t.r)}</div>
+          <div className="mt-1"><GradeBadge grade={t.grade} score={t.score} /></div>
+        </div>
+      </Link>
+    </li>
+  );
+}
+
 function ResetForm({ acct, onDone }: { acct: PaperAccount; onDone: () => void }) {
   const [open, setOpen] = useState(false);
   const [balance, setBalance] = useState(String(acct.settings.starting_balance));
@@ -88,7 +135,7 @@ function ResetForm({ acct, onDone }: { acct: PaperAccount; onDone: () => void })
     );
   }
   return (
-    <form onSubmit={submit} className="menu-pop flex flex-wrap items-end gap-2 bg-surface border border-[#1e2d45] rounded-xl p-3">
+    <form onSubmit={submit} className="menu-pop w-full sm:w-auto flex flex-wrap items-end gap-2 bg-surface border border-[#1e2d45] rounded-xl p-3">
       <label className="text-[10px] tracking-widest text-[#64748b]">STARTING BALANCE (₹)
         <input value={balance} onChange={e => setBalance(e.target.value.replace(/[^0-9]/g, ""))} inputMode="numeric"
                className="mt-1 block w-32 bg-card border border-[#1e2d45] focus:border-[#ff9933] rounded-lg px-2.5 py-1.5 text-sm font-mono text-[#e2e8f0] outline-none" />
@@ -188,7 +235,12 @@ export default function PaperPage() {
           <span className="text-xs font-semibold text-[#e2e8f0]">Open positions</span>
           <span className="text-[10px] text-[#64748b]">marked to the live bid · updates every 5s</span>
         </div>
-        <div className="overflow-x-auto">
+        <ul className="md:hidden divide-y divide-[#1e2d45]">
+          {!a ? <li className="px-4 py-3"><div className="skeleton h-14 rounded" /></li> :
+            a.open.length ? a.open.map(t => <OpenCard key={t.signal_id} t={t} />) :
+            <li className="px-4 py-8 text-center text-xs text-[#475569]">No open position.</li>}
+        </ul>
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-[12px] tabular-nums">
             <thead><tr className="text-[10px] tracking-widest text-[#64748b] text-left">
               <th className="px-4 py-2 font-medium">SIDE</th><th className="px-2 py-2 font-medium">CONTRACT</th>
@@ -210,7 +262,12 @@ export default function PaperPage() {
           <span className="text-xs font-semibold text-[#e2e8f0]">Closed trades <span className="text-[#64748b] font-normal">({a?.trades.length ?? 0})</span></span>
           {a && a.stats.best != null && <span className="text-[10px] text-[#64748b]">best {fmtRupees(a.stats.best, true)} · worst {fmtRupees(a.stats.worst, true)}</span>}
         </div>
-        <div className="overflow-x-auto">
+        <ul className="lg:hidden divide-y divide-[#1e2d45]">
+          {!a ? <li className="px-4 py-3"><div className="skeleton h-14 rounded" /></li> :
+            a.trades.length ? a.trades.map(t => <ClosedCard key={t.signal_id} t={t} />) :
+            <li className="px-4 py-8 text-center text-xs text-[#475569]">No closed paper trade yet.</li>}
+        </ul>
+        <div className="hidden lg:block overflow-x-auto">
           <table className="w-full text-[12px] tabular-nums">
             <thead><tr className="text-[10px] tracking-widest text-[#64748b] text-left">
               <th className="px-4 py-2 font-medium">CLOSED</th><th className="px-2 py-2 font-medium">CONTRACT</th>

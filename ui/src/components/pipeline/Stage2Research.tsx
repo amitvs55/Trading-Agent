@@ -26,7 +26,7 @@ const REC_COLOR: Record<string, string> = {
 export function Stage2Research({ bullCase, bearCase, verdict }: Props) {
   return (
     <div className="p-5">
-      <div className="grid grid-cols-2 gap-4 mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
         {/* Bull */}
         <div className="bg-[#22c55e0d] border border-[#22c55e33] rounded-xl p-4">
           <div className="flex items-center gap-2 mb-3">

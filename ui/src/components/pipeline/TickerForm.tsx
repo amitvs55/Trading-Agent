@@ -28,18 +28,18 @@ export function TickerForm({ status, onAnalyze, onReset, lastTicker, totalRuns, 
 
   return (
     <section className="mb-6">
-      <div className="bg-surface border border-[#1e2d45] rounded-xl px-6 py-5 flex items-center gap-5 flex-wrap">
+      <div className="bg-surface border border-[#1e2d45] rounded-xl px-4 sm:px-6 py-5 flex items-center gap-4 sm:gap-5 flex-wrap">
 
         {/* Title */}
-        <div className="flex-shrink-0">
+        <div className="min-w-0 sm:flex-shrink-0">
           <h1 className="text-lg font-bold text-[#e2e8f0]">Indian Market Analysis</h1>
           <p className="text-xs mt-0.5 text-[#64748b]">NSE/BSE · Enter symbol (RELIANCE, TCS, INFY…) · SEBI regulated</p>
         </div>
 
-        <div className="w-px h-9 bg-[#1e2d45]" />
+        <div className="hidden sm:block w-px h-9 bg-[#1e2d45]" />
 
-        {/* Controls */}
-        <div className="flex items-center gap-3">
+        {/* Controls: on phones the symbol field takes the free width and nothing overflows */}
+        <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
           {/* Exchange */}
           <select
             value={exchange}
@@ -52,7 +52,7 @@ export function TickerForm({ status, onAnalyze, onReset, lastTicker, totalRuns, 
           </select>
 
           {/* Input */}
-          <div className="relative">
+          <div className="relative flex-1 min-w-0 sm:flex-none">
             <input
               type="text"
               value={ticker}
@@ -62,7 +62,7 @@ export function TickerForm({ status, onAnalyze, onReset, lastTicker, totalRuns, 
               maxLength={20}
               placeholder="RELIANCE"
               className={cn(
-                "bg-bg border rounded-lg px-3 py-2.5 font-mono text-base font-bold tracking-widest outline-none w-44 transition-colors disabled:opacity-50",
+                "bg-bg border rounded-lg px-3 py-2.5 font-mono text-base font-bold tracking-widest outline-none w-full sm:w-44 transition-colors disabled:opacity-50",
                 running
                   ? "border-[#ff9933] text-[#ff9933]"
                   : "border-[#1e2d45] text-[#ff9933] focus:border-[#ff993355]"
@@ -75,7 +75,7 @@ export function TickerForm({ status, onAnalyze, onReset, lastTicker, totalRuns, 
             onClick={submit}
             disabled={running}
             className={cn(
-              "flex items-center gap-2 px-6 py-2.5 rounded-lg font-bold text-sm text-white transition-opacity",
+              "flex items-center gap-2 px-4 sm:px-6 py-2.5 rounded-lg font-bold text-sm text-white transition-opacity flex-shrink-0",
               running ? "opacity-60 cursor-not-allowed" : "hover:opacity-85 cursor-pointer"
             )}
             style={{ background: "linear-gradient(135deg,#ff9933,#cc6600)" }}
@@ -112,7 +112,7 @@ export function TickerForm({ status, onAnalyze, onReset, lastTicker, totalRuns, 
         </div>
 
         {/* Stats */}
-        <div className="ml-auto flex items-center gap-6">
+        <div className="sm:ml-auto flex items-center gap-6">
           {lastTicker && (
             <div className="text-center">
               <div className="text-xs text-[#64748b]">Last Run</div>

@@ -35,7 +35,7 @@ function ConnectionNotice() {
   if (!visible) return null;
   return (
     <div role="status" aria-live="polite"
-         className="fade-in fixed bottom-4 left-1/2 -translate-x-1/2 z-[60] flex items-center gap-2 rounded-full border border-[#f59e0b44] bg-[#1a2233f2] px-4 py-2 text-xs text-yellow shadow-[0_12px_32px_rgba(0,0,0,.5)] backdrop-blur">
+         className="fade-in fixed bottom-[calc(72px+env(safe-area-inset-bottom))] lg:bottom-4 left-1/2 -translate-x-1/2 z-[60] max-w-[calc(100vw-32px)] flex items-center gap-2 rounded-full border border-[#f59e0b44] bg-[#1a2233f2] px-4 py-2 text-xs text-yellow shadow-[0_12px_32px_rgba(0,0,0,.5)] backdrop-blur">
       <Loader2 size={13} className="animate-spin" />
       Reconnecting to the API… showing the last data received
     </div>

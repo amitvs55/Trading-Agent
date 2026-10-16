@@ -61,7 +61,7 @@ export function Stage1DataCollection({ market, sentiment, news, fundamentals }: 
           </div>
 
           {/* Indicators grid */}
-          <div className="grid grid-cols-3 gap-3 mb-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
             {/* RSI */}
             <div className="bg-bg border border-[#1e2d45] rounded-lg p-3">
               <div className="text-xs text-[#64748b] mb-2">RSI (14)</div>

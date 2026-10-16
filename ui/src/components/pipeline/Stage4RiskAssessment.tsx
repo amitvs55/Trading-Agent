@@ -18,7 +18,7 @@ function riskColor(score: number) {
 export function Stage4RiskAssessment({ assessments }: Props) {
   return (
     <div className="p-5">
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {assessments.map(a => {
           const style = PROFILE_STYLE[a.profile] ?? PROFILE_STYLE.neutral;
           return (
