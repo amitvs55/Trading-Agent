@@ -16,6 +16,7 @@ import { SentimentGauge }    from "@/components/charts/SentimentGauge";
 import { DebateScoreBar }    from "@/components/charts/DebateScoreBar";
 import { RiskRadar }         from "@/components/charts/RiskRadar";
 import { TradeHistoryTable } from "@/components/history/TradeHistoryTable";
+import { TokenUsageCard }    from "@/components/usage/TokenUsageCard";
 import { toYFTicker }        from "@/lib/utils";
 
 const LIMIT = 10;
@@ -185,6 +186,9 @@ export default function DashboardPage() {
 
           {/* ── Right: Charts panel ── */}
           <div className="flex flex-col gap-4">
+
+            {/* OpenAI token usage + cost */}
+            <TokenUsageCard usage={state.usage} status={status} />
 
             {/* Price Chart */}
             <div className="bg-surface border border-[#1e2d45] rounded-xl overflow-hidden">

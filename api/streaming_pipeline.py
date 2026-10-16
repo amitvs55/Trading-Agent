@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import math
 from typing import Any
 
 from orchestrator.pipeline import TradingPipeline
@@ -10,11 +11,15 @@ from orchestrator.pipeline import TradingPipeline
 def _serialize(obj: Any) -> Any:
     """Recursively convert Pydantic models / enums to JSON-safe dicts."""
     if hasattr(obj, "model_dump"):
-        return obj.model_dump(mode="json")
+        return _serialize(obj.model_dump(mode="json"))
     if isinstance(obj, list):
         return [_serialize(i) for i in obj]
     if isinstance(obj, dict):
         return {k: _serialize(v) for k, v in obj.items()}
+    # yfinance data can contain NaN/inf; json.dumps would emit bare NaN, which
+    # the browser's JSON.parse rejects, silently dropping the whole SSE event
+    if isinstance(obj, float) and not math.isfinite(obj):
+        return None
     return obj
 
 
@@ -33,6 +38,9 @@ class StreamingPipeline(TradingPipeline):
     # ── internal helpers ──────────────────────────────────────────────────────
 
     def _emit(self, event: dict) -> None:
+        # Attach running token/cost totals so the dashboard can update live
+        if event.get("status") == "complete":
+            event["usage"] = self.usage.summary()
         self._loop.call_soon_threadsafe(self._q.put_nowait, event)
 
     # ── stage overrides ───────────────────────────────────────────────────────

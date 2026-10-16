@@ -10,6 +10,7 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 from config.settings import settings
 from utils.helpers import parse_json_response
 from utils.logger import setup_logger
+from utils.usage import UsageTracker
 
 logger = setup_logger("llm")
 
@@ -24,11 +25,14 @@ JSON_MODE_MODELS = {
 class LLMClient:
     """Wrapper around OpenAI chat completions with retry and JSON output."""
 
-    def __init__(self):
+    def __init__(self, agent_name: str = "unknown"):
         self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
         self.model = settings.MODEL_NAME
         self.temperature = settings.LLM_TEMPERATURE
         self._supports_json_mode = None
+        self.agent_name = agent_name
+        # Set by the pipeline so each run gets its own tracker
+        self.tracker: UsageTracker | None = None
 
     def _check_json_mode_support(self) -> bool:
         """Check if the configured model supports response_format=json_object."""
@@ -54,6 +58,7 @@ class LLMClient:
         system_prompt: str,
         user_prompt: str,
         temperature: float | None = None,
+        is_retry: bool = False,
     ) -> dict[str, Any]:
         """Call OpenAI and return parsed JSON dict.
 
@@ -99,6 +104,21 @@ class LLMClient:
             usage.completion_tokens if usage else 0,
             elapsed,
         )
+
+        if self.tracker is not None and usage is not None:
+            details = getattr(usage, "prompt_tokens_details", None)
+            cached = (getattr(details, "cached_tokens", 0) or 0) if details else 0
+            # The response carries the resolved snapshot name (e.g. gpt-4o-mini-2024-07-18)
+            resolved = getattr(response, "model", None)
+            self.tracker.record(
+                agent=self.agent_name,
+                model=resolved if isinstance(resolved, str) and resolved else self.model,
+                prompt_tokens=usage.prompt_tokens or 0,
+                completion_tokens=usage.completion_tokens or 0,
+                cached_tokens=cached,
+                latency_s=elapsed,
+                is_retry=is_retry,
+            )
 
         content = response.choices[0].message.content or "{}"
         return parse_json_response(content)

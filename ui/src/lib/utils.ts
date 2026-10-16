@@ -41,6 +41,23 @@ export function formatVolume(value: number | null | undefined): string {
   return value.toLocaleString("en-IN");
 }
 
+/** USD→INR rate used for the secondary rupee figure next to LLM costs */
+export const USD_INR = Number(process.env.NEXT_PUBLIC_USD_INR) || 84;
+
+/** Format an LLM cost in dollars: 4 decimals under $1, 2 above */
+export function formatUSD(value: number | null | undefined): string {
+  if (value == null) return "—";
+  return "$" + value.toFixed(Math.abs(value) < 1 ? 4 : 2);
+}
+
+/** Format token counts compactly: 950, 12.4K, 1.20M */
+export function formatTokens(value: number | null | undefined): string {
+  if (value == null) return "—";
+  if (value >= 1e6) return (value / 1e6).toFixed(2) + "M";
+  if (value >= 1e4) return (value / 1e3).toFixed(1) + "K";
+  return value.toLocaleString("en-US");
+}
+
 /** Format seconds as "1m 23s" */
 export function formatDuration(seconds: number): string {
   const m = Math.floor(seconds / 60);

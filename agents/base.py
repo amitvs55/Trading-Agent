@@ -25,7 +25,7 @@ class BaseAgent:
     output_model: Type[BaseModel] = BaseModel
 
     def __init__(self):
-        self.llm = LLMClient()
+        self.llm = LLMClient(agent_name=self.name)
 
     def build_user_prompt(self, context: dict[str, Any]) -> str:
         """Build the user prompt from the input context. Override in subclasses."""
@@ -61,7 +61,7 @@ class BaseAgent:
             f"IMPORTANT: Your previous response had an error: {e}\n"
             f"Please fix the JSON output to match the required schema exactly."
         )
-        raw = self.llm.call(system, retry_prompt)
+        raw = self.llm.call(system, retry_prompt, is_retry=True)
         result = self.output_model.model_validate(raw)
         logger.info("[%s] Output validated on retry", self.name)
         return result

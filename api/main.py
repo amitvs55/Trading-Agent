@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from api.routes.analyze import router as analyze_router
 from api.routes.history import router as history_router
 from api.routes.pricehistory import router as pricehistory_router
+from api.routes.usage import router as usage_router
 
 app = FastAPI(
     title="TradingAgents India API",
@@ -30,6 +31,7 @@ app.add_middleware(
 app.include_router(analyze_router, prefix="/api")
 app.include_router(history_router, prefix="/api")
 app.include_router(pricehistory_router, prefix="/api")
+app.include_router(usage_router, prefix="/api")
 
 
 @app.get("/health")

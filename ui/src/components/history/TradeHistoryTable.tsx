@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { Search, Download, RefreshCw } from "lucide-react";
-import { cn, formatINR } from "@/lib/utils";
+import { cn, formatINR, formatTokens, formatUSD } from "@/lib/utils";
 import { format } from "date-fns";
 
 interface Props {
@@ -95,7 +95,7 @@ export function TradeHistoryTable({ records, total, isLoading, onRefresh, page, 
         <table className="w-full border-collapse">
           <thead>
             <tr className="border-b border-[#1e2d45]">
-              {["ORDER ID", "SYMBOL", "EXCHANGE", "STATUS", "DIRECTION", "ENTRY (₹)", "DATE (IST)", "DETAILS"].map(h => (
+              {["ORDER ID", "SYMBOL", "EXCHANGE", "STATUS", "DIRECTION", "ENTRY (₹)", "TOKENS", "COST ($)", "DATE (IST)", "DETAILS"].map(h => (
                 <th key={h} className="px-4 py-3 text-left text-[10px] text-[#64748b] font-semibold tracking-widest">{h}</th>
               ))}
             </tr>
@@ -104,14 +104,14 @@ export function TradeHistoryTable({ records, total, isLoading, onRefresh, page, 
             {isLoading ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <tr key={i} className="border-b border-[#1e2d4530]">
-                  {Array.from({ length: 8 }).map((_, j) => (
+                  {Array.from({ length: 10 }).map((_, j) => (
                     <td key={j} className="px-4 py-3"><div className="skeleton h-3 rounded w-20" /></td>
                   ))}
                 </tr>
               ))
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-xs text-[#64748b]">No trades found</td>
+                <td colSpan={10} className="px-4 py-8 text-center text-xs text-[#64748b]">No trades found</td>
               </tr>
             ) : (
               filtered.map((r, i) => {
@@ -121,6 +121,7 @@ export function TradeHistoryTable({ records, total, isLoading, onRefresh, page, 
                                : String(r.details   ?? "").toLowerCase().includes("hold")  ? "hold" : "long";
                 const entryPrice = typeof r.entry_price === "number" ? formatINR(r.entry_price) : "—";
                 const exchange  = ticker.endsWith(".BO") ? "BSE" : "NSE";
+                const usage     = r.usage as { total_tokens?: number; cost_usd?: number } | null | undefined;
 
                 return (
                   <tr key={i} className="border-b border-[#1e2d4530] hover:bg-[#1a2233] transition-colors cursor-pointer">
@@ -142,6 +143,8 @@ export function TradeHistoryTable({ records, total, isLoading, onRefresh, page, 
                       </span>
                     </td>
                     <td className="px-4 py-3 font-mono text-xs text-[#e2e8f0]">{entryPrice}</td>
+                    <td className="px-4 py-3 font-mono text-xs text-[#94a3b8]">{usage?.total_tokens != null ? formatTokens(usage.total_tokens) : "—"}</td>
+                    <td className="px-4 py-3 font-mono text-xs text-[#e2e8f0]">{usage?.cost_usd != null ? formatUSD(usage.cost_usd) : "—"}</td>
                     <td className="px-4 py-3 text-[11px] text-[#64748b]">{fmtDate(r.logged_at)}</td>
                     <td className="px-4 py-3 text-[11px] text-[#64748b] max-w-[180px] truncate">{String(r.details ?? "")}</td>
                   </tr>

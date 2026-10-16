@@ -22,8 +22,10 @@ from agents.risk_neutral import NeutralRiskAgent
 from agents.sentiment import SentimentAgent
 from agents.trader import TraderAgent
 from config.settings import settings
-from models.schemas import PipelineResult
+from models.schemas import PipelineResult, UsageSummary
+from utils.llm import LLMClient
 from utils.logger import setup_logger
+from utils.usage import UsageTracker
 
 logger = setup_logger("pipeline")
 console = Console()
@@ -59,6 +61,14 @@ class TradingPipeline:
 
         # Stage 6: Execution
         self.execution_engine = ExecutionEngine()
+
+        # Token/cost tracking for this run. Handed to each agent's client explicitly
+        # (rather than via contextvars) so the parallel stages' worker threads see it.
+        self.usage = UsageTracker(settings.MODEL_NAME)
+        for agent in vars(self).values():
+            llm = getattr(agent, "llm", None)
+            if isinstance(llm, LLMClient):
+                llm.tracker = self.usage
 
     def run(self) -> PipelineResult:
         """Run the full 6-stage pipeline."""
@@ -113,6 +123,11 @@ class TradingPipeline:
             progress.remove_task(task)
 
         elapsed = time.time() - start
+        usage = self.usage.summary()
+        logger.info(
+            "Run usage: %d calls, %d tokens, $%.4f",
+            usage["calls"], usage["total_tokens"], usage["cost_usd"],
+        )
 
         return PipelineResult(
             ticker=self.ticker,
@@ -128,11 +143,13 @@ class TradingPipeline:
             final_decision=decision,
             execution=execution,
             total_duration_seconds=round(elapsed, 1),
+            usage=UsageSummary.model_validate(usage),
         )
 
     def _stage_data_collection(self) -> dict[str, Any]:
         """Stage 1: Run 4 data collection agents in parallel."""
         logger.info("Stage 1: Data collection for %s", self.ticker)
+        self.usage.stage = 1
         ctx = {"ticker": self.ticker}
 
         with concurrent.futures.ThreadPoolExecutor(
@@ -158,6 +175,7 @@ class TradingPipeline:
     def _stage_research(self, analyst_outputs: dict) -> tuple:
         """Stage 2: Bull/Bear research + moderated debate."""
         logger.info("Stage 2: Research debate")
+        self.usage.stage = 2
         context = {"ticker": self.ticker, **analyst_outputs}
 
         bull = self.bull_agent.run(context)
@@ -181,6 +199,7 @@ class TradingPipeline:
     def _stage_trading(self, verdict, market_data) -> Any:
         """Stage 3: Trader proposes a trade."""
         logger.info("Stage 3: Trade proposal")
+        self.usage.stage = 3
         proposal = self.trader_agent.run({
             "ticker": self.ticker,
             "verdict": verdict,
@@ -193,6 +212,7 @@ class TradingPipeline:
     def _stage_risk(self, proposal) -> list:
         """Stage 4: Run 3 risk managers in parallel."""
         logger.info("Stage 4: Risk assessment")
+        self.usage.stage = 4
         ctx = {"proposal": proposal}
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
@@ -212,6 +232,7 @@ class TradingPipeline:
     def _stage_decision(self, proposal, risk_assessments) -> Any:
         """Stage 5: Portfolio manager makes final decision."""
         logger.info("Stage 5: Portfolio decision")
+        self.usage.stage = 5
         decision = self.portfolio_manager.run({
             "ticker": self.ticker,
             "proposal": proposal,
@@ -224,4 +245,6 @@ class TradingPipeline:
     def _stage_execution(self, decision) -> Any:
         """Stage 6: Execute or log the decision."""
         logger.info("Stage 6: Execution")
-        return self.execution_engine.run({"decision": decision})
+        self.usage.stage = 6
+        # All LLM stages are done, so this is the run's final usage; it goes in the trade log
+        return self.execution_engine.run({"decision": decision, "usage": self.usage.summary()})

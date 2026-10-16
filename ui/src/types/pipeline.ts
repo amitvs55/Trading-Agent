@@ -150,6 +150,70 @@ export interface FinalDecision {
   risk_consensus:          string;
 }
 
+// LLM token usage / USD cost (mirrors utils/usage.py summary)
+export interface UsageBucket {
+  calls:             number;
+  prompt_tokens:     number;
+  completion_tokens: number;
+  cached_tokens:     number;
+  total_tokens:      number;
+  cost_usd:          number;
+}
+
+export interface UsageCall {
+  agent:             string;
+  stage:             number | null;
+  model:             string;
+  prompt_tokens:     number;
+  completion_tokens: number;
+  cached_tokens:     number;
+  total_tokens:      number;
+  cost_usd:          number;
+  latency_s:         number;
+  is_retry:          boolean;
+}
+
+export interface UsageSummary extends UsageBucket {
+  model:               string;
+  pricing_known:       boolean;
+  input_price_per_1m:  number;
+  output_price_per_1m: number;
+  retries:             number;
+  by_agent:            Record<string, UsageBucket>;
+  by_stage:            Record<string, UsageBucket>;
+  calls_detail:        UsageCall[];
+}
+
+export interface UsagePeriod {
+  runs:              number;
+  calls:             number;
+  prompt_tokens:     number;
+  completion_tokens: number;
+  cached_tokens:     number;
+  total_tokens:      number;
+  cost_usd:          number;
+  avg_cost_per_run:  number;
+}
+
+export interface UsageAgentTotal {
+  agent:        string;
+  calls:        number;
+  total_tokens: number;
+  cost_usd:     number;
+}
+
+export interface UsageReport {
+  model:                string;
+  all_time:             UsagePeriod;
+  today:                UsagePeriod;
+  last_7_days:          UsagePeriod;
+  daily:                { date: string; cost_usd: number; total_tokens: number; runs: number }[];
+  by_agent:             UsageAgentTotal[];
+  by_model:             Record<string, UsagePeriod>;
+  most_expensive_agent: UsageAgentTotal | null;
+  untracked_runs:       number;
+}
+
 export interface ExecutionResult {
   agent_name: string;
   ticker:     string;
@@ -158,6 +222,7 @@ export interface ExecutionResult {
   status:     ExecutionStatus;
   details:    string;
   logged_at:  string;
+  usage?:     UsageSummary | null;
 }
 
 export interface PipelineResult {
@@ -175,6 +240,7 @@ export interface PipelineResult {
   final_decision:        FinalDecision;
   execution:             ExecutionResult;
   total_duration_seconds: number;
+  usage?:                UsageSummary | null;
 }
 
 // SSE event types
@@ -187,6 +253,7 @@ export interface SSEStageComplete {
   stage:   number;
   status:  "complete";
   payload: Record<string, unknown>;
+  usage?:  UsageSummary;
 }
 export interface SSEDone {
   done:        true;
@@ -216,6 +283,7 @@ export interface PipelineState {
   fullResult:   PipelineResult | null;
   error:        string | null;
   elapsed:      number;
+  usage:        UsageSummary | null;
 }
 
 // Price history

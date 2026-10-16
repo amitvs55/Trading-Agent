@@ -8,6 +8,9 @@ class Settings(BaseSettings):
     MODEL_NAME: str = "gpt-4"
     LLM_TEMPERATURE: float = 0.3
     LLM_MAX_RETRIES: int = 3
+    # Optional USD-per-1M-token prices for the cost monitor; override utils/usage.PRICING
+    OPENAI_PRICE_INPUT_PER_1M: float | None = None
+    OPENAI_PRICE_OUTPUT_PER_1M: float | None = None
     MAX_PARALLEL_WORKERS: int = 4
     LOG_LEVEL: str = "INFO"
     LOG_DIR: str = "logs"

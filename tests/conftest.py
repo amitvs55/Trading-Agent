@@ -216,7 +216,7 @@ def mock_llm(monkeypatch):
     """Mock LLMClient.call to return test fixtures."""
     from utils.llm import LLMClient
 
-    def mock_call(self, system_prompt, user_prompt, temperature=None):
+    def mock_call(self, system_prompt, user_prompt, temperature=None, is_retry=False):
         return _get_mock_response(system_prompt)
 
     monkeypatch.setattr(LLMClient, "call", mock_call)

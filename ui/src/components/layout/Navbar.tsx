@@ -50,6 +50,7 @@ export function Navbar() {
           {[
             { href: "/",        label: "Dashboard" },
             { href: "/history", label: "History"   },
+            { href: "/usage",   label: "Usage"     },
           ].map(({ href, label }) => (
             <Link
               key={href}

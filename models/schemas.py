@@ -170,11 +170,48 @@ class FinalDecision(AgentMetadata):
 # ─── Stage 6: Execution ──────────────────────────────────────────────────────
 
 
+# ─── LLM Usage / Cost ────────────────────────────────────────────────────────
+
+
+class UsageBucket(BaseModel):
+    calls: int = 0
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    cached_tokens: int = 0
+    total_tokens: int = 0
+    cost_usd: float = 0.0
+
+
+class UsageCall(BaseModel):
+    agent: str
+    stage: Optional[int] = None
+    model: str
+    prompt_tokens: int
+    completion_tokens: int
+    cached_tokens: int = 0
+    total_tokens: int
+    cost_usd: float
+    latency_s: float = 0.0
+    is_retry: bool = False
+
+
+class UsageSummary(UsageBucket):
+    model: str
+    pricing_known: bool = True
+    input_price_per_1m: float = 0.0
+    output_price_per_1m: float = 0.0
+    retries: int = 0
+    by_agent: dict[str, UsageBucket] = Field(default_factory=dict)
+    by_stage: dict[str, UsageBucket] = Field(default_factory=dict)
+    calls_detail: list[UsageCall] = Field(default_factory=list)
+
+
 class ExecutionResult(AgentMetadata):
     order_id: str
     status: Literal["executed_simulated", "held", "rejected"]
     details: str
     logged_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    usage: Optional[UsageSummary] = None
 
 
 # ─── Full Pipeline Result ────────────────────────────────────────────────────
@@ -195,3 +232,4 @@ class PipelineResult(BaseModel):
     final_decision: FinalDecision
     execution: ExecutionResult
     total_duration_seconds: float
+    usage: Optional[UsageSummary] = None

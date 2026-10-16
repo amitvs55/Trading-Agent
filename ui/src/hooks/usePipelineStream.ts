@@ -10,6 +10,7 @@ const INITIAL_STATE: PipelineState = {
   fullResult:   null,
   error:        null,
   elapsed:      0,
+  usage:        null,
 };
 
 export function usePipelineStream() {
@@ -77,6 +78,7 @@ export function usePipelineStream() {
               status:     "done",
               currentStage: 6,
               fullResult: event.full_result,
+              usage:      event.full_result.usage ?? prev.usage,
             }));
             break;
           }
@@ -102,6 +104,7 @@ export function usePipelineStream() {
                 ...prev,
                 currentStage: event.stage,
                 stages,
+                usage: ("usage" in event && event.usage) ? event.usage : prev.usage,
               };
             });
           }

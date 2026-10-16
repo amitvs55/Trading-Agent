@@ -46,6 +46,7 @@ class ExecutionEngine:
             order_id=order_id,
             status=status,
             details=details,
+            usage=context.get("usage"),
         )
 
         # Log to trades ledger
