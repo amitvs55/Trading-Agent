@@ -8,7 +8,7 @@
 - **How to set up and deploy:** `docs/options-runbook.md`.
 - **Scope:** NIFTY first. Intraday + positional, **buy-only** (BUY CE / BUY PE / EXIT).
 - **Money:** capital ₹1 lakh, **risk 3% per trade, 10% daily loss stop**, always 1 lot.
-- **Hosting:** Railway. `api` service (FastAPI) and a `recorder` cron service (`railway.recorder.json`, 08:30 IST weekdays).
+- **Hosting:** Railway. `api` service (FastAPI), `ui` (Next.js), Postgres, and an always-on `recorder` (`SERVICE_ROLE=recorder` → `options/daemon.py`, which starts the session at 08:30 IST on trading days).
 - **Frontend:** existing Next.js app in `ui/`. The user wants it polished ("perfect as heaven").
 - **Testing:** Python 3.12 installed (user scope); run `.venv\Scripts\python -m pytest tests/options` (venv at repo root; already in .gitignore). Options tests: 120 passed (157 with the old app's tests). Synthetic market for tests: `tests/options/market.py`.
 

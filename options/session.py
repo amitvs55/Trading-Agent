@@ -1,7 +1,7 @@
 """One trading day: wait for the Kite login, load contracts, record the market, report.
 
-Railway runs this as a cron service at 08:30 IST on weekdays (railway.recorder.json); it
-exits after the close, so every day starts with a fresh process and WebSocket.
+options.daemon starts this in a fresh process at 08:30 IST on each trading day; it exits
+after the close, so every day starts with a fresh process and WebSocket.
 
     python -m options.session
 """

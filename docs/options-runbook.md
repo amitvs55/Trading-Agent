@@ -9,9 +9,9 @@ How to set up, deploy, run and validate the live NIFTY options signal tool. The 
 ```
  Railway project "trading-agent"
  ┌──────────────────────────┐   writes bars, signals, board   ┌────────────┐
- │ recorder (cron service)  │ ───────────────────────────────▶│  Postgres  │
- │ python -m options.session│                                 └─────┬──────┘
- │ 08:30–15:31 IST weekdays │◀── Kite WebSocket + REST              │ reads
+ │ recorder (always on)     │ ───────────────────────────────▶│  Postgres  │
+ │ python -m options.daemon │                                 └─────┬──────┘
+ │ session 08:30–15:31 IST  │◀── Kite WebSocket + REST              │ reads
  │ sends Telegram messages  │                                       ▼
  └──────────────────────────┘                          ┌──────────────────────────┐
                                                        │ api (FastAPI)            │
@@ -20,7 +20,7 @@ How to set up, deploy, run and validate the live NIFTY options signal tool. The 
                                                        └──────────────────────────┘
 ```
 
-- **recorder:** a Railway *cron* service. It starts at 08:30 IST, waits for your Kite login, then records the market and runs the signal engine. It sends the morning brief, signals and end-of-day report to Telegram, and exits after the close. Every day therefore starts fresh.
+- **recorder:** a small always-on service (`SERVICE_ROLE=recorder`, same Docker image as the API) running `options.daemon`. On each trading day at 08:30 IST it starts the session in a fresh process. The session waits for your Kite login, records the market, runs the signal engine, sends the morning brief, signals and end-of-day report to Telegram, and exits after the close. If the service restarts during market hours, it starts that day's session immediately. A cron service isn't used because Railway's config-as-code is deprecated for new services.
 - **api:** your existing FastAPI service. It now also handles the Kite login redirect and serves the dashboard data.
 - **ui:** your existing Next.js service. The new pages are **Signals** and **Performance**.
 
@@ -33,12 +33,13 @@ How to set up, deploy, run and validate the live NIFTY options signal tool. The 
 
 ### 2.2 Railway
 1. **Postgres:** add a **PostgreSQL** database to the `trading-agent` project.
-2. **Recorder service:** create a new service from the same GitHub repo (or `railway up`), named `recorder`. In **Settings → Config-as-code**, set the path to `railway.recorder.json`. That file sets the start command (`python -m options.session`), the cron schedule (`0 3 * * 1-5`, which is 08:30 IST, Mon–Fri) and no restarts.
+2. **Recorder service:** a service named `recorder`, deployed from the repo root with `railway up --service recorder`. It needs the variable `SERVICE_ROLE=recorder`; the Dockerfile then runs the scheduler instead of the API. No other settings are needed.
 3. **Variables:**
 
 | Variable | api | recorder | Notes |
 |---|---|---|---|
 | `DATABASE_URL` | ✅ | ✅ | `${{Postgres.DATABASE_URL}}` (a reference variable) |
+| `SERVICE_ROLE` | | ✅ | `recorder` |
 | `KITE_API_KEY`, `KITE_API_SECRET` | ✅ | ✅ | From the Kite developer console. Keep the secret secret. |
 | `KITE_USER_ID` | ✅ | | Your Zerodha client ID; logins from other accounts are rejected |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | ✅ | ✅ | Appendix C |
@@ -96,7 +97,15 @@ Bars are replayed minute by minute with the engine clock 4 seconds after each cl
 - **Monthly:** refresh the approximate NIFTY heavyweight weights in `options/core/constituents.py` from NSE's factsheet. Also update them after the semi-annual rebalance.
 - **Nothing to do:** lot sizes, expiries and strike steps update automatically from Kite's instrument list every morning.
 
-## 8. Troubleshooting
+## 8. Railway config-as-code deprecation (before 1 Dec 2026)
+Railway stops honouring `railway.json` on **1 Dec 2026**. The `api` and `ui` services currently get their Dockerfile builder (and the API's `/health` check) from those files. Before that date:
+- Open each service in the Railway dashboard.
+- Set **Builder = Dockerfile**, and **Healthcheck path = /health** for `api`.
+- Delete the `railway.json` files.
+
+The recorder already doesn't depend on them.
+
+## 9. Troubleshooting
 | Symptom | Likely cause |
 |---|---|
 | "KITE_API_KEY / KITE_API_SECRET are not set" on Telegram | Variables missing on the recorder service |
