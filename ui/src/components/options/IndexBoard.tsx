@@ -3,7 +3,8 @@ import { memo } from "react";
 import { CalendarClock, Gauge, Layers, TrendingDown, TrendingUp, Minus } from "lucide-react";
 import type { Board, BoardPillar } from "@/types/options";
 import { cn } from "@/lib/utils";
-import { ageSeconds, fmtAge, fmtDate, fmtNum, PILLAR_LABELS } from "@/lib/optionsFormat";
+import { fmtDate, fmtNum, PILLAR_LABELS } from "@/lib/optionsFormat";
+import { LiveAge } from "@/components/common/LiveAge";
 import { BiasMark } from "./StatusBits";
 
 const SPOT_NAMES: Record<string, string> = { NIFTY: "NIFTY 50", BANKNIFTY: "NIFTY BANK", FINNIFTY: "NIFTY FIN SERVICE" };
@@ -73,7 +74,6 @@ function LevelsLadder({ board }: { board: Board }) {
 
 // Memoised: SWR keeps the same object when a poll returns identical data, so an unchanged board skips rendering.
 export const IndexBoard = memo(function IndexBoard({ board }: { board: Board }) {
-  const age = ageSeconds(board.as_of);
   const TrendIcon = board.htf_trend === "up" ? TrendingUp : board.htf_trend === "down" ? TrendingDown : Minus;
   const oi = board.oi ?? {};
   return (
@@ -101,7 +101,7 @@ export const IndexBoard = memo(function IndexBoard({ board }: { board: Board }) 
             </span>
           )}
           <span className="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-md bg-card border border-[#1e2d45] text-[#64748b]">
-            updated {fmtAge(age)}
+            <LiveAge iso={board.as_of} prefix="updated " />
           </span>
         </div>
       </div>

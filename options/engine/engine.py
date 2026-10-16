@@ -9,6 +9,7 @@ from typing import Callable
 
 from options.agents import events as event_agent, macro as macro_agent
 from options.agents.context import AgentContext, Constituent
+from options.agents.health import AgentTracker
 from options.agents.option_chain import build_chain
 from options.agents.volatility import percentile_rank, price_chain
 from options.config import OptionsSettings
@@ -16,11 +17,11 @@ from options.core.calendar import IST, MARKET_OPEN, NseCalendar, at_ist, now_ist
 from options.core.events import EVENTS, Event
 from options.core.schemas import OPEN_STATES, Action, Contract, Grade, Signal, SignalState
 from options.delivery import cards
-from options.engine import grading, lifecycle, performance
+from options.engine import confidence, grading, lifecycle, performance
 from options.engine.levels import plan
 from options.engine.risk import RiskConfig, budget_gate, size
 from options.engine.selection import pick_expiry, pick_strike
-from options.engine.snapshot import Snapshot, take
+from options.engine.snapshot import Snapshot, SnapshotError, take
 from options.engine.state import MarketState
 from options.notify.base import Notifier
 from options.quant import indicators as ind
@@ -74,6 +75,7 @@ class SignalEngine:
         self._flow_alerted: set[str] = set()
         self._last_bucket: datetime | None = None
         self.snapshots: dict[str, Snapshot] = {}
+        self.agent_health: dict[str, AgentTracker] = {i: AgentTracker() for i in refs}
 
     # ── Inputs ───────────────────────────────────────────────────────────────
 
@@ -108,11 +110,28 @@ class SignalEngine:
 
     def evaluate(self, now: datetime) -> None:
         for index in self.refs:
-            snap = take(self.context(index, now))
+            try:
+                snap = take(self.context(index, now))
+            except SnapshotError as e:                  # technical agent down: nothing to evaluate this time
+                self._record_agents(index, e.runs, [r.agent for r in e.runs if r.status == "error"], now)
+                continue
             self.snapshots[index] = snap
+            self._record_agents(index, snap.runs, snap.failed, now)
             self.store.save_board(index, board(snap), now)
             self._manage_open(snap, now)
+            if snap.failed:
+                logger.warning("%s: no new signals this check, agent(s) failing: %s", index, ", ".join(snap.failed))
+                continue
             self._scan(snap, now)
+
+    def _record_agents(self, index: str, runs, failed: list[str], now: datetime) -> None:
+        tracker = self.agent_health.setdefault(index, AgentTracker())
+        for message in tracker.update(runs, now):
+            self.notifier.send(f"{message} ({index})")
+        try:
+            self.store.save_agent_status(index, tracker.payload(now, failed), now)
+        except Exception:                               # monitoring must never stop trading logic
+            logger.exception("Couldn't save agent status for %s", index)
 
     # ── Open signals ─────────────────────────────────────────────────────────
 
@@ -219,10 +238,12 @@ class SignalEngine:
         self._log(now, index, cand, "SIGNAL", [sig.signal_id], grade.value, score)
         self.open.append(sig)
 
-        history = [s for s in self.store.signals_since(today_start - timedelta(days=3650)) if s.setup == setup.id]
-        st = performance.stats(history)
+        everything = self.store.signals_since(today_start - timedelta(days=3650))
+        st = performance.stats([s for s in everything if s.setup == setup.id])
+        band = confidence.band_stats(everything).get(sig.grade.value)
         self.notifier.send(cards.signal_card(sig, self.risk.capital,
-                                             performance.summary_line(st) if st["trades"] >= 30 else None))
+                                             performance.summary_line(st) if st["trades"] >= 30 else None,
+                                             confidence.telegram_line(sig, band)))
 
     def _build(self, snap, setup, cand, row, expiry, trade, sizing, grade, score, pillar, seq, now) -> Signal:
         index = snap.ctx.index

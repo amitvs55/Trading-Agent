@@ -1,12 +1,13 @@
 "use client";
 import Link from "next/link";
-import { ArrowLeft, ListChecks, ScrollText } from "lucide-react";
+import { ArrowLeft, Gauge, ListChecks, ScrollText } from "lucide-react";
 import type { SignalDetail } from "@/types/options";
 import { useOptionsApi } from "@/lib/optionsApi";
 import { fmtDateTime, fmtPremium, fmtR, fmtRupees } from "@/lib/optionsFormat";
 import { SignalCard } from "@/components/options/SignalCard";
 import { ChecksList } from "@/components/options/ChecksList";
 import { SignalCardSkeleton } from "@/components/options/Skeletons";
+import { ConfidenceBreakdown, ConfidenceMeter } from "@/components/options/Confidence";
 
 const KIND_LABELS: Record<string, string> = {
   CREATED: "Signal created", ENTRY_FILLED: "Entry filled", T1_HIT: "Target 1 reached", T2_HIT: "Target 2 reached",
@@ -37,7 +38,20 @@ export default function SignalDetailPage({ params }: { params: { id: string } })
         ) : (
           <div className="fade-in grid gap-5 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_380px]">
             <div className="flex flex-col gap-5 min-w-0">
-              <SignalCard s={s} setupLabel={data.setup_label} wide />
+              <SignalCard s={s} setupLabel={data.setup_label} wide showConfidence={false} />
+              {s.confidence && (
+                <section className="bg-surface border border-[#1e2d45] rounded-xl overflow-hidden">
+                  <div className="px-4 py-3 border-b border-[#1e2d45] flex items-center gap-2">
+                    <Gauge size={13} className="text-[#ff9933]" />
+                    <span className="text-xs font-semibold text-[#e2e8f0]">Confidence</span>
+                    <span className="text-[10px] text-[#64748b]">where each of the {s.confidence.max} points came from</span>
+                  </div>
+                  <div className="p-4 flex flex-col gap-4">
+                    <ConfidenceMeter c={s.confidence} />
+                    <ConfidenceBreakdown c={s.confidence} />
+                  </div>
+                </section>
+              )}
               <section className="bg-surface border border-[#1e2d45] rounded-xl overflow-hidden">
                 <div className="px-4 py-3 border-b border-[#1e2d45] flex items-center gap-2">
                   <ListChecks size={13} className="text-[#ff9933]" />

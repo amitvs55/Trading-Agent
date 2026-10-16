@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { sendJson } from "@/lib/optionsApi";
 import { ageSeconds, fmtAge, fmtDateTime, fmtNum } from "@/lib/optionsFormat";
 import { Button } from "./ConnectorCard";
+import { LiveAge } from "@/components/common/LiveAge";
 
 function Panel({ icon, title, children, subtitle }: { icon: ReactNode; title: string; subtitle?: string; children: ReactNode }) {
   return (
@@ -99,7 +100,7 @@ export function RecorderCard({ status }: { status: RecorderStatus | null | undef
         </span>
       </div>
       <dl className="divide-y divide-[#1e2d45]">
-        <Row k="Last heartbeat" v={status ? fmtAge(age) : "—"} />
+        <Row k="Last heartbeat" v={status ? <LiveAge iso={status.ts} /> : "—"} />
         {!running && <Row k="Next session" v={status?.next_start ? fmtDateTime(status.next_start) : "—"} />}
         <Row k="Session started" v={status?.session_started_at ? fmtDateTime(status.session_started_at) : "—"} />
         <Row k="Last exit code" v={status?.last_exit_code == null ? "—" :

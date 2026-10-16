@@ -2,7 +2,7 @@
 import { AlertTriangle, CheckCircle2, CircleDashed, MinusCircle, XCircle } from "lucide-react";
 import type { CheckStatus, HealthResult } from "@/types/auth";
 import { cn } from "@/lib/utils";
-import { ageSeconds, fmtAge } from "@/lib/optionsFormat";
+import { LiveAge } from "@/components/common/LiveAge";
 
 export const CHECK_STYLE: Record<CheckStatus | "none", { icon: typeof CheckCircle2; text: string; label: string; ring: string; bar: string }> = {
   ok:   { icon: CheckCircle2,  text: "text-green",     label: "Healthy",     ring: "border-[#22c55e33] bg-[#22c55e0d]", bar: "bg-green" },
@@ -25,7 +25,7 @@ export function CheckMeta({ result }: { result: HealthResult | null | undefined 
   if (!result) return <span className="text-[11px] text-[#475569]">Never tested</span>;
   return (
     <span className="text-[11px] text-[#64748b]">
-      checked {fmtAge(ageSeconds(result.checked_at))}{result.latency_ms != null ? ` · ${result.latency_ms.toLocaleString("en-IN")} ms` : ""}
+      checked <LiveAge iso={result.checked_at} />{result.latency_ms != null ? ` · ${result.latency_ms.toLocaleString("en-IN")} ms` : ""}
     </span>
   );
 }

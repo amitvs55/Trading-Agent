@@ -6,6 +6,7 @@ import type { OptionsStatus } from "@/types/options";
 import { API_URL, cn } from "@/lib/utils";
 import { ageSeconds, fmtAge, fmtDate, fmtNum, PHASE_LABELS } from "@/lib/optionsFormat";
 import { SessionBarSkeleton } from "./Skeletons";
+import { LiveAge } from "@/components/common/LiveAge";
 
 function Chip({ children, tone = "neutral" }: { children: ReactNode; tone?: "good" | "warn" | "bad" | "neutral" }) {
   return (
@@ -60,7 +61,7 @@ export function SessionBar({ status }: { status: OptionsStatus | undefined }) {
       <Chip tone={fresh ? "good" : open ? "warn" : "neutral"}>
         <Activity size={13} className={fresh ? "text-green" : "text-[#64748b]"} />
         <span className="text-[#94a3b8]">Market data</span>
-        <span className="font-mono text-[#e2e8f0]">{fmtAge(dataAge)}</span>
+        <span className="font-mono text-[#e2e8f0]"><LiveAge iso={status.last_bar_at} /></span>
         <span className="text-[#475569]">· {fmtNum(status.bars_today)} bars today</span>
       </Chip>
 

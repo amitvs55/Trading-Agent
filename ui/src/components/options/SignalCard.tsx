@@ -6,6 +6,7 @@ import type { Quote, Signal, Status } from "@/types/options";
 import { cn } from "@/lib/utils";
 import { EXIT_LABELS, fmtDate, fmtPremium, fmtR, fmtRupees, fmtTime } from "@/lib/optionsFormat";
 import { DirectionPill, GradeBadge, ModeTag, StateBadge, STATUS_STYLE } from "./StatusBits";
+import { ConfidenceRow } from "./Confidence";
 
 const OPEN = new Set(["TRIGGERED", "ACTIVE", "T1_HIT"]);
 
@@ -73,8 +74,8 @@ function CheckCounts({ s }: { s: Signal }) {
   );
 }
 
-export const SignalCard = memo(function SignalCard({ s, quote, setupLabel, compact = false, wide = false }: {
-  s: Signal; quote?: Quote; setupLabel: string; compact?: boolean; wide?: boolean;
+export const SignalCard = memo(function SignalCard({ s, quote, setupLabel, compact = false, wide = false, showConfidence = true }: {
+  s: Signal; quote?: Quote; setupLabel: string; compact?: boolean; wide?: boolean; showConfidence?: boolean;
 }) {
   const open = OPEN.has(s.state);
   const current = open ? (quote?.bid ?? quote?.ltp ?? null) : s.exit_price;
@@ -102,6 +103,8 @@ export const SignalCard = memo(function SignalCard({ s, quote, setupLabel, compa
         </div>
         <StateBadge state={s.state} />
       </div>
+
+      {s.confidence && !compact && showConfidence && <ConfidenceRow c={s.confidence} />}
 
       {!open && result != null && (
         <div className={cn("mx-4 mb-3 px-3 py-2 rounded-lg border flex items-center justify-between",

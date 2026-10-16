@@ -28,12 +28,14 @@ def checks_block(checks: list[PillarCheck]) -> str:
     return f"<b>Analysis</b> {head}\n" + "\n".join(lines)
 
 
-def signal_card(sig: Signal, capital: float, setup_stats: str | None = None) -> str:
+def signal_card(sig: Signal, capital: float, setup_stats: str | None = None, confidence: str | None = None) -> str:
     c = sig.contract
     buy = sig.action is Action.BUY_CE
     head = (f"{'🟢' if buy else '🔴'} <b>{'BUY CE' if buy else 'BUY PE'} · {escape(sig.index)}</b> · "
             f"Grade {sig.grade.value} ({sig.score:.0f}/100) · {escape(SETUP_LABELS.get(sig.setup, sig.setup))}")
     mode = "\n<i>SHADOW TEST: tracked automatically, not for trading yet</i>" if sig.mode == "SHADOW" else ""
+    if confidence:
+        mode = f"\n📊 {escape(confidence)}{mode}"
     t1_note = "book half" if sig.lots >= 2 else "lock half the gain"
     rr1 = (sig.t1 - sig.entry_high) / (sig.entry_high - sig.stop_loss)
     rr2 = (sig.t2 - sig.entry_high) / (sig.entry_high - sig.stop_loss)

@@ -7,11 +7,13 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 
-from api.deps import current_user, get_repo
+from api.deps import current_user, get_repo, get_store
 from api.routes.admin import router as admin_router
+from api.routes.agents import install_research_sink, router as agents_router
 from api.routes.analyze import router as analyze_router
 from api.routes.history import router as history_router
 from api.routes.options import router as options_router
+from api.routes.paper import ensure_account, router as paper_router
 from api.routes.pricehistory import router as pricehistory_router
 from api.routes.usage import router as usage_router
 from options.admin.connectors import apply_research_overrides
@@ -31,6 +33,12 @@ async def lifespan(_: FastAPI):
             print(f"ADMIN SETUP CODE: {code}", flush=True)
     except Exception:
         logger.exception("Admin start-up checks failed")
+    try:
+        repo = get_repo()
+        ensure_account(repo)                        # the paper account counts from the first start-up
+        install_research_sink(get_store())          # research agents' outcomes survive redeploys
+    except Exception:
+        logger.exception("Paper account / agent health start-up failed")
     yield
 
 
@@ -64,6 +72,8 @@ app.include_router(pricehistory_router, prefix="/api", dependencies=signed_in)
 app.include_router(usage_router, prefix="/api", dependencies=signed_in)
 app.include_router(options_router)  # /kite/* login flow + /api/options/* (signed-in)
 app.include_router(admin_router)    # /api/auth/* + /api/admin/* (admin)
+app.include_router(agents_router)   # /api/agents (signed-in) + /api/admin/agents/selftest
+app.include_router(paper_router)    # /api/paper (signed-in) + /api/admin/paper
 
 
 @app.get("/health")

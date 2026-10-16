@@ -44,7 +44,9 @@ def _as_ist(ts) -> datetime:
 
 
 def replay_day(source: Store, target: Store, day: date, cfg: OptionsSettings, calendar: NseCalendar,
-               notifier: Notifier | None = None, setups: list[Setup] | None = None) -> list[Signal]:
+               notifier: Notifier | None = None, setups: list[Setup] | None = None,
+               until: time | None = None) -> list[Signal]:
+    """Replay one recorded day (or its first part, up to `until`) into `target`."""
     rows = source.instruments_on(day)
     if not rows:
         return []
@@ -76,7 +78,7 @@ def replay_day(source: Store, target: Store, day: date, cfg: OptionsSettings, ca
                           now_fn=lambda: clock["now"], setups=setups)
 
     by_minute: dict[datetime, list[dict]] = defaultdict(list)
-    for b in source.bars_between(at_ist(day, time(9, 0)), at_ist(day, time(15, 31))):
+    for b in source.bars_between(at_ist(day, time(9, 0)), at_ist(day, until or time(15, 31))):
         b = {**b, "ts": _as_ist(b["ts"])}
         by_minute[b["ts"]].append(b)
     for minute in sorted(by_minute):

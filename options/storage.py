@@ -112,6 +112,15 @@ board_state = Table(
     Column("data", Text, nullable=False),
 )
 
+# Latest health of each group of agents: an index's signal agents ("NIFTY"), the research
+# pipeline's agents ("research") and the last self-test ("selftest")
+agent_status = Table(
+    "agent_status", metadata,
+    Column("key", String(32), primary_key=True),
+    Column("ts", DateTime(timezone=True), nullable=False),
+    Column("data", Text, nullable=False),
+)
+
 # ── Admin: accounts, sessions, settings saved from the UI, health results ──────────
 
 users = Table(
@@ -329,6 +338,15 @@ class Store:
 
     def load_board(self, index: str) -> dict | None:
         q = select(board_state.c.data).where(board_state.c.index_name == index)
+        with self.engine.connect() as conn:
+            raw = conn.execute(q).scalar()
+        return json.loads(raw) if raw else None
+
+    def save_agent_status(self, key: str, payload: dict, now: datetime) -> None:
+        self._upsert(agent_status, [{"key": key, "ts": now, "data": json.dumps(payload, default=str)}], ["key"])
+
+    def load_agent_status(self, key: str) -> dict | None:
+        q = select(agent_status.c.data).where(agent_status.c.key == key)
         with self.engine.connect() as conn:
             raw = conn.execute(q).scalar()
         return json.loads(raw) if raw else None

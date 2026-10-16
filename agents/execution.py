@@ -8,6 +8,7 @@ from typing import Any
 
 from config.settings import settings
 from models.schemas import ExecutionResult, FinalDecision
+from utils.agent_health import tracked
 from utils.logger import setup_logger
 
 logger = setup_logger("execution")
@@ -60,3 +61,7 @@ class ExecutionEngine:
         log_path.parent.mkdir(exist_ok=True)
         with open(log_path, "a") as f:
             f.write(result.model_dump_json() + "\n")
+
+
+# Not an LLM agent, but a pipeline stage: record its outcome for the Agents page too
+ExecutionEngine.run = tracked(ExecutionEngine.name, ExecutionEngine.run)

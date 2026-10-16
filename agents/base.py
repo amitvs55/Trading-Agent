@@ -5,6 +5,7 @@ from typing import Any, Type, TypeVar
 
 from pydantic import BaseModel, ValidationError
 
+from utils.agent_health import tracked
 from utils.llm import LLMClient
 from utils.logger import setup_logger
 
@@ -23,6 +24,14 @@ class BaseAgent:
     name: str = "base_agent"
     system_prompt: str = ""
     output_model: Type[BaseModel] = BaseModel
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        # Record every agent's outcome for the Agents page, including subclasses that override run()
+        if "run" in cls.__dict__ and not getattr(cls.__dict__["run"], "__agent_tracked__", False):
+            cls.run = tracked(cls.name, cls.__dict__["run"])
+        elif "run" not in cls.__dict__:
+            cls.run = tracked(cls.name, BaseAgent.__dict__["run"])
 
     def __init__(self):
         self.llm = LLMClient(agent_name=self.name)

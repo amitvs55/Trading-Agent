@@ -3,62 +3,10 @@
 from datetime import date, datetime, timedelta
 
 from options.core.calendar import IST
-
-TODAY = date(2026, 10, 16)              # Friday
-WEEKLY = date(2026, 10, 19)             # Monday: Tue 20 Oct is Dussehra
-MONTHLY = date(2026, 10, 27)
-EXPIRED = date(2026, 10, 13)
-
-NIFTY_SPOT_TOKEN = 256265
-VIX_TOKEN = 264969
-FUT_TOKEN = 9001
-NEXT_FUT_TOKEN = 9002
-
-NSE_ROWS = [
-    {"instrument_token": NIFTY_SPOT_TOKEN, "tradingsymbol": "NIFTY 50", "name": "NIFTY 50",
-     "segment": "INDICES", "instrument_type": "EQ", "expiry": "", "strike": 0.0, "lot_size": 0, "tick_size": 0.0},
-    {"instrument_token": VIX_TOKEN, "tradingsymbol": "INDIA VIX", "name": "INDIA VIX",
-     "segment": "INDICES", "instrument_type": "EQ", "expiry": "", "strike": 0.0, "lot_size": 0, "tick_size": 0.0},
-    {"instrument_token": 738561, "tradingsymbol": "RELIANCE", "name": "RELIANCE INDUSTRIES",
-     "segment": "NSE", "instrument_type": "EQ", "expiry": "", "strike": 0.0, "lot_size": 1, "tick_size": 0.1},
-]
-
-
-def option_token(expiry: date, strike: float, right: str) -> int:
-    return int(f"{expiry:%m%d}{int(strike)}{1 if right == 'CE' else 2}")
-
-
-def _option(expiry: date, strike: float, right: str, lot: int = 65) -> dict:
-    return {"instrument_token": option_token(expiry, strike, right),
-            "tradingsymbol": f"NIFTY{expiry:%y%b}{int(strike)}{right}".upper(),
-            "name": "NIFTY", "segment": "NFO-OPT", "instrument_type": right, "expiry": expiry,
-            "strike": float(strike), "lot_size": lot, "tick_size": 0.05}
-
-
-def _strikes() -> list[int]:
-    near = list(range(24500, 26001, 50))                     # 50-point steps near the money
-    far = list(range(23000, 24500, 100)) + list(range(26100, 27600, 100))
-    return sorted(near + far)
-
-
-def nfo_rows() -> list[dict]:
-    rows = [
-        {"instrument_token": FUT_TOKEN, "tradingsymbol": "NIFTY26OCTFUT", "name": "NIFTY",
-         "segment": "NFO-FUT", "instrument_type": "FUT", "expiry": MONTHLY, "strike": 0.0,
-         "lot_size": 65, "tick_size": 0.1},
-        {"instrument_token": NEXT_FUT_TOKEN, "tradingsymbol": "NIFTY26NOVFUT", "name": "NIFTY",
-         "segment": "NFO-FUT", "instrument_type": "FUT", "expiry": date(2026, 11, 24), "strike": 0.0,
-         "lot_size": 65, "tick_size": 0.1},
-        # Other indices and expired contracts must be ignored
-        {"instrument_token": 7777, "tradingsymbol": "BANKNIFTY26OCTFUT", "name": "BANKNIFTY",
-         "segment": "NFO-FUT", "instrument_type": "FUT", "expiry": MONTHLY, "strike": 0.0,
-         "lot_size": 30, "tick_size": 0.1},
-        _option(EXPIRED, 25300, "CE"),
-    ]
-    for exp in (WEEKLY, MONTHLY):
-        for k in _strikes():
-            rows += [_option(exp, k, "CE"), _option(exp, k, "PE")]
-    return rows
+from options.backtest.synthetic import (  # noqa: F401  (re-exported for the tests)
+    EXPIRED, FUT_TOKEN, MONTHLY, NEXT_FUT_TOKEN, NIFTY_SPOT_TOKEN, NSE_ROWS, TODAY, VIX_TOKEN, WEEKLY,
+    _option, _strikes, nfo_rows, option_token,
+)
 
 
 class Clock:

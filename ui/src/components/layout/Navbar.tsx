@@ -6,12 +6,15 @@ import { ChevronDown, LogOut, PlugZap, TrendingUp } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthGate";
 import { cn } from "@/lib/utils";
 import { useOptionsApi } from "@/lib/optionsApi";
-import { fmtNum, PHASE_LABELS } from "@/lib/optionsFormat";
-import type { BoardResponse, OptionsStatus } from "@/types/options";
+import { fmtNum } from "@/lib/optionsFormat";
+import type { BoardResponse } from "@/types/options";
+import { LiveClock } from "./LiveClock";
 
 const LINKS = [
   { href: "/signals",     label: "Signals"     },
+  { href: "/paper",       label: "Paper"       },
   { href: "/performance", label: "Performance" },
+  { href: "/agents",      label: "Agents"      },
   { href: "/",            label: "Research"    },
   { href: "/history",     label: "History"     },
   { href: "/usage",       label: "Usage"       },
@@ -32,7 +35,7 @@ function UserMenu() {
   const user = auth.user;
   if (!user) {
     // Same footprint as the real button, so nothing moves when the profile arrives
-    return <div className="flex-shrink-0 h-[34px] w-[34px] md:w-[96px] rounded-lg border border-[#1e2d45] bg-card" aria-hidden />;
+    return <div className="flex-shrink-0 h-[34px] w-[50px] 2xl:w-[96px] rounded-lg border border-[#1e2d45] bg-card" aria-hidden />;
   }
   const initial = user.username.slice(0, 1).toUpperCase();
   return (
@@ -40,7 +43,7 @@ function UserMenu() {
       <button onClick={() => setOpen(o => !o)} aria-haspopup="menu" aria-expanded={open}
               className="flex items-center gap-2 h-[34px] rounded-lg border border-[#1e2d45] bg-card pl-1 pr-2 hover:border-[#2d3e58] transition-colors">
         <span className="w-6 h-6 rounded-md grid place-items-center bg-[#ff993326] text-[#ff9933] text-xs font-bold">{initial}</span>
-        <span className="hidden md:inline text-xs text-[#e2e8f0]">{user.username}</span>
+        <span className="hidden 2xl:inline text-xs text-[#e2e8f0]">{user.username}</span>
         <ChevronDown size={12} className={cn("text-[#64748b] transition-transform duration-200", open && "rotate-180")} />
       </button>
       {open && (
@@ -94,20 +97,6 @@ function LiveIndices() {
   );
 }
 
-function MarketPill() {
-  const { data } = useOptionsApi<OptionsStatus>("/api/options/status", 60_000);
-  const open = !!data && ["opening", "main", "late", "closing"].includes(data.session_phase);
-  return (
-    <div className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-md bg-card border border-[#1e2d45]">
-      <div className={cn("w-2 h-2 rounded-full transition-colors", open ? "bg-green animate-pulse" : "bg-[#475569]")} />
-      <span className={cn("transition-colors", open ? "text-green" : "text-[#94a3b8]")}>
-        {!data ? "NSE" : open ? "NSE open" : PHASE_LABELS[data.session_phase] ?? "NSE closed"}
-      </span>
-      <span className="text-[#64748b]">9:15–15:30 IST</span>
-    </div>
-  );
-}
-
 export function Navbar() {
   const path = usePathname();
   const active = (href: string) => (href === "/" ? path === "/" : path === href || path.startsWith(`${href}/`));
@@ -123,13 +112,13 @@ export function Navbar() {
                style={{ background: "rgba(255,153,51,.15)", border: "1px solid rgba(255,153,51,.35)" }}>
             <TrendingUp size={15} className="text-[#ff9933]" />
           </div>
-          <div className="hidden sm:block">
+          <div className="hidden 2xl:block">
             <span className="font-bold text-sm tracking-wide text-[#ff9933]">TradingAgents</span>
             <span className="text-[#64748b] text-xs ml-1.5">India</span>
           </div>
         </div>
 
-        <div className="hidden xl:flex flex-1 min-w-0 justify-center"><LiveIndices /></div>
+        <div className="hidden 2xl:flex flex-1 min-w-0 justify-center"><LiveIndices /></div>
 
         {/* Nav links */}
         <div className="flex items-center gap-0.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [mask-image:linear-gradient(90deg,#000_82%,transparent)] lg:[mask-image:none]">
@@ -138,7 +127,7 @@ export function Navbar() {
               key={href}
               href={href}
               className={cn(
-                "px-3 py-1 text-sm font-medium transition-colors border-b-2 whitespace-nowrap",
+                "px-2 xl:px-2.5 2xl:px-3 py-1 text-sm font-medium transition-colors border-b-2 whitespace-nowrap",
                 active(href)
                   ? "text-[#ff9933] border-[#ff9933]"
                   : "text-[#94a3b8] border-transparent hover:text-[#e2e8f0]"
@@ -151,7 +140,7 @@ export function Navbar() {
 
         {/* Right */}
         <div className="flex items-center gap-3 flex-shrink-0">
-          <div className="hidden 2xl:block"><MarketPill /></div>
+          <LiveClock />
           <UserMenu />
         </div>
       </div>

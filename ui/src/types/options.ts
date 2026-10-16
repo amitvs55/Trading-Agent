@@ -55,6 +55,20 @@ export interface Signal {
   closed_at: string | null;
   pnl_rupees: number | null;
   r_multiple: number | null;
+  confidence?: Confidence;
+}
+
+/** How much of the analysis agrees (not a win probability), plus the real record of the same grade. */
+export interface Confidence {
+  score: number;
+  max: number;
+  grade: "A" | "B" | "C";
+  level: "Very high" | "High" | "Moderate" | "Low";
+  parts: { pillar: string; label: string; weight: number; points: number; status: Status; detail: string }[];
+  strengths: string[];
+  weaknesses: { label: string; lost: number; detail: string }[];
+  band: { grade: string; label?: string; trades: number; win_rate: number | null; avg_r: number | null;
+          enough: boolean; min_trades: number };
 }
 
 export interface Quote {
@@ -126,6 +140,8 @@ export interface OptionsStatus {
   trading_day: boolean;
   next_trading_day: string;
   session_phase: string;
+  market_opens_at: string;
+  market_closes_at: string;
   indices: string[];
   data_provider: "angel" | "kite";
   data_provider_name: string;
@@ -179,4 +195,113 @@ export interface Evaluation {
 export interface EvaluationsResponse {
   evaluations: Evaluation[];
   setup_labels: Record<string, string>;
+}
+
+// ── Agents page (/api/agents) ────────────────────────────────────────────────
+
+export type AgentStatus = "ok" | "degraded" | "error" | "idle";
+
+export interface AgentState {
+  status: AgentStatus;
+  detail: string;
+  error: string | null;
+  ms: number | null;
+  last_run_at: string | null;
+  last_ok_at: string | null;
+  runs: number;
+  errors: number;
+  failing_in_row: number;
+}
+
+export interface AgentGroup {
+  as_of: string;
+  signals_paused: boolean;
+  failed: string[];
+  agents: Record<string, AgentState>;
+}
+
+export interface SelfTest {
+  source: "recorded" | "synthetic";
+  day: string;
+  index: string;
+  note?: string;
+  passed: boolean;
+  errors: number;
+  degraded: number;
+  ran_at: string;
+  agents: Record<string, Partial<AgentState>>;
+}
+
+export interface ResearchAgent {
+  id: string;
+  label: string;
+  stage: number;
+  status: AgentStatus;
+  last_run_at: string | null;
+  last_ok_at: string | null;
+  seconds: number | null;
+  error: string | null;
+  runs: number;
+  errors: number;
+}
+
+export interface AgentsResponse {
+  now: string;
+  catalog: { id: string; label: string; reads: string; pillars: string[] }[];
+  signal: Record<string, AgentGroup>;
+  selftest: SelfTest | null;
+  research: ResearchAgent[];
+  recorder: { ts: string; state: string; next_start: string | null } | null;
+  openai_configured: boolean;
+}
+
+// ── Paper account (/api/paper) ───────────────────────────────────────────────
+
+export interface PaperTrade {
+  signal_id: string;
+  symbol: string;
+  action: "BUY_CE" | "BUY_PE";
+  grade: string;
+  score: number;
+  mode: "SHADOW" | "LIVE";
+  setup: string;
+  lots: number;
+  units: number;
+  entry: number;
+  entry_at: string;
+  stop: number;
+  t1: number;
+  t2: number;
+  state: SignalState;
+  exit: number | null;
+  exit_at: string | null;
+  exit_reason: string | null;
+  cost: number;
+  risk: number;
+  pnl: number | null;
+  charges: number | null;
+  r: number | null;
+  bid?: number | null;
+  unrealised?: number;
+  value?: number;
+}
+
+export interface PaperAccount {
+  settings: { starting_balance: number; started_at: string; follow: "all" | "A"; follow_label: string };
+  rules: { risk_per_trade_pct: number; daily_loss_stop_pct: number; max_lots: number };
+  balance: number;
+  equity: number;
+  cash: number;
+  invested: number;
+  unrealised: number;
+  realised: number;
+  return_pct: number;
+  today: { realised: number; unrealised: number; pnl: number; daily_stop: number; daily_stop_hit: boolean };
+  stats: { trades: number; wins: number; win_rate: number | null; max_drawdown: number; max_drawdown_pct: number;
+           best: number | null; worst: number | null };
+  open: PaperTrade[];
+  trades: PaperTrade[];
+  skipped: { signal_id: string; at: string; reason: string }[];
+  curve: { t: string; balance: number; id?: string }[];
+  as_of: string;
 }

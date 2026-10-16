@@ -4,6 +4,8 @@
 in the Kite developer console (plan Appendix A).
 """
 
+import threading
+import time as clock
 from datetime import time, timedelta
 from html import escape
 
@@ -14,7 +16,7 @@ from api.deps import current_user, get_cfg, get_store
 from options.config import OptionsSettings
 from options.core.calendar import NseCalendar, at_ist, now_ist
 from options.core.schemas import OPEN_STATES, Signal
-from options.engine import performance
+from options.engine import confidence, performance
 from options.notify import make_notifier
 from options.notify.base import Notifier
 from options.setups import SETUP_LABELS
@@ -87,6 +89,12 @@ def kite_callback(request_token: str | None = None, status: str | None = None,
     return HTMLResponse(_page("Kite connected", "Today's session is saved. You can close this tab.", ok=True))
 
 
+@router.get("/api/time")
+def server_time() -> dict:
+    """Public and tiny: the dashboard's clock syncs to this, so a phone with a drifting clock still shows exchange time."""
+    return {"epoch_ms": int(clock.time() * 1000), "ist": now_ist().isoformat(timespec="seconds")}
+
+
 @router.get("/api/options/status", dependencies=[Depends(current_user)])
 def options_status(store: Store = Depends(get_store), settings: OptionsSettings = Depends(get_cfg)) -> dict:
     now = now_ist()
@@ -94,12 +102,15 @@ def options_status(store: Store = Depends(get_store), settings: OptionsSettings 
     today = now.date()
     trading_day = cal.is_trading_day(today)
     last_bar = store.last_bar_ts()
+    session_day = today if trading_day and now.time() < time(15, 30) else cal.next_trading_day(today)
     return {
         "now_ist": now.isoformat(timespec="seconds"),
         "trading_day": trading_day,
         "next_trading_day": (today if trading_day and now.time() < time(15, 30)
                              else cal.next_trading_day(today)).isoformat(),
         "session_phase": cal.session_phase(now),
+        "market_opens_at": at_ist(session_day, time(9, 15)).isoformat(),
+        "market_closes_at": at_ist(session_day, time(15, 30)).isoformat(),
         "indices": settings.OPTIONS_INDICES,
         "data_provider": settings.provider,
         "data_provider_name": settings.provider_name,
@@ -121,8 +132,27 @@ def options_status(store: Store = Depends(get_store), settings: OptionsSettings 
 
 # ── Dashboard data ───────────────────────────────────────────────────────────
 
-def _signal_json(sig: Signal) -> dict:
-    return sig.model_dump(mode="json")
+_bands_cache: dict[int, tuple[float, dict]] = {}
+_bands_lock = threading.Lock()
+BANDS_TTL_S = 60
+
+
+def _bands(store: Store) -> dict[str, dict]:
+    """Track record per grade, recomputed at most once a minute (the signals list is polled every 5 s)."""
+    with _bands_lock:
+        hit = _bands_cache.get(id(store.engine))
+        if hit and clock.monotonic() - hit[0] < BANDS_TTL_S:
+            return hit[1]
+    bands = confidence.band_stats(store.signals_since(now_ist() - timedelta(days=3650)))
+    with _bands_lock:
+        _bands_cache[id(store.engine)] = (clock.monotonic(), bands)
+    return bands
+
+
+def _signal_json(sig: Signal, bands: dict[str, dict] | None = None) -> dict:
+    out = sig.model_dump(mode="json")
+    out["confidence"] = confidence.with_band(confidence.breakdown(sig), bands or {})
+    return out
 
 
 @router.get("/api/options/board", dependencies=[Depends(current_user)])
@@ -143,7 +173,8 @@ def options_signals(days: int = Query(7, ge=1, le=3650), store: Store = Depends(
         if s.state in OPEN_STATES and (bar := store.latest_bar(s.contract.token)):
             quotes[s.signal_id] = {"ts": bar["ts"].isoformat(), "ltp": bar["close"], "bid": bar["bid"],
                                    "ask": bar["ask"]}
-    return {"signals": [_signal_json(s) for s in ordered], "quotes": quotes, "setup_labels": SETUP_LABELS}
+    bands = _bands(store) if ordered else {}
+    return {"signals": [_signal_json(s, bands) for s in ordered], "quotes": quotes, "setup_labels": SETUP_LABELS}
 
 
 @router.get("/api/options/signals/{signal_id}", dependencies=[Depends(current_user)])
@@ -152,7 +183,8 @@ def options_signal(signal_id: str, store: Store = Depends(get_store)) -> dict:
     if sig is None:
         raise HTTPException(404, "Signal not found")
     events = [{**e, "ts": e["ts"].isoformat() if e.get("ts") else None} for e in store.signal_history(signal_id)]
-    return {"signal": _signal_json(sig), "events": events, "setup_label": SETUP_LABELS.get(sig.setup, sig.setup)}
+    return {"signal": _signal_json(sig, _bands(store)), "events": events,
+            "setup_label": SETUP_LABELS.get(sig.setup, sig.setup)}
 
 
 @router.get("/api/options/performance", dependencies=[Depends(current_user)])
