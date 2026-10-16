@@ -21,4 +21,5 @@ logzero>=1.7
 SQLAlchemy>=2.0
 psycopg[binary]>=3.1
 requests>=2.31
+cryptography>=42           # encrypts connector secrets stored from the UI
 tzdata>=2024.1

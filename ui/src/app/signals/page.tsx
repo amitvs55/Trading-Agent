@@ -3,7 +3,6 @@ import { Radio, RefreshCw, Satellite } from "lucide-react";
 import type { BoardResponse, EvaluationsResponse, OptionsStatus, SignalsResponse } from "@/types/options";
 import { useOptionsApi } from "@/lib/optionsApi";
 import { istDateKey, todayIST } from "@/lib/optionsFormat";
-import { LoginGate } from "@/components/options/LoginGate";
 import { SessionBar } from "@/components/options/SessionBar";
 import { IndexBoard } from "@/components/options/IndexBoard";
 import { SignalCard } from "@/components/options/SignalCard";
@@ -29,7 +28,7 @@ export default function SignalsPage() {
   const signalsLoading = !signals.data && !signals.error;
 
   return (
-    <LoginGate needsLogin={needsLogin}>
+    <>
       <main className="max-w-screen-2xl mx-auto px-4 sm:px-6 py-6">
         <div className="mb-5 flex items-start justify-between gap-4 flex-wrap">
           <div>
@@ -99,6 +98,6 @@ export default function SignalsPage() {
           <NoTradeLog rows={(evals.data?.evaluations ?? []).filter(r => istDateKey(r.ts) === today)} labels={evals.data?.setup_labels ?? labels} />
         </div>
       </main>
-    </LoginGate>
+    </>
   );
 }

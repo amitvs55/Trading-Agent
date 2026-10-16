@@ -2,6 +2,7 @@
 import { useState, useCallback, useRef } from "react";
 import type { PipelineState, SSEEvent, StageData } from "@/types/pipeline";
 import { API_URL } from "@/lib/utils";
+import { authHeaders } from "@/lib/optionsApi";
 
 const INITIAL_STATE: PipelineState = {
   status:       "idle",
@@ -37,7 +38,7 @@ export function usePipelineStream() {
     try {
       const res = await fetch(`${API_URL}/api/analyze`, {
         method:  "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: authHeaders({ "Content-Type": "application/json" }),
         body:    JSON.stringify({ ticker, exchange }),
         signal:  abortRef.current.signal,
       });

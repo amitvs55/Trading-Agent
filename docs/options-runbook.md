@@ -38,22 +38,28 @@ The tool only reads market data; it places no orders, so SEBI's static-IP rule f
 ### 2.2 Railway
 1. **Postgres:** add a **PostgreSQL** database to the `trading-agent` project.
 2. **Recorder service:** a service named `recorder`, deployed from the repo root with `railway up --service recorder`. It needs the variable `SERVICE_ROLE=recorder`; the Dockerfile then runs the scheduler instead of the API. No other settings are needed.
-3. **Variables:**
+3. **Variables:** only two, set once. Everything else is managed in the UI (§2.3).
 
 | Variable | api | recorder | Notes |
 |---|---|---|---|
 | `DATABASE_URL` | ✅ | ✅ | `${{Postgres.DATABASE_URL}}` (a reference variable) |
 | `SERVICE_ROLE` | | ✅ | `recorder` |
-| `ANGEL_API_KEY`, `ANGEL_CLIENT_CODE`, `ANGEL_PIN`, `ANGEL_TOTP_SECRET` | ✅ | ✅ | §2.1 steps 1–3. All four are secrets. (On `api` they only let the status chip say "configured".) |
-| `ANGEL_HISTORICAL_API_KEY` | | ✅ | Only if your account needs a separate key for historical data |
-| `DATA_PROVIDER` | ✅ | ✅ | `angel` (default) or `kite` |
-| `KITE_API_KEY`, `KITE_API_SECRET`, `KITE_USER_ID` | ✅ | ✅ | Only with `DATA_PROVIDER=kite` |
-| `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | ✅ | ✅ | Appendix C |
-| `DASHBOARD_TOKEN` | ✅ | | Protects `/api/options/*`. **Required** on a public URL. |
-| `OPTIONS_LIVE_SETUPS` | | ✅ | JSON list of setups promoted to LIVE, e.g. `["S1_TREND_PULLBACK"]`. Default `[]` (all SHADOW). |
-| `OPTIONS_CAPITAL`, `OPTIONS_RISK_PER_TRADE_PCT`, `OPTIONS_DAILY_LOSS_STOP_PCT` | ✅ | ✅ | Defaults 100000 / 3 / 10 |
+| `SECRET_KEY` (optional) | ✅ | ✅ | Any long random string; the same value on both. It keeps the key that encrypts saved secrets outside the database. If it's added later, saved secrets are re-encrypted automatically. Changing or removing it afterwards makes them unreadable, so re-enter them on the Connectors page. |
 
-4. **Deploy:** deploy `api` and `recorder`. `ui` needs a redeploy for the new pages.
+Old-style variables (`ANGEL_*`, `KITE_*`, `TELEGRAM_*`, `OPTIONS_*`) still work as defaults. A value saved on the Connectors page takes precedence.
+
+4. **Deploy:** deploy `api`, `recorder` and `ui`.
+
+### 2.3 First sign-in and connectors (in the browser)
+1. **Find the setup code:** open the API service's logs on Railway and find the line `ADMIN SETUP CODE: XXXXX-XXXXX`. A new code is printed each time the API starts while no admin exists.
+2. **Create the admin:** open the dashboard. It asks you to create the admin account: enter the setup code, a username and a password of 10 or more characters. The code stops working once the admin exists.
+3. **Add your keys:** go to **Connectors**, enter your Angel One, Telegram (and optionally Kite and OpenAI) details, and press **Save & test** on each card. Secrets are encrypted in the database and never shown again, only their last 4 characters.
+4. **Choose the data source:** Angel One by default; **Use for market data** switches it.
+5. **Set trading rules:** capital, risk per trade, daily loss stop, and which setups are LIVE.
+6. **Start today's session (optional):** if it's a trading day before 15:00, press **Start today's session now** on the Recorder card so you don't wait for tomorrow's 08:30 start.
+7. **Check health:** **Run all health checks** tests the database, recorder heartbeat, market data, every connector and global data. Each card's **Test** button re-checks just that connector.
+
+All pages, including the old research pages, now need a signed-in user. Sessions last 14 days of inactivity. Changing your password signs out every other device.
 
 ## 3. Daily use
 | Time (IST) | What happens | What you do |

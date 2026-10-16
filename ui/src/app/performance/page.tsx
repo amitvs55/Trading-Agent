@@ -5,7 +5,6 @@ import type { Performance, SignalsResponse, Stats } from "@/types/options";
 import { useOptionsApi } from "@/lib/optionsApi";
 import { cn } from "@/lib/utils";
 import { EXIT_LABELS, fmtDateTime, fmtPct, fmtR, fmtRupees } from "@/lib/optionsFormat";
-import { LoginGate } from "@/components/options/LoginGate";
 import { EquityChart, RDistribution } from "@/components/options/PerformanceCharts";
 import { GradeBadge, ModeTag } from "@/components/options/StatusBits";
 
@@ -59,7 +58,7 @@ export default function PerformancePage() {
   const labels = p?.setup_labels ?? {};
 
   return (
-    <LoginGate needsLogin={perf.needsLogin || log.needsLogin}>
+    <>
       <main className="max-w-screen-2xl mx-auto px-4 sm:px-6 py-6">
         <div className="mb-5">
           <h1 className="text-2xl font-bold text-[#e2e8f0] flex items-center gap-2.5"><BarChart3 size={20} className="text-[#ff9933]" /> Track record</h1>
@@ -143,6 +142,6 @@ export default function PerformancePage() {
           </div>
         </section>
       </main>
-    </LoginGate>
+    </>
   );
 }

@@ -4,59 +4,40 @@
 in the Kite developer console (plan Appendix A).
 """
 
-import secrets
 from datetime import time, timedelta
-from functools import lru_cache
 from html import escape
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from options.config import settings
+from api.deps import current_user, get_cfg, get_store
+from options.config import OptionsSettings
 from options.core.calendar import NseCalendar, at_ist, now_ist
 from options.core.schemas import OPEN_STATES, Signal
 from options.engine import performance
 from options.notify import make_notifier
 from options.notify.base import Notifier
 from options.setups import SETUP_LABELS
-from options.storage import Store, make_engine
+from options.storage import Store
 from utils.logger import setup_logger
 
 logger = setup_logger("options.api")
 router = APIRouter(tags=["options"])
 
 
-@lru_cache(maxsize=1)
-def get_store() -> Store:
-    return Store(make_engine(settings.DATABASE_URL))
+def get_notifier(cfg: OptionsSettings = Depends(get_cfg)) -> Notifier:
+    return make_notifier(cfg)
 
 
-@lru_cache(maxsize=1)
-def get_notifier() -> Notifier:
-    return make_notifier(settings)
-
-
-def get_broker():
-    if not (settings.KITE_API_KEY and settings.KITE_API_SECRET):
-        raise HTTPException(503, "Kite Connect is not configured: set KITE_API_KEY and KITE_API_SECRET.")
+def get_broker(cfg: OptionsSettings = Depends(get_cfg)):
+    if not (cfg.KITE_API_KEY and cfg.KITE_API_SECRET):
+        raise HTTPException(503, "Kite Connect is not configured: add its keys on the Connectors page.")
     from options.brokers.kite import KiteBroker
-    return KiteBroker(settings.KITE_API_KEY, settings.KITE_API_SECRET)
+    return KiteBroker(cfg.KITE_API_KEY, cfg.KITE_API_SECRET)
 
 
-def get_allowed_user() -> str:
-    return settings.KITE_USER_ID
-
-
-def get_dashboard_token() -> str:
-    return settings.DASHBOARD_TOKEN
-
-
-def require_dashboard(authorization: str | None = Header(None), token: str = Depends(get_dashboard_token)) -> None:
-    if not token:
-        return
-    supplied = (authorization or "").removeprefix("Bearer ").strip()
-    if not secrets.compare_digest(supplied.encode(), token.encode()):
-        raise HTTPException(401, "Dashboard login required")
+def get_allowed_user(cfg: OptionsSettings = Depends(get_cfg)) -> str:
+    return cfg.KITE_USER_ID
 
 
 def _page(title: str, message: str, ok: bool) -> str:
@@ -87,7 +68,7 @@ def kite_callback(request_token: str | None = None, status: str | None = None,
                   allowed_user: str = Depends(get_allowed_user)) -> HTMLResponse:
     if status != "success" or not request_token:
         return HTMLResponse(_page("Login not completed", "Zerodha did not confirm the login. "
-                                  "Open the login link from Telegram and try again.", ok=False), 400)
+                                  "Open the login link from Telegram or the Connectors page and try again.", ok=False), 400)
     try:
         access_token, user_id = broker.create_session(request_token)
     except Exception as e:
@@ -106,8 +87,8 @@ def kite_callback(request_token: str | None = None, status: str | None = None,
     return HTMLResponse(_page("Kite connected", "Today's session is saved. You can close this tab.", ok=True))
 
 
-@router.get("/api/options/status", dependencies=[Depends(require_dashboard)])
-def options_status(store: Store = Depends(get_store)) -> dict:
+@router.get("/api/options/status", dependencies=[Depends(current_user)])
+def options_status(store: Store = Depends(get_store), settings: OptionsSettings = Depends(get_cfg)) -> dict:
     now = now_ist()
     cal = NseCalendar()
     today = now.date()
@@ -144,13 +125,13 @@ def _signal_json(sig: Signal) -> dict:
     return sig.model_dump(mode="json")
 
 
-@router.get("/api/options/board", dependencies=[Depends(require_dashboard)])
-def options_board(store: Store = Depends(get_store)) -> dict:
+@router.get("/api/options/board", dependencies=[Depends(current_user)])
+def options_board(store: Store = Depends(get_store), settings: OptionsSettings = Depends(get_cfg)) -> dict:
     boards = {i: b for i in settings.OPTIONS_INDICES if (b := store.load_board(i))}
     return {"boards": boards, "now_ist": now_ist().isoformat(timespec="seconds")}
 
 
-@router.get("/api/options/signals", dependencies=[Depends(require_dashboard)])
+@router.get("/api/options/signals", dependencies=[Depends(current_user)])
 def options_signals(days: int = Query(7, ge=1, le=3650), store: Store = Depends(get_store)) -> dict:
     today = now_ist().date()
     found = {s.signal_id: s for s in store.signals_since(at_ist(today - timedelta(days=days - 1), time(0, 0)))}
@@ -165,7 +146,7 @@ def options_signals(days: int = Query(7, ge=1, le=3650), store: Store = Depends(
     return {"signals": [_signal_json(s) for s in ordered], "quotes": quotes, "setup_labels": SETUP_LABELS}
 
 
-@router.get("/api/options/signals/{signal_id}", dependencies=[Depends(require_dashboard)])
+@router.get("/api/options/signals/{signal_id}", dependencies=[Depends(current_user)])
 def options_signal(signal_id: str, store: Store = Depends(get_store)) -> dict:
     sig = store.get_signal(signal_id)
     if sig is None:
@@ -174,8 +155,8 @@ def options_signal(signal_id: str, store: Store = Depends(get_store)) -> dict:
     return {"signal": _signal_json(sig), "events": events, "setup_label": SETUP_LABELS.get(sig.setup, sig.setup)}
 
 
-@router.get("/api/options/performance", dependencies=[Depends(require_dashboard)])
-def options_performance(store: Store = Depends(get_store)) -> dict:
+@router.get("/api/options/performance", dependencies=[Depends(current_user)])
+def options_performance(store: Store = Depends(get_store), settings: OptionsSettings = Depends(get_cfg)) -> dict:
     everything = store.signals_since(now_ist() - timedelta(days=3650))
     done = sorted(performance.traded(everything), key=lambda s: s.closed_at)
     equity, curve = 0.0, []
@@ -199,7 +180,7 @@ def options_performance(store: Store = Depends(get_store)) -> dict:
     }
 
 
-@router.get("/api/options/evaluations", dependencies=[Depends(require_dashboard)])
+@router.get("/api/options/evaluations", dependencies=[Depends(current_user)])
 def options_evaluations(hours: int = Query(8, ge=1, le=24 * 30), store: Store = Depends(get_store)) -> dict:
     rows = store.evaluations_since(now_ist() - timedelta(hours=hours))
     return {"evaluations": [{**r, "ts": r["ts"].isoformat()} for r in rows], "setup_labels": SETUP_LABELS}

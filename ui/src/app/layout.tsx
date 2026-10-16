@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import "./globals.css";
 import { Navbar } from "@/components/layout/Navbar";
+import { AuthGate } from "@/components/auth/AuthGate";
 
 export const metadata: Metadata = {
   title: "TradingAgents India",
@@ -12,18 +13,20 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className="dark">
       <body>
-        <Navbar />
-        {children}
-        <footer className="border-t border-[#1e2d45] mt-10 py-4 px-6">
-          <div className="india-stripe mb-3" />
-          <div className="max-w-screen-2xl mx-auto flex flex-wrap items-center justify-between gap-2 text-xs text-[#475569]">
-            <span>
-              TradingAgents India · NSE · Live options signals + research pipeline ·{" "}
-              <span className="text-[#ff993388]">For personal research and education. Not investment advice.</span>
-            </span>
-            <span className="font-mono">All times IST (UTC+5:30)</span>
-          </div>
-        </footer>
+        <AuthGate>
+          <Navbar />
+          {children}
+          <footer className="border-t border-[#1e2d45] mt-10 py-4 px-6">
+            <div className="india-stripe mb-3" />
+            <div className="max-w-screen-2xl mx-auto flex flex-wrap items-center justify-between gap-2 text-xs text-[#475569]">
+              <span>
+                TradingAgents India · NSE · Live options signals + research pipeline ·{" "}
+                <span className="text-[#ff993388]">For personal research and education. Not investment advice.</span>
+              </span>
+              <span className="font-mono">All times IST (UTC+5:30)</span>
+            </div>
+          </footer>
+        </AuthGate>
       </body>
     </html>
   );

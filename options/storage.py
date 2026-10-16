@@ -112,6 +112,53 @@ board_state = Table(
     Column("data", Text, nullable=False),
 )
 
+# ── Admin: accounts, sessions, settings saved from the UI, health results ──────────
+
+users = Table(
+    "users", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("username", String(64), nullable=False, unique=True),
+    Column("password_hash", Text, nullable=False),
+    Column("role", String(16), nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+    Column("last_login_at", DateTime(timezone=True)),
+)
+
+user_sessions = Table(
+    "user_sessions", metadata,
+    Column("token_digest", String(64), primary_key=True),
+    Column("user_id", Integer, nullable=False, index=True),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+    Column("expires_at", DateTime(timezone=True), nullable=False),
+    Column("last_seen_at", DateTime(timezone=True), nullable=False),
+)
+
+app_settings = Table(
+    "app_settings", metadata,
+    Column("key", String(64), primary_key=True),
+    Column("value", Text, nullable=False),            # JSON; Fernet-encrypted when secret
+    Column("secret", Integer, nullable=False),
+    Column("updated_at", DateTime(timezone=True), nullable=False),
+    Column("updated_by", String(64)),
+)
+
+app_meta = Table(
+    "app_meta", metadata,
+    Column("key", String(64), primary_key=True),
+    Column("value", Text, nullable=False),
+    Column("updated_at", DateTime(timezone=True), nullable=False),
+)
+
+health_checks = Table(
+    "health_checks", metadata,
+    Column("check_id", String(32), primary_key=True),
+    Column("status", String(8), nullable=False),
+    Column("message", Text, nullable=False),
+    Column("details", Text),
+    Column("latency_ms", Integer),
+    Column("checked_at", DateTime(timezone=True), nullable=False),
+)
+
 _INSTRUMENT_FIELDS = ("instrument_token", "tradingsymbol", "name", "segment", "instrument_type",
                       "strike", "lot_size", "tick_size")
 

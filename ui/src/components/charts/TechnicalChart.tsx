@@ -7,6 +7,7 @@ import {
 import type { TradeProposal } from "@/types/pipeline";
 import type { Candle } from "@/types/pipeline";
 import { formatINR, API_URL } from "@/lib/utils";
+import { authHeaders } from "@/lib/optionsApi";
 
 interface Props {
   ticker:   string;
@@ -20,7 +21,7 @@ export function TechnicalChart({ ticker, proposal }: Props) {
   useEffect(() => {
     if (!ticker) return;
     setLoading(true);
-    fetch(`${API_URL}/api/pricehistory/${encodeURIComponent(ticker)}`)
+    fetch(`${API_URL}/api/pricehistory/${encodeURIComponent(ticker)}`, { headers: authHeaders() })
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d?.candles) setCandles(d.candles); })
       .catch(() => {})

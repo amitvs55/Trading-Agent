@@ -62,7 +62,7 @@ def auto_login(broker, store: Store, notifier: Notifier, today: date, now_fn: Ca
         store.save_access_token(today, "auto-login", user_id, now_fn())   # marks the day as connected
         return True
     notifier.send(f"🔴 <b>{escape(broker.name)} login failed</b>: {escape(reason)}. "
-                  "Nothing is being recorded today. Check the ANGEL_* variables on Railway.")
+                  "Nothing is being recorded today. Check Angel One on the Connectors page.")
     return False
 
 
@@ -122,7 +122,7 @@ def run(cfg: OptionsSettings = default_settings, *, now_fn: Callable[[], datetim
         missing = cfg.missing_provider_keys()
         if missing:
             notifier.send(f"⚠️ {' / '.join(missing)} {'is' if len(missing) == 1 else 'are'} not set, "
-                          "so today's session can't start.")
+                          "so today's session can't start. Add them on the Connectors page.")
             return 2
         from options.brokers import make_broker
         broker = make_broker(cfg)
@@ -261,12 +261,15 @@ def load_constituents(broker, nse_rows: list[dict], indices: list[str]) -> dict[
 
 
 def main() -> int:
+    from options.admin.connectors import load_effective_settings
+
+    cfg = load_effective_settings()          # environment + whatever was saved on the Connectors page
     try:
-        return run()
+        return run(cfg)
     except Exception as e:
         logger.exception("Session crashed")
-        make_notifier(default_settings).send(f"🔴 <b>Session crashed</b>: {escape(type(e).__name__)}. "
-                                             "Check the recorder logs on Railway.")
+        make_notifier(cfg).send(f"🔴 <b>Session crashed</b>: {escape(type(e).__name__)}. "
+                                "Check the recorder logs on Railway.")
         return 1
 
 

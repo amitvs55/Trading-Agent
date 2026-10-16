@@ -2,7 +2,10 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from api import deps
 from api.routes import options as routes
+from options.admin.repo import AdminRepo
+from options.config import OptionsSettings
 from options.core.calendar import now_ist
 from options.storage import Store, make_engine
 from tests.options.fixtures import FakeBroker, RecordingNotifier
@@ -17,8 +20,12 @@ def ctx(tmp_path):
     app.dependency_overrides[routes.get_notifier] = lambda: notifier
     app.dependency_overrides[routes.get_broker] = lambda: broker
     app.dependency_overrides[routes.get_allowed_user] = lambda: "AB1234"
-    app.dependency_overrides[routes.get_dashboard_token] = lambda: ""       # auth off unless a test sets it
+    app.dependency_overrides[routes.get_cfg] = lambda: OptionsSettings(_env_file=None)
+    app.dependency_overrides[routes.current_user] = lambda: ADMIN          # signed in unless a test removes it
     return TestClient(app), store, notifier, app
+
+
+ADMIN = {"id": 1, "username": "admin", "role": "admin", "token": "t"}
 
 
 def test_login_redirects_to_zerodha(ctx):
@@ -56,7 +63,7 @@ def test_callback_rejects_other_zerodha_accounts(ctx):
 def test_unconfigured_kite_returns_503(ctx, monkeypatch):
     client, _, _, app = ctx
     del app.dependency_overrides[routes.get_broker]
-    monkeypatch.setattr(routes.settings, "KITE_API_KEY", "")
+    app.dependency_overrides[routes.get_cfg] = lambda: OptionsSettings(_env_file=None, KITE_API_KEY="", KITE_API_SECRET="")
     assert client.get("/kite/login", follow_redirects=False).status_code == 503
 
 
@@ -69,12 +76,18 @@ def test_status(ctx):
     assert body["risk"]["risk_per_trade_pct"] == 3.0 and body["risk"]["daily_loss_stop_pct"] == 10.0
 
 
-def test_dashboard_endpoints_require_the_token_when_set(ctx):
-    client, _, _, app = ctx
-    app.dependency_overrides[routes.get_dashboard_token] = lambda: "s3cret"
-    assert client.get("/api/options/board").status_code == 401
+def test_dashboard_endpoints_require_a_signed_in_user(ctx, tmp_path):
+    client, store, _, app = ctx
+    del app.dependency_overrides[routes.current_user]
+    repo = AdminRepo(store.engine, secret_key="k")
+    app.dependency_overrides[deps.get_repo] = lambda: repo
+    r = client.get("/api/options/board")
+    assert r.status_code == 401 and r.json()["detail"]["code"] == "setup_required"
+    repo.create_user("amit", "correct horse battery")
+    assert client.get("/api/options/board").json()["detail"]["code"] == "login_required"
     assert client.get("/api/options/board", headers={"Authorization": "Bearer wrong"}).status_code == 401
-    ok = client.get("/api/options/board", headers={"Authorization": "Bearer s3cret"})
+    token = repo.create_session(1)
+    ok = client.get("/api/options/board", headers={"Authorization": f"Bearer {token}"})
     assert ok.status_code == 200 and ok.json()["boards"] == {}
     assert client.get("/kite/login", follow_redirects=False).status_code == 307     # login flow stays public
 
@@ -84,7 +97,6 @@ def test_signals_detail_performance_and_evaluations(ctx):
     from options.core.schemas import SignalState
 
     client, store, _, app = ctx
-    app.dependency_overrides[routes.get_dashboard_token] = lambda: ""
     now = now_ist()
     sig = make_signal(created_at=now)
     sig.state, sig.pnl_rupees, sig.r_multiple, sig.closed_at = SignalState.CLOSED, 1500.0, 0.8, now

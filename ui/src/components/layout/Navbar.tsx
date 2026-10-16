@@ -1,7 +1,9 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { TrendingUp } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ChevronDown, LogOut, PlugZap, TrendingUp } from "lucide-react";
+import { useAuth } from "@/components/auth/AuthGate";
 import { cn } from "@/lib/utils";
 import { useOptionsApi } from "@/lib/optionsApi";
 import { fmtNum, PHASE_LABELS } from "@/lib/optionsFormat";
@@ -13,7 +15,48 @@ const LINKS = [
   { href: "/",            label: "Research"    },
   { href: "/history",     label: "History"     },
   { href: "/usage",       label: "Usage"       },
+  { href: "/connectors",  label: "Connectors"  },
 ];
+
+function UserMenu() {
+  const auth = useAuth();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [open]);
+  if (!auth) return null;
+  const initial = auth.user.username.slice(0, 1).toUpperCase();
+  return (
+    <div className="relative flex-shrink-0" ref={ref}>
+      <button onClick={() => setOpen(o => !o)} aria-haspopup="menu" aria-expanded={open}
+              className="flex items-center gap-2 rounded-lg border border-[#1e2d45] bg-card pl-1 pr-2 py-1 hover:border-[#2d3e58] transition-colors">
+        <span className="w-6 h-6 rounded-md grid place-items-center bg-[#ff993326] text-[#ff9933] text-xs font-bold">{initial}</span>
+        <span className="hidden md:inline text-xs text-[#e2e8f0]">{auth.user.username}</span>
+        <ChevronDown size={12} className="text-[#64748b]" />
+      </button>
+      {open && (
+        <div role="menu" className="absolute right-0 mt-2 w-56 rounded-xl border border-[#1e2d45] bg-surface shadow-[0_16px_40px_rgba(0,0,0,.5)] p-1.5 z-50">
+          <div className="px-3 py-2 border-b border-[#1e2d45] mb-1">
+            <div className="text-sm font-semibold text-[#e2e8f0]">{auth.user.username}</div>
+            <div className="text-[10px] tracking-widest text-[#64748b] uppercase">{auth.user.role}</div>
+          </div>
+          <Link href="/connectors" role="menuitem" onClick={() => setOpen(false)}
+                className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-[#94a3b8] hover:bg-card hover:text-[#e2e8f0]">
+            <PlugZap size={14} /> Connectors &amp; health
+          </Link>
+          <button role="menuitem" onClick={() => auth.logout()}
+                  className="w-full flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-[#94a3b8] hover:bg-card hover:text-[#fca5a5]">
+            <LogOut size={14} /> Sign out
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // Live values only: nothing is shown until the signal engine has published a board.
 function LiveIndices() {
@@ -106,8 +149,9 @@ export function Navbar() {
         </div>
 
         {/* Right */}
-        <div className="hidden 2xl:flex items-center gap-3 flex-shrink-0">
-          <MarketPill />
+        <div className="flex items-center gap-3 flex-shrink-0">
+          <div className="hidden 2xl:block"><MarketPill /></div>
+          <UserMenu />
         </div>
       </div>
     </nav>

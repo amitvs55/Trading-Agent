@@ -1,8 +1,8 @@
 "use client";
 import useSWR from "swr";
-import { API_URL } from "@/lib/utils";
+import { apiJson } from "@/lib/optionsApi";
 
-const fetcher = (url: string) => fetch(url).then(r => r.json());
+const fetcher = (path: string) => apiJson<{ records?: Record<string, unknown>[]; total?: number }>(path);
 
 export function useTradeHistory(params?: { limit?: number; offset?: number; ticker?: string; status?: string }) {
   const q = new URLSearchParams();
@@ -11,7 +11,7 @@ export function useTradeHistory(params?: { limit?: number; offset?: number; tick
   if (params?.ticker)  q.set("ticker", params.ticker);
   if (params?.status)  q.set("status", params.status);
 
-  const url = `${API_URL}/api/history?${q.toString()}`;
+  const url = `/api/history?${q.toString()}`;
   const { data, error, isLoading, mutate } = useSWR(url, fetcher, { refreshInterval: 30_000 });
 
   return {

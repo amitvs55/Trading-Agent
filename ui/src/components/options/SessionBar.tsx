@@ -1,5 +1,6 @@
 "use client";
 import type { ReactNode } from "react";
+import Link from "next/link";
 import { Activity, Clock, LogIn, Send, Shield, Wifi, WifiOff } from "lucide-react";
 import type { OptionsStatus } from "@/types/options";
 import { API_URL, cn } from "@/lib/utils";
@@ -36,7 +37,10 @@ export function SessionBar({ status }: { status: OptionsStatus | undefined }) {
       {status.data_connected_today ? (
         <Chip tone="good"><Wifi size={13} className="text-green" /><span className="text-green font-medium">{status.data_provider_name} connected</span></Chip>
       ) : !status.data_configured ? (
-        <Chip tone="bad"><WifiOff size={13} className="text-red" /><span className="text-red font-medium">{status.data_provider_name} keys not set</span></Chip>
+        <Link href="/connectors" className="group">
+          <Chip tone="bad"><WifiOff size={13} className="text-red" /><span className="text-red font-medium">{status.data_provider_name} keys not set</span>
+            <span className="text-[#ff9933] group-hover:underline">Set up</span></Chip>
+        </Link>
       ) : status.data_needs_manual_login ? (
         <a href={`${API_URL}/kite/login`} className="group">
           <Chip tone={status.trading_day ? "warn" : "neutral"}>
@@ -61,12 +65,15 @@ export function SessionBar({ status }: { status: OptionsStatus | undefined }) {
         <span className="text-[#475569]">· {fmtNum(status.bars_today)} bars today</span>
       </Chip>
 
-      <Chip tone={status.telegram_configured ? "neutral" : "warn"}>
-        <Send size={13} className={status.telegram_configured ? "text-[#60a5fa]" : "text-yellow"} />
-        <span className={status.telegram_configured ? "text-[#94a3b8]" : "text-yellow"}>
-          {status.telegram_configured ? "Telegram alerts on" : "Telegram not set up"}
-        </span>
-      </Chip>
+      <Link href="/connectors" className="group">
+        <Chip tone={status.telegram_configured ? "neutral" : "warn"}>
+          <Send size={13} className={status.telegram_configured ? "text-[#60a5fa]" : "text-yellow"} />
+          <span className={status.telegram_configured ? "text-[#94a3b8]" : "text-yellow"}>
+            {status.telegram_configured ? "Telegram alerts on" : "Telegram not set up"}
+          </span>
+          {!status.telegram_configured && <span className="text-[#ff9933] group-hover:underline">Set up</span>}
+        </Chip>
+      </Link>
 
       <Chip>
         <Shield size={13} className="text-[#ff9933]" />

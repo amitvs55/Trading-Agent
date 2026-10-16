@@ -4,7 +4,6 @@ import { ArrowLeft, ListChecks, ScrollText } from "lucide-react";
 import type { SignalDetail } from "@/types/options";
 import { useOptionsApi } from "@/lib/optionsApi";
 import { fmtDateTime, fmtPremium, fmtR, fmtRupees } from "@/lib/optionsFormat";
-import { LoginGate } from "@/components/options/LoginGate";
 import { SignalCard } from "@/components/options/SignalCard";
 import { ChecksList } from "@/components/options/ChecksList";
 
@@ -20,7 +19,7 @@ export default function SignalDetailPage({ params }: { params: { id: string } })
   const s = data?.signal;
 
   return (
-    <LoginGate needsLogin={needsLogin}>
+    <>
       <main className="max-w-screen-xl mx-auto px-4 sm:px-6 py-6">
         <Link href="/signals" className="inline-flex items-center gap-1.5 text-xs text-[#94a3b8] hover:text-[#e2e8f0] mb-4">
           <ArrowLeft size={13} /> Live signals
@@ -81,6 +80,6 @@ export default function SignalDetailPage({ params }: { params: { id: string } })
           </div>
         )}
       </main>
-    </LoginGate>
+    </>
   );
 }
