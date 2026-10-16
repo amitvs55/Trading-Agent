@@ -65,9 +65,13 @@
 
 ## Phase E — Validation and deploy
 - [x] Replay harness over recorded bars through the live engine — `options/backtest/replay.py` (deterministic; separate output DB)
-- [ ] Railway: Postgres, recorder cron service, environment variables (needs user approval)
+- [x] Railway (16 Oct 2026): Postgres added; `recorder` service (always-on daemon, `SERVICE_ROLE=recorder`); `DATABASE_URL` wired to api and recorder; api, ui and recorder deployed and verified. **Secrets still to be set by the user** (see below).
 - [ ] Shadow mode for 4–6 weeks, then LIVE per setup
 
 ## User setup still pending
+- **Railway variables on `api`:** `DASHBOARD_TOKEN` (set this first: the dashboard is public until it's set), `KITE_API_KEY`, `KITE_API_SECRET`, `KITE_USER_ID`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`.
+- **Railway variables on `recorder`:** `KITE_API_KEY`, `KITE_API_SECRET`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`.
+- **Before 1 Dec 2026:** set Builder = Dockerfile (and Healthcheck = /health on `api`) in the dashboard for `api` and `ui`, because railway.json stops working then (runbook §8).
+- **Rotate the OpenAI API key:** a Railway config dump printed it into the 16 Oct session log.
 - **Kite Connect:** create the app (Appendix A of the plan) and set `KITE_API_KEY`, `KITE_API_SECRET` and `KITE_USER_ID` on Railway.
 - **Telegram:** create the bot (Appendix C of the plan) and set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`.
