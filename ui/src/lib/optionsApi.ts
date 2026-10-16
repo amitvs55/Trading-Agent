@@ -3,8 +3,10 @@ import useSWR, { mutate as globalMutate } from "swr";
 import { API_URL } from "@/lib/utils";
 
 // The signed-in session token (from /api/auth/login or /api/auth/setup) lives in this browser only.
-const TOKEN_KEY = "auth.session";
+export const TOKEN_KEY = "auth.session";
+const USER_KEY = "auth.user";             // last known profile, so the navbar renders before /me answers
 export const ME_KEY = "/api/auth/me";
+export const AUTH_EVENT = "auth-change";
 
 export class AuthRequired extends Error {
   code: "login_required" | "setup_required";
@@ -30,19 +32,40 @@ export function getToken(): string {
   try { return localStorage.getItem(TOKEN_KEY) ?? ""; } catch { return ""; }
 }
 
+function announce() {
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(AUTH_EVENT));
+}
+
 export function setToken(token: string) {
   try { localStorage.setItem(TOKEN_KEY, token); } catch { /* private mode: lasts until reload */ }
+  document.documentElement.classList.remove("auth-out");
+  announce();
   globalMutate(() => true);                      // refetch everything with the new session
 }
 
-/** Drop the token without triggering refetches (used inside fetchers). */
+/** Drop the session (expired, revoked or signed out). */
 export function forgetToken() {
-  try { localStorage.removeItem(TOKEN_KEY); } catch { /* ignore */ }
+  try {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(USER_KEY);
+  } catch { /* ignore */ }
+  announce();
 }
 
 export function clearToken() {
-  try { localStorage.removeItem(TOKEN_KEY); } catch { /* ignore */ }
-  globalMutate(() => true);
+  forgetToken();
+  globalMutate(() => true, undefined, { revalidate: false });   // don't keep the last user's data around
+}
+
+export function getCachedUser<T>(): T | null {
+  try {
+    const raw = localStorage.getItem(USER_KEY);
+    return raw ? (JSON.parse(raw) as T) : null;
+  } catch { return null; }
+}
+
+export function cacheUser(user: unknown) {
+  try { localStorage.setItem(USER_KEY, JSON.stringify(user)); } catch { /* ignore */ }
 }
 
 export function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
@@ -63,6 +86,7 @@ async function errorFrom(res: Response): Promise<ApiError | AuthRequired> {
 
 /** fetch() against the API with the session attached; a 401 sends the whole app back to the login screen. */
 export async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  if (!getToken() && !path.startsWith("/api/auth/")) throw new AuthRequired();     // signed out: don't even ask
   const res = await fetch(`${API_URL}${path}`, {
     ...init,
     headers: authHeaders((init.headers as Record<string, string>) ?? {}),

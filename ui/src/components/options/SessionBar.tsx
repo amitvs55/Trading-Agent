@@ -5,11 +5,12 @@ import { Activity, Clock, LogIn, Send, Shield, Wifi, WifiOff } from "lucide-reac
 import type { OptionsStatus } from "@/types/options";
 import { API_URL, cn } from "@/lib/utils";
 import { ageSeconds, fmtAge, fmtDate, fmtNum, PHASE_LABELS } from "@/lib/optionsFormat";
+import { SessionBarSkeleton } from "./Skeletons";
 
 function Chip({ children, tone = "neutral" }: { children: ReactNode; tone?: "good" | "warn" | "bad" | "neutral" }) {
   return (
     <div className={cn(
-      "flex items-center gap-2 text-xs px-3 py-2 rounded-lg border whitespace-nowrap",
+      "flex items-center gap-2 h-[34px] text-xs px-3 rounded-lg border whitespace-nowrap transition-colors",
       tone === "good" && "border-[#22c55e33] bg-[#22c55e0b]",
       tone === "warn" && "border-[#f59e0b33] bg-[#f59e0b0b]",
       tone === "bad" && "border-[#ef444433] bg-[#ef44440b]",
@@ -19,15 +20,13 @@ function Chip({ children, tone = "neutral" }: { children: ReactNode; tone?: "goo
 }
 
 export function SessionBar({ status }: { status: OptionsStatus | undefined }) {
-  if (!status) {
-    return <div className="flex gap-2 flex-wrap">{[0, 1, 2, 3].map(i => <div key={i} className="skeleton h-9 w-44 rounded-lg" />)}</div>;
-  }
+  if (!status) return <SessionBarSkeleton />;
   const open = ["opening", "main", "late", "closing"].includes(status.session_phase);
   const dataAge = ageSeconds(status.last_bar_at);
   const fresh = dataAge != null && dataAge < 180;
 
   return (
-    <div className="flex gap-2 flex-wrap">
+    <div className="fade-in flex gap-2 flex-wrap">
       <Chip tone={open ? "good" : "neutral"}>
         <span className={cn("w-2 h-2 rounded-full", open ? "bg-green animate-pulse" : "bg-[#475569]")} />
         <span className={open ? "text-green font-medium" : "text-[#94a3b8]"}>{PHASE_LABELS[status.session_phase] ?? status.session_phase}</span>

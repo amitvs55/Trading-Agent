@@ -1,4 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -13,16 +12,32 @@
   --red:        #ef4444;
   --yellow:     #f59e0b;
   --muted:      #64748b;
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
 
+html {
+  background: var(--background);
+  /* Reserve the scrollbar's width so the page never jumps sideways when content grows past the fold */
+  scrollbar-gutter: stable;
+}
+
 body {
   background: var(--background);
   color: #e2e8f0;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  /* Equal-width digits: live prices and counters change without the text around them shifting */
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
   min-height: 100vh;
+  -webkit-tap-highlight-color: transparent;
 }
+
+/* Signed out (set before first paint by the inline script in layout.tsx): don't flash the app shell */
+html.auth-out [data-app-shell] { visibility: hidden; }
 
 /* Scrollbars */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
@@ -36,12 +51,30 @@ body {
   height: 2px;
 }
 
-/* Shimmer skeleton */
+/* Skeleton: the shimmer is a transformed overlay, so it runs on the compositor (no repaint per frame) */
 .skeleton {
-  background: linear-gradient(90deg, #1a2233, #1e2d45, #1a2233);
-  background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
+  position: relative;
+  overflow: hidden;
+  background: #1a2233;
 }
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.045), transparent);
+  animation: skeleton-sweep 1.6s ease-in-out infinite;
+  will-change: transform;
+}
+@keyframes skeleton-sweep { to { transform: translateX(100%); } }
+
+/* Content that replaces a skeleton eases in instead of popping */
+.fade-in { animation: fade-in 220ms cubic-bezier(0.2, 0, 0, 1) both; }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+/* Route change: a short settle, never a blank */
+.page-enter { animation: page-enter 200ms cubic-bezier(0.2, 0, 0, 1) both; }
+@keyframes page-enter { from { opacity: 0.001; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 
 /* Stage running border */
 .stage-running-border {
@@ -51,3 +84,16 @@ body {
 /* Smooth accordion */
 .accordion-open  { max-height: 2000px; opacity: 1; overflow: hidden; transition: max-height .4s ease, opacity .3s ease; }
 .accordion-close { max-height: 0;      opacity: 0; overflow: hidden; transition: max-height .35s ease, opacity .25s ease; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
+  .skeleton::after { display: none; }
+}
+
+/* Menus open with a quick settle from their anchor */
+.menu-pop { transform-origin: top right; animation: menu-pop 140ms cubic-bezier(0.2, 0, 0, 1) both; }
+@keyframes menu-pop { from { opacity: 0; transform: translateY(-4px) scale(0.98); } to { opacity: 1; transform: none; } }

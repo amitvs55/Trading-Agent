@@ -1,4 +1,5 @@
 "use client";
+import { memo } from "react";
 import Link from "next/link";
 import { ChevronRight, Clock, Hourglass, ShieldAlert } from "lucide-react";
 import type { Quote, Signal, Status } from "@/types/options";
@@ -72,7 +73,7 @@ function CheckCounts({ s }: { s: Signal }) {
   );
 }
 
-export function SignalCard({ s, quote, setupLabel, compact = false, wide = false }: {
+export const SignalCard = memo(function SignalCard({ s, quote, setupLabel, compact = false, wide = false }: {
   s: Signal; quote?: Quote; setupLabel: string; compact?: boolean; wide?: boolean;
 }) {
   const open = OPEN.has(s.state);
@@ -84,7 +85,7 @@ export function SignalCard({ s, quote, setupLabel, compact = false, wide = false
   const result = s.pnl_rupees;
 
   return (
-    <article className="bg-surface border border-[#1e2d45] rounded-xl overflow-hidden">
+    <article className="fade-in bg-surface border border-[#1e2d45] rounded-xl overflow-hidden">
       <div className={cn("h-0.5", up ? "bg-green" : "bg-red")} />
       <div className="px-4 pt-3.5 pb-3 flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
@@ -147,4 +148,4 @@ export function SignalCard({ s, quote, setupLabel, compact = false, wide = false
       </div>
     </article>
   );
-}
+});

@@ -60,7 +60,7 @@ export default function ConnectorsPage() {
           <ShieldAlert size={15} /> Only admins can manage connectors.
         </div>
       )}
-      {(runError || (conn.error && !forbidden)) && (
+      {(runError || (conn.error && !forbidden && !data)) && (
         <div className="mb-5 bg-[#ef444411] border border-[#ef444433] rounded-xl px-5 py-3 text-sm text-red">
           ⚠ {runError ?? conn.error?.message}
         </div>
@@ -80,7 +80,7 @@ export default function ConnectorsPage() {
         <aside className="flex flex-col gap-5 min-w-0">
           <RecorderCard status={data?.recorder ?? health.data?.recorder} />
           {data ? <TradingCard trading={data.trading} onSaved={onSaved} /> : <div className="skeleton h-80 rounded-xl" />}
-          {auth && <AccountCard username={auth.user.username} secretKeyFromEnv={!!data?.secret_key_from_env} />}
+          {auth?.user && <AccountCard username={auth.user.username} secretKeyFromEnv={!!data?.secret_key_from_env} />}
         </aside>
       </div>
     </main>

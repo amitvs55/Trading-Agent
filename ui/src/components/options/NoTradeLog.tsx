@@ -12,7 +12,7 @@ const OUTCOME: Record<Evaluation["outcome"], { label: string; cls: string }> = {
 };
 
 /** Every setup that fired and what the engine decided: the honest "why no trade" record. */
-export function NoTradeLog({ rows, labels }: { rows: Evaluation[]; labels: Record<string, string> }) {
+export function NoTradeLog({ rows, labels, loading = false }: { rows: Evaluation[]; labels: Record<string, string>; loading?: boolean }) {
   return (
     <section className="bg-surface border border-[#1e2d45] rounded-xl overflow-hidden">
       <div className="px-4 py-3 border-b border-[#1e2d45] flex items-center gap-2">
@@ -20,8 +20,10 @@ export function NoTradeLog({ rows, labels }: { rows: Evaluation[]; labels: Recor
         <span className="text-xs font-semibold text-[#e2e8f0]">Decision log</span>
         <span className="text-[10px] text-[#64748b]">every trigger that fired today, and why it did or didn't become a signal</span>
       </div>
-      {rows.length === 0 ? (
-        <div className="px-4 py-8 text-center text-xs text-[#475569]">No setup has triggered yet today.</div>
+      {loading ? (
+        <div className="px-4 py-[22px] flex flex-col gap-2" aria-hidden><div className="skeleton h-3 rounded" /><div className="skeleton h-3 w-2/3 rounded" /></div>
+      ) : rows.length === 0 ? (
+        <div className="fade-in px-4 py-8 text-center text-xs text-[#475569]">No setup has triggered yet today.</div>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-[12px]">

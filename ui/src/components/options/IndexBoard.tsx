@@ -1,4 +1,5 @@
 "use client";
+import { memo } from "react";
 import { CalendarClock, Gauge, Layers, TrendingDown, TrendingUp, Minus } from "lucide-react";
 import type { Board, BoardPillar } from "@/types/options";
 import { cn } from "@/lib/utils";
@@ -36,43 +37,47 @@ function PillarTile({ p }: { p: BoardPillar }) {
   );
 }
 
+// Module level (not inside LevelsLadder): a component defined inside another is a new type on
+// every render, so React would rebuild every row on each poll.
+function LevelRow({ name, value, price }: { name: string; value: number; price: number }) {
+  const dist = value - price;
+  return (
+    <div className="flex items-center justify-between text-[11px] py-1 px-2 rounded hover:bg-[#ffffff06]">
+      <span className="text-[#94a3b8] truncate">{name}</span>
+      <span className="flex items-center gap-3 font-mono tabular-nums">
+        <span className="text-[#e2e8f0]">{fmtNum(value)}</span>
+        <span className={cn("w-12 text-right", dist > 0 ? "text-[#86efac]" : "text-[#fca5a5]")}>{dist > 0 ? "+" : "−"}{fmtNum(Math.abs(dist))}</span>
+      </span>
+    </div>
+  );
+}
+
 function LevelsLadder({ board }: { board: Board }) {
   const price = board.fut ?? 0;
   const rows = Object.entries(board.levels).map(([name, value]) => ({ name, value }));
   const above = rows.filter(r => r.value > price).sort((a, b) => b.value - a.value).slice(-6);
   const below = rows.filter(r => r.value <= price).sort((a, b) => b.value - a.value).slice(0, 6);
-  const Row = ({ name, value }: { name: string; value: number }) => {
-    const dist = value - price;
-    return (
-      <div className="flex items-center justify-between text-[11px] py-1 px-2 rounded hover:bg-[#ffffff06]">
-        <span className="text-[#94a3b8] truncate">{name}</span>
-        <span className="flex items-center gap-3 font-mono tabular-nums">
-          <span className="text-[#e2e8f0]">{fmtNum(value)}</span>
-          <span className={cn("w-12 text-right", dist > 0 ? "text-[#86efac]" : "text-[#fca5a5]")}>{dist > 0 ? "+" : "−"}{fmtNum(Math.abs(dist))}</span>
-        </span>
-      </div>
-    );
-  };
   return (
     <div>
       <div className="text-[10px] tracking-widest text-[#64748b] mb-1.5 px-2">RESISTANCE ABOVE</div>
-      {above.length ? above.map(r => <Row key={r.name} {...r} />) : <div className="text-[11px] text-[#475569] px-2 py-1">Open space</div>}
+      {above.length ? above.map(r => <LevelRow key={r.name} {...r} price={price} />) : <div className="text-[11px] text-[#475569] px-2 py-1">Open space</div>}
       <div className="my-1.5 flex items-center gap-2 px-2 py-1.5 rounded-md bg-[#ff993314] border border-[#ff993333]">
         <span className="text-[10px] font-bold tracking-widest text-[#ff9933]">FUT</span>
         <span className="font-mono text-sm font-bold text-[#ff9933] tabular-nums ml-auto">{fmtNum(price, 1)}</span>
       </div>
       <div className="text-[10px] tracking-widest text-[#64748b] mb-1.5 mt-2 px-2">SUPPORT BELOW</div>
-      {below.length ? below.map(r => <Row key={r.name} {...r} />) : <div className="text-[11px] text-[#475569] px-2 py-1">Open space</div>}
+      {below.length ? below.map(r => <LevelRow key={r.name} {...r} price={price} />) : <div className="text-[11px] text-[#475569] px-2 py-1">Open space</div>}
     </div>
   );
 }
 
-export function IndexBoard({ board }: { board: Board }) {
+// Memoised: SWR keeps the same object when a poll returns identical data, so an unchanged board skips rendering.
+export const IndexBoard = memo(function IndexBoard({ board }: { board: Board }) {
   const age = ageSeconds(board.as_of);
   const TrendIcon = board.htf_trend === "up" ? TrendingUp : board.htf_trend === "down" ? TrendingDown : Minus;
   const oi = board.oi ?? {};
   return (
-    <section className="bg-surface border border-[#1e2d45] rounded-xl overflow-hidden" aria-label={`${board.index} analysis board`}>
+    <section className="fade-in bg-surface border border-[#1e2d45] rounded-xl overflow-hidden" aria-label={`${board.index} analysis board`}>
       <div className="px-5 py-4 border-b border-[#1e2d45] flex flex-wrap items-end justify-between gap-4">
         <div>
           <div className="text-[10px] tracking-widest text-[#64748b]">{SPOT_NAMES[board.index] ?? board.index}</div>
@@ -128,4 +133,4 @@ export function IndexBoard({ board }: { board: Board }) {
       </div>
     </section>
   );
-}
+});

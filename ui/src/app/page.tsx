@@ -76,7 +76,7 @@ export default function DashboardPage() {
 
       {/* Two-column layout */}
       {status !== "idle" && (
-        <div className="grid gap-5" style={{ gridTemplateColumns: "1fr 390px" }}>
+        <div className="grid gap-5 grid-cols-1 xl:grid-cols-[minmax(0,1fr)_390px]">
 
           {/* ── Left: Stage cards ── */}
           <div className="flex flex-col gap-4">

@@ -1,13 +1,17 @@
 "use client";
-import { createContext, useContext, useState, type FormEvent, type ReactNode } from "react";
-import useSWR from "swr";
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useState, type FormEvent, type ReactNode } from "react";
+import useSWR, { mutate as globalMutate, useSWRConfig } from "swr";
 import { Eye, EyeOff, KeyRound, Loader2, Lock, ShieldCheck, TrendingUp, User as UserIcon } from "lucide-react";
 import type { SessionResponse, User } from "@/types/auth";
 import { API_URL, cn } from "@/lib/utils";
-import { ApiError, AuthRequired, ME_KEY, apiFetch, apiJson, clearToken, forgetToken, getToken, sendJson, setToken } from "@/lib/optionsApi";
+import {
+  AUTH_EVENT, AuthRequired, ME_KEY, TOKEN_KEY, apiFetch, apiJson, cacheUser, clearToken, forgetToken, getCachedUser,
+  getToken, sendJson, setToken,
+} from "@/lib/optionsApi";
+import { clearFailures } from "@/lib/connection";
 
 interface AuthValue {
-  user: User;
+  user: User | null;               // null for a moment on a fresh browser, until /api/auth/me answers
   logout: () => Promise<void>;
 }
 
@@ -17,50 +21,100 @@ export function useAuth(): AuthValue | null {
   return useContext(AuthContext);
 }
 
-async function fetchMe(): Promise<User> {
-  if (!getToken()) {
-    const res = await fetch(`${API_URL}/api/auth/state`, { cache: "no-store" });
-    if (!res.ok) throw new ApiError(res.status, `API error ${res.status}`);
-    const state = (await res.json()) as { has_admin: boolean };
-    throw new AuthRequired(state.has_admin ? "login_required" : "setup_required");
+// useLayoutEffect on the client (runs before paint), nothing on the server.
+const useBeforePaint = typeof window === "undefined" ? useEffect : useLayoutEffect;
+
+// What the pages need first. Fetched once the browser is idle after sign-in, so moving between
+// pages shows real data at once instead of a skeleton (SWR revalidates it on arrival anyway).
+const PREFETCH = ["/api/options/status", "/api/options/board", "/api/options/signals?days=7",
+  "/api/options/evaluations?hours=12", "/api/options/performance", "/api/options/signals?days=3650"];
+const PREFETCH_ADMIN = ["/api/admin/connectors", "/api/admin/health"];
+
+function whenIdle(fn: () => void): () => void {
+  const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number;
+                                 cancelIdleCallback?: (id: number) => void };
+  if (w.requestIdleCallback) {
+    const id = w.requestIdleCallback(fn, { timeout: 3_000 });
+    return () => w.cancelIdleCallback?.(id);
   }
-  try {
-    return await apiJson<User>(ME_KEY);
-  } catch (err) {
-    if (err instanceof AuthRequired) forgetToken();       // expired or revoked: start clean
-    throw err;
-  }
+  const id = window.setTimeout(fn, 1_200);
+  return () => window.clearTimeout(id);
 }
 
-/** Everything in the app sits behind this: no session, no pages (and no API data). */
+/**
+ * Everything in the app sits behind this. With a saved session the pages render at once and load
+ * their data in parallel with the session check (the API enforces auth on every call either way);
+ * without one, the sign-in screen shows. No full-screen "Loading…" step in between.
+ */
 export function AuthGate({ children }: { children: ReactNode }) {
-  const { data: user, error, isLoading, mutate } = useSWR<User>(ME_KEY, fetchMe, {
-    shouldRetryOnError: false,
-    revalidateOnFocus: true,
-  });
+  // The server (and the first client render) assume a session, so pages stay statically rendered.
+  // The layout's inline script hides the shell before paint when there's none; this corrects it.
+  const [token, setTokenState] = useState<string | null>("assumed");
+  const [rejected, setRejected] = useState<string | null>(null);     // the token the API turned down
+  const [cached, setCached] = useState<User | null>(null);
+  const { cache } = useSWRConfig();
 
-  if (user) {
-    const logout = async () => {
-      try { await apiFetch("/api/auth/logout", { method: "POST" }); } catch { /* signing out locally anyway */ }
-      clearToken();
-      await mutate(undefined, { revalidate: true });
-    };
-    return <AuthContext.Provider value={{ user, logout }}>{children}</AuthContext.Provider>;
-  }
-  if (isLoading && !error) return <Splash />;
-  if (error instanceof AuthRequired) {
-    return error.code === "setup_required" ? <SetupScreen /> : <LoginScreen />;
-  }
+  const sync = useCallback(() => {
+    setTokenState(getToken() || null);
+    setCached(getCachedUser<User>());
+  }, []);
+  useBeforePaint(sync, [sync]);
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => { if (e.key === null || e.key === TOKEN_KEY) sync(); };   // other tabs
+    window.addEventListener(AUTH_EVENT, sync);
+    window.addEventListener("storage", onStorage);
+    return () => { window.removeEventListener(AUTH_EVENT, sync); window.removeEventListener("storage", onStorage); };
+  }, [sync]);
+
+  const { data: me } = useSWR<User>(token ? ME_KEY : null, async (k: string) => {
+    const used = getToken();
+    if (!used) throw new AuthRequired();                // signed out: no request
+    try {
+      return await apiJson<User>(k);
+    } catch (err) {
+      if (err instanceof AuthRequired) setRejected(used);
+      throw err;
+    }
+  }, { shouldRetryOnError: false, revalidateOnFocus: true, onSuccess: cacheUser });
+  // Tied to the token it was about, so a rejection of an old session never signs out a new one
+  const expired = !!token && rejected === token;
+  useEffect(() => { if (expired) forgetToken(); }, [expired]);       // revoked or timed out: start clean
+
+  const user = me ?? cached;
+  const signedIn = !!token && !expired;
+  const confirmedRole = me?.role;                     // prefetch only once the session is confirmed
+  useEffect(() => {
+    if (!confirmedRole) return;
+    return whenIdle(() => {
+      const keys = confirmedRole === "admin" ? [...PREFETCH, ...PREFETCH_ADMIN] : PREFETCH;
+      keys.filter(k => cache.get(k) === undefined)      // untouched: no page has loaded or is loading it
+          .forEach(k => { globalMutate(k, apiJson(k), { revalidate: false }).catch(() => { /* the page retries */ }); });
+    });
+  }, [confirmedRole, cache]);
+
+  const logout = useCallback(async () => {
+    try { await apiFetch("/api/auth/logout", { method: "POST" }); } catch { /* signing out locally anyway */ }
+    clearToken();
+    clearFailures();
+  }, []);
+
+  if (!signedIn) return <SignedOut />;
   return (
-    <Shell>
-      <Card icon={<Lock size={20} className="text-red" />} title="Can't reach the API">
-        <p className="text-sm text-[#94a3b8] leading-relaxed">{error?.message ?? "Unknown error"}. The API service may be restarting.</p>
-        <button onClick={() => mutate()} className="mt-5 w-full rounded-lg border border-[#1e2d45] bg-card py-2.5 text-sm text-[#e2e8f0] hover:border-[#ff9933] transition-colors">
-          Try again
-        </button>
-      </Card>
-    </Shell>
+    <AuthContext.Provider value={{ user, logout }}>
+      <div data-app-shell>{children}</div>
+    </AuthContext.Provider>
   );
+}
+
+function SignedOut() {
+  // Login is the usual case, so it shows straight away; the one-time setup screen replaces it only
+  // if the API says no admin exists yet.
+  const { data } = useSWR<{ has_admin: boolean }>("/api/auth/state", async (k: string) => {
+    const res = await fetch(`${API_URL}${k}`, { cache: "no-store" });
+    if (!res.ok) throw new Error(`API error ${res.status}`);
+    return res.json();
+  }, { revalidateOnFocus: false });
+  return data && !data.has_admin ? <SetupScreen /> : <LoginScreen />;
 }
 
 // ── Screens ──────────────────────────────────────────────────────────────────
@@ -89,20 +143,12 @@ function Shell({ children }: { children: ReactNode }) {
 
 function Card({ icon, title, subtitle, children }: { icon: ReactNode; title: string; subtitle?: ReactNode; children: ReactNode }) {
   return (
-    <div className="bg-surface border border-[#1e2d45] rounded-2xl p-7 shadow-[0_20px_60px_rgba(0,0,0,.45)]">
+    <div className="fade-in bg-surface border border-[#1e2d45] rounded-2xl p-7 shadow-[0_20px_60px_rgba(0,0,0,.45)]">
       <div className="w-12 h-12 rounded-xl grid place-items-center mb-5 bg-[#ff993314] border border-[#ff993333]">{icon}</div>
       <h1 className="text-lg font-bold text-[#e2e8f0]">{title}</h1>
       {subtitle && <div className="text-sm text-[#64748b] mt-1 mb-5 leading-relaxed">{subtitle}</div>}
       {children}
     </div>
-  );
-}
-
-function Splash() {
-  return (
-    <Shell>
-      <div className="flex items-center justify-center gap-2 text-sm text-[#64748b]"><Loader2 size={16} className="animate-spin" /> Loading…</div>
-    </Shell>
   );
 }
 

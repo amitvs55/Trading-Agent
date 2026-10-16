@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 
 from api.deps import current_user, get_repo
 from api.routes.admin import router as admin_router
@@ -50,7 +51,10 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    max_age=7200,           # browsers reuse a preflight for 2 h (Chrome's cap) instead of one per poll URL every 10 min
 )
+# JSON shrinks 5-10x; the research pipeline's event stream is excluded by Starlette (it must flush per event)
+app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 # Everything except /health, the auth endpoints and the Kite login redirect needs a signed-in user
 signed_in = [Depends(current_user)]

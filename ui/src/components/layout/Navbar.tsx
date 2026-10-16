@@ -29,20 +29,25 @@ function UserMenu() {
     return () => document.removeEventListener("mousedown", close);
   }, [open]);
   if (!auth) return null;
-  const initial = auth.user.username.slice(0, 1).toUpperCase();
+  const user = auth.user;
+  if (!user) {
+    // Same footprint as the real button, so nothing moves when the profile arrives
+    return <div className="flex-shrink-0 h-[34px] w-[34px] md:w-[96px] rounded-lg border border-[#1e2d45] bg-card" aria-hidden />;
+  }
+  const initial = user.username.slice(0, 1).toUpperCase();
   return (
     <div className="relative flex-shrink-0" ref={ref}>
       <button onClick={() => setOpen(o => !o)} aria-haspopup="menu" aria-expanded={open}
-              className="flex items-center gap-2 rounded-lg border border-[#1e2d45] bg-card pl-1 pr-2 py-1 hover:border-[#2d3e58] transition-colors">
+              className="flex items-center gap-2 h-[34px] rounded-lg border border-[#1e2d45] bg-card pl-1 pr-2 hover:border-[#2d3e58] transition-colors">
         <span className="w-6 h-6 rounded-md grid place-items-center bg-[#ff993326] text-[#ff9933] text-xs font-bold">{initial}</span>
-        <span className="hidden md:inline text-xs text-[#e2e8f0]">{auth.user.username}</span>
-        <ChevronDown size={12} className="text-[#64748b]" />
+        <span className="hidden md:inline text-xs text-[#e2e8f0]">{user.username}</span>
+        <ChevronDown size={12} className={cn("text-[#64748b] transition-transform duration-200", open && "rotate-180")} />
       </button>
       {open && (
-        <div role="menu" className="absolute right-0 mt-2 w-56 rounded-xl border border-[#1e2d45] bg-surface shadow-[0_16px_40px_rgba(0,0,0,.5)] p-1.5 z-50">
+        <div role="menu" className="menu-pop absolute right-0 mt-2 w-56 rounded-xl border border-[#1e2d45] bg-surface shadow-[0_16px_40px_rgba(0,0,0,.5)] p-1.5 z-50">
           <div className="px-3 py-2 border-b border-[#1e2d45] mb-1">
-            <div className="text-sm font-semibold text-[#e2e8f0]">{auth.user.username}</div>
-            <div className="text-[10px] tracking-widest text-[#64748b] uppercase">{auth.user.role}</div>
+            <div className="text-sm font-semibold text-[#e2e8f0]">{user.username}</div>
+            <div className="text-[10px] tracking-widest text-[#64748b] uppercase">{user.role}</div>
           </div>
           <Link href="/connectors" role="menuitem" onClick={() => setOpen(false)}
                 className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-[#94a3b8] hover:bg-card hover:text-[#e2e8f0]">
@@ -58,14 +63,15 @@ function UserMenu() {
   );
 }
 
-// Live values only: nothing is shown until the signal engine has published a board.
+// Live values only: nothing is shown until the signal engine has published a board. The slot it
+// sits in is always there (see Navbar), so the links beside it never move when it fills in.
 function LiveIndices() {
   const { data } = useOptionsApi<BoardResponse>("/api/options/board", 30_000);
   const boards = Object.values(data?.boards ?? {});
   if (!boards.length) return null;
   const vix = boards[0].vix;
   return (
-    <div className="hidden xl:flex items-center gap-5">
+    <div className="fade-in flex items-center gap-5">
       {boards.map((b, i) => (
         <div key={b.index} className="flex items-center gap-5">
           {i > 0 && <div className="w-px h-3.5 bg-[#1e2d45]" />}
@@ -90,18 +96,13 @@ function LiveIndices() {
 
 function MarketPill() {
   const { data } = useOptionsApi<OptionsStatus>("/api/options/status", 60_000);
-  if (!data) {
-    return (
-      <div className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-md bg-card border border-[#1e2d45]">
-        <span className="text-[#64748b]">NSE 9:15–15:30 IST</span>
-      </div>
-    );
-  }
-  const open = ["opening", "main", "late", "closing"].includes(data.session_phase);
+  const open = !!data && ["opening", "main", "late", "closing"].includes(data.session_phase);
   return (
     <div className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-md bg-card border border-[#1e2d45]">
-      <div className={cn("w-2 h-2 rounded-full", open ? "bg-green animate-pulse" : "bg-[#475569]")} />
-      <span className={open ? "text-green" : "text-[#94a3b8]"}>{open ? "NSE open" : PHASE_LABELS[data.session_phase] ?? "NSE closed"}</span>
+      <div className={cn("w-2 h-2 rounded-full transition-colors", open ? "bg-green animate-pulse" : "bg-[#475569]")} />
+      <span className={cn("transition-colors", open ? "text-green" : "text-[#94a3b8]")}>
+        {!data ? "NSE" : open ? "NSE open" : PHASE_LABELS[data.session_phase] ?? "NSE closed"}
+      </span>
       <span className="text-[#64748b]">9:15–15:30 IST</span>
     </div>
   );
@@ -128,10 +129,10 @@ export function Navbar() {
           </div>
         </div>
 
-        <LiveIndices />
+        <div className="hidden xl:flex flex-1 min-w-0 justify-center"><LiveIndices /></div>
 
         {/* Nav links */}
-        <div className="flex items-center gap-0.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="flex items-center gap-0.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [mask-image:linear-gradient(90deg,#000_82%,transparent)] lg:[mask-image:none]">
           {LINKS.map(({ href, label }) => (
             <Link
               key={href}

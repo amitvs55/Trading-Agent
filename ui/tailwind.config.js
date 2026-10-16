@@ -16,7 +16,9 @@ const config = {
         muted:   "#64748b",
       },
       fontFamily: {
-        mono: ["JetBrains Mono", "Fira Code", "monospace"],
+        // Self-hosted by next/font (layout.tsx), with metric-matched fallbacks: no flash, no reflow
+        sans: ["var(--font-inter)", "ui-sans-serif", "system-ui", "sans-serif"],
+        mono: ["var(--font-mono)", "ui-monospace", "SFMono-Regular", "monospace"],
       },
       keyframes: {
         "pulse-glow": {

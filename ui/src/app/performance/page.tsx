@@ -12,7 +12,7 @@ function Tile({ label, value, sub, loading }: { label: string; value: string; su
   return (
     <div className="bg-surface border border-[#1e2d45] rounded-xl p-4">
       <div className="text-[10px] text-[#64748b] tracking-widest mb-2">{label}</div>
-      {loading ? <div className="skeleton h-7 rounded w-20" /> : <div className="font-bold text-2xl text-[#e2e8f0]">{value}</div>}
+      {loading ? <div className="skeleton h-8 rounded w-20" /> : <div className="fade-in font-bold text-2xl leading-8 text-[#e2e8f0]">{value}</div>}
       {sub && <div className="text-[11px] text-[#64748b] mt-1">{sub}</div>}
     </div>
   );

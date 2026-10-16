@@ -6,6 +6,7 @@ import { useOptionsApi } from "@/lib/optionsApi";
 import { fmtDateTime, fmtPremium, fmtR, fmtRupees } from "@/lib/optionsFormat";
 import { SignalCard } from "@/components/options/SignalCard";
 import { ChecksList } from "@/components/options/ChecksList";
+import { SignalCardSkeleton } from "@/components/options/Skeletons";
 
 const KIND_LABELS: Record<string, string> = {
   CREATED: "Signal created", ENTRY_FILLED: "Entry filled", T1_HIT: "Target 1 reached", T2_HIT: "Target 2 reached",
@@ -15,7 +16,7 @@ const KIND_LABELS: Record<string, string> = {
 };
 
 export default function SignalDetailPage({ params }: { params: { id: string } }) {
-  const { data, error, needsLogin } = useOptionsApi<SignalDetail>(`/api/options/signals/${encodeURIComponent(params.id)}`, 10_000);
+  const { data, error } = useOptionsApi<SignalDetail>(`/api/options/signals/${encodeURIComponent(params.id)}`, 10_000);
   const s = data?.signal;
 
   return (
@@ -24,9 +25,17 @@ export default function SignalDetailPage({ params }: { params: { id: string } })
         <Link href="/signals" className="inline-flex items-center gap-1.5 text-xs text-[#94a3b8] hover:text-[#e2e8f0] mb-4">
           <ArrowLeft size={13} /> Live signals
         </Link>
-        {error && !needsLogin && <div className="mb-4 bg-[#ef444411] border border-[#ef444433] rounded-xl px-5 py-3 text-sm text-red">⚠ {error.message}</div>}
-        {!s ? <div className="skeleton h-64 rounded-xl" /> : (
-          <div className="grid gap-5 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_380px]">
+        {!s && error && "status" in error && (error as { status: number }).status === 404 ? (
+          <div className="fade-in bg-surface border border-[#1e2d45] rounded-xl px-6 py-12 text-center text-sm text-[#94a3b8]">
+            Signal {params.id} doesn&apos;t exist.
+          </div>
+        ) : !s ? (
+          <div className="grid gap-5 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_380px]" aria-hidden>
+            <SignalCardSkeleton />
+            <div className="skeleton h-80 rounded-xl" />
+          </div>
+        ) : (
+          <div className="fade-in grid gap-5 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_380px]">
             <div className="flex flex-col gap-5 min-w-0">
               <SignalCard s={s} setupLabel={data.setup_label} wide />
               <section className="bg-surface border border-[#1e2d45] rounded-xl overflow-hidden">

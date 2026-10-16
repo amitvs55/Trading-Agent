@@ -1,4 +1,5 @@
 "use client";
+import { useState } from "react";
 import { Radio, RefreshCw, Satellite } from "lucide-react";
 import type { BoardResponse, EvaluationsResponse, OptionsStatus, SignalsResponse } from "@/types/options";
 import { useOptionsApi } from "@/lib/optionsApi";
@@ -7,6 +8,7 @@ import { SessionBar } from "@/components/options/SessionBar";
 import { IndexBoard } from "@/components/options/IndexBoard";
 import { SignalCard } from "@/components/options/SignalCard";
 import { NoTradeLog } from "@/components/options/NoTradeLog";
+import { BoardSkeleton, SignalCardSkeleton } from "@/components/options/Skeletons";
 
 const OPEN = new Set(["TRIGGERED", "ACTIVE", "T1_HIT"]);
 
@@ -15,7 +17,7 @@ export default function SignalsPage() {
   const boards = useOptionsApi<BoardResponse>("/api/options/board", 15_000);
   const signals = useOptionsApi<SignalsResponse>("/api/options/signals?days=7", 5_000);
   const evals = useOptionsApi<EvaluationsResponse>("/api/options/evaluations?hours=12", 30_000);
-  const needsLogin = status.needsLogin || boards.needsLogin || signals.needsLogin;
+  const [refreshing, setRefreshing] = useState(false);
 
   const all = signals.data?.signals ?? [];
   const labels = signals.data?.setup_labels ?? {};
@@ -23,9 +25,13 @@ export default function SignalsPage() {
   const today = todayIST();
   const closedToday = all.filter(s => !OPEN.has(s.state) && istDateKey(s.created_at) === today);
   const boardList = Object.values(boards.data?.boards ?? {});
-  const error = status.error || boards.error || signals.error;
-  const boardsLoading = !boards.data && !boards.error;
-  const signalsLoading = !signals.data && !signals.error;
+  const boardsLoading = !boards.data;
+  const signalsLoading = !signals.data;
+  const refreshAll = async () => {
+    setRefreshing(true);
+    try { await Promise.all([status.refresh(), boards.refresh(), signals.refresh(), evals.refresh()]); }
+    finally { setRefreshing(false); }
+  };
 
   return (
     <>
@@ -39,25 +45,19 @@ export default function SignalsPage() {
               NIFTY options · buy-only · every signal checked against 12 analysis pillars and tracked to its result
             </p>
           </div>
-          <button onClick={() => { status.refresh(); boards.refresh(); signals.refresh(); evals.refresh(); }}
+          <button onClick={refreshAll} disabled={refreshing}
                   className="flex items-center gap-1.5 bg-card border border-[#1e2d45] rounded-lg px-3 py-2 text-xs text-[#94a3b8] hover:text-[#e2e8f0] transition-colors">
-            <RefreshCw size={11} className={signals.isLoading ? "animate-spin" : ""} /> Refresh
+            <RefreshCw size={11} className={refreshing ? "animate-spin" : ""} /> Refresh
           </button>
         </div>
-
-        {error && !needsLogin && (
-          <div className="mb-4 bg-[#ef444411] border border-[#ef444433] rounded-xl px-5 py-3 text-sm text-red">
-            ⚠ Could not reach the signal API: {error.message}. Showing the last data received.
-          </div>
-        )}
 
         <div className="mb-5"><SessionBar status={status.data} /></div>
 
         <div className="grid gap-5 grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_480px]">
           <div className="flex flex-col gap-5 min-w-0">
-            {boardsLoading ? <div className="skeleton h-[520px] rounded-xl" /> :
+            {boardsLoading ? <BoardSkeleton /> :
              boardList.length ? boardList.map(b => <IndexBoard key={b.index} board={b} />) : (
-              <section className="bg-surface border border-[#1e2d45] rounded-xl px-6 py-14 text-center">
+              <section className="fade-in bg-surface border border-[#1e2d45] rounded-xl px-6 py-14 text-center">
                 <Satellite size={28} className="mx-auto text-[#334155] mb-3" />
                 <div className="text-sm font-semibold text-[#e2e8f0]">No analysis yet</div>
                 <p className="text-xs text-[#64748b] mt-1.5 max-w-md mx-auto leading-relaxed">
@@ -73,10 +73,10 @@ export default function SignalsPage() {
               <h2 className="text-sm font-semibold text-[#e2e8f0]">Open signals <span className="text-[#64748b] font-normal">({open.length})</span></h2>
               <span className="text-[10px] text-[#64748b]">updates every 5s</span>
             </div>
-            {signalsLoading ? <div className="skeleton h-72 rounded-xl" /> : open.length ? open.map(s => (
+            {signalsLoading ? <SignalCardSkeleton /> : open.length ? open.map(s => (
               <SignalCard key={s.signal_id} s={s} quote={signals.data?.quotes[s.signal_id]} setupLabel={labels[s.setup] ?? s.setup} />
             )) : (
-              <div className="bg-surface border border-dashed border-[#1e2d45] rounded-xl px-5 py-10 text-center">
+              <div className="fade-in bg-surface border border-dashed border-[#1e2d45] rounded-xl px-5 py-10 text-center">
                 <div className="text-sm text-[#e2e8f0] font-medium">No open signal</div>
                 <p className="text-xs text-[#64748b] mt-1.5 leading-relaxed">
                   The engine checks every setup on each 5-minute close. When nothing meets every rule, the answer is
@@ -95,7 +95,8 @@ export default function SignalsPage() {
         </div>
 
         <div className="mt-5">
-          <NoTradeLog rows={(evals.data?.evaluations ?? []).filter(r => istDateKey(r.ts) === today)} labels={evals.data?.setup_labels ?? labels} />
+          <NoTradeLog rows={(evals.data?.evaluations ?? []).filter(r => istDateKey(r.ts) === today)} labels={evals.data?.setup_labels ?? labels}
+                      loading={!evals.data} />
         </div>
       </main>
     </>

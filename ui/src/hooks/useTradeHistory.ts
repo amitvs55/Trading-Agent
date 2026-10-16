@@ -17,7 +17,7 @@ export function useTradeHistory(params?: { limit?: number; offset?: number; tick
   return {
     records:    (data?.records ?? []) as Record<string, unknown>[],
     total:      (data?.total   ?? 0)  as number,
-    isLoading,
+    isLoading: isLoading && data === undefined,       // a page change keeps the old rows until the new ones arrive
     error,
     refresh:    mutate,
   };

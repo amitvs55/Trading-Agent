@@ -36,7 +36,7 @@ export default function UsagePage() {
         </button>
       </div>
 
-      {error && (
+      {error && !report && (
         <div className="mb-4 bg-[#ef444411] border border-[#ef444433] rounded-xl px-5 py-4 text-sm text-red">
           ⚠ Could not load usage: {String(error.message ?? error)}
         </div>
