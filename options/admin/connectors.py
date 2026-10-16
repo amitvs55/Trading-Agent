@@ -7,9 +7,11 @@ the only configuration that has to stay in the environment.
 """
 
 from dataclasses import dataclass, field
+from types import SimpleNamespace
 
 from pydantic import TypeAdapter
 
+from options.admin import validation
 from options.admin.repo import AdminRepo
 from options.config import OptionsSettings
 from options.setups import SETUP_LABELS
@@ -59,7 +61,8 @@ CONNECTORS: dict[str, ConnectorSpec] = {c.id: c for c in [
     ConnectorSpec(
         "telegram", "Telegram", "Alerts", "Signal cards, follow-ups, the morning brief and the end-of-day report.",
         (FieldSpec("TELEGRAM_BOT_TOKEN", "Bot token", secret=True, help="From @BotFather"),
-         FieldSpec("TELEGRAM_CHAT_ID", "Chat ID", help="Message your bot once, then read it from getUpdates")),
+         FieldSpec("TELEGRAM_CHAT_ID", "Chat ID", placeholder="123456789",
+                   help="Your own Telegram ID (a number): press Start on your bot, then send /start to @userinfobot")),
         docs_url="https://core.telegram.org/bots#how-do-i-create-a-bot"),
     ConnectorSpec(
         "openai", "OpenAI", "Research pipeline", "Powers the multi-agent research pages. Not used by the "
@@ -72,6 +75,16 @@ CONNECTORS: dict[str, ConnectorSpec] = {c.id: c for c in [
 FIELD_INDEX: dict[str, tuple[ConnectorSpec, FieldSpec]] = {f.key: (c, f) for c in CONNECTORS.values() for f in c.fields}
 RESEARCH_KEYS = ("OPENAI_API_KEY", "MODEL_NAME")     # belong to config.settings, not OptionsSettings
 PROVIDERS = {"angel": "Angel One", "kite": "Kite"}
+
+
+
+class InvalidFields(ValueError):
+    """One or more submitted values are malformed; nothing was saved."""
+
+    def __init__(self, problems: dict[str, str]):
+        self.problems = problems
+        super().__init__(" ".join(problems.values()))
+
 
 TRADING_LIMITS = {
     "OPTIONS_CAPITAL": (10_000, 100_000_000),
@@ -90,6 +103,8 @@ def effective_settings(repo: AdminRepo | None, base: OptionsSettings | None = No
     for key, value in saved.items():
         f = OptionsSettings.model_fields.get(key)
         if f is not None:
+            if isinstance(value, str):
+                value = validation.normalize(key, value)
             update[key] = TypeAdapter(f.annotation).validate_python(value)
     return base.model_copy(update=update)
 
@@ -130,6 +145,7 @@ def connector_view(spec: ConnectorSpec, repo: AdminRepo, base: OptionsSettings, 
             "key": f.key, "label": f.label, "secret": f.secret, "required": f.required, "help": f.help,
             "placeholder": f.placeholder, "source": source, "is_set": bool(value),
             "display": (mask(value) if f.secret else value) if value else "",
+            "problem": validation.problem(f.key, value),
             "updated_at": meta[f.key]["updated_at"].isoformat() if f.key in meta and meta[f.key]["updated_at"] else None,
         })
     return {"id": spec.id, "name": spec.name, "role": spec.role, "description": spec.description,
@@ -149,24 +165,75 @@ def connectors_payload(repo: AdminRepo, base: OptionsSettings | None = None) -> 
     }
 
 
-def save_connector(repo: AdminRepo, connector_id: str, values: dict[str, str | None], by: str) -> list[str]:
-    """Apply edits: a non-empty string sets a field, None clears it, "" or absent keeps it."""
+def clean_values(connector_id: str, values: dict[str, str | None]) -> dict[str, str | None]:
+    """Tidy and check submitted edits: a non-empty string sets a field, None clears it, "" or absent
+    keeps it. Raises InvalidFields (every problem, keyed by field) before anything is stored."""
     spec = CONNECTORS.get(connector_id)
     if spec is None:
         raise KeyError(connector_id)
-    allowed = {f.key: f for f in spec.fields}
-    changed = []
+    allowed = {f.key for f in spec.fields}
+    out, problems = {}, {}
     for key, value in values.items():
-        f = allowed.get(key)
-        if f is None:
+        if key not in allowed:
             raise ValueError(f"{key} is not a {spec.name} setting")
         if value is None:
-            repo.delete_setting(key)
-            changed.append(key)
+            out[key] = None
         elif str(value).strip():
-            repo.set_setting(key, str(value).strip(), secret=f.secret, by=by)
-            changed.append(key)
-    return changed
+            cleaned, problem = validation.clean(key, str(value))
+            if problem:
+                problems[key] = problem
+            else:
+                out[key] = cleaned
+    if problems:
+        raise InvalidFields(problems)
+    return out
+
+
+def missing_after(repo: AdminRepo, connector_id: str, clean: dict[str, str | None],
+                  base: OptionsSettings | None = None) -> list[str]:
+    """Required fields that would still be empty once `clean` is saved."""
+    base = base or OptionsSettings()
+    saved = repo.setting_values()
+    missing = []
+    for f in CONNECTORS[connector_id].fields:
+        if not f.required:
+            continue
+        if f.key in clean:
+            value = clean[f.key] if clean[f.key] is not None else _env_value(f.key, base)
+        else:
+            value = saved[f.key] if f.key in saved else _env_value(f.key, base)
+        if not value:
+            missing.append(f.label)
+    return missing
+
+
+def preview_settings(repo: AdminRepo, clean: dict[str, str | None],
+                     base: OptionsSettings | None = None) -> tuple[OptionsSettings, SimpleNamespace]:
+    """The options and research settings as they would be after saving `clean`, without saving it,
+    so a connector can be tested before its values are stored."""
+    from config.settings import settings as research_now
+
+    base = base or OptionsSettings()
+    research = {k: getattr(research_now, k, "") for k in RESEARCH_KEYS}
+    update = {}
+    for key, value in clean.items():
+        value = _env_value(key, base) if value is None else value
+        if key in RESEARCH_KEYS:
+            research[key] = value
+        else:
+            update[key] = TypeAdapter(OptionsSettings.model_fields[key].annotation).validate_python(value)
+    return effective_settings(repo, base).model_copy(update=update), SimpleNamespace(**research)
+
+
+def save_connector(repo: AdminRepo, connector_id: str, values: dict[str, str | None], by: str) -> list[str]:
+    """Check, then store the edits (see clean_values). Returns the keys that changed."""
+    clean = clean_values(connector_id, values)
+    for key, value in clean.items():
+        if value is None:
+            repo.delete_setting(key)
+        else:
+            repo.set_setting(key, value, secret=FIELD_INDEX[key][1].secret, by=by)
+    return list(clean)
 
 
 def set_data_provider(repo: AdminRepo, provider: str, by: str) -> None:

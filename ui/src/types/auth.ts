@@ -35,6 +35,7 @@ export interface ConnectorField {
   source: "app" | "env" | "unset";
   is_set: boolean;
   display: string;
+  problem: string | null;       // why the current value looks wrong (format check), if it does
   updated_at: string | null;
 }
 
@@ -75,6 +76,12 @@ export interface ConnectorsResponse {
   trading: TradingSettings;
   recorder: RecorderStatus | null;
   secret_key_from_env: boolean;
+}
+
+/** PUT /api/admin/connectors/{id}: the new state plus the test the edits had to pass first. */
+export interface SaveConnectorResponse extends ConnectorsResponse {
+  test: HealthResult | null;
+  missing: string[];
 }
 
 export interface HealthResponse {

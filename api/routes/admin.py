@@ -135,6 +135,7 @@ def auth_password(body: PasswordBody, user: dict = Depends(current_user), repo: 
 
 class ConnectorBody(BaseModel):
     values: dict[str, str | None]
+    test: bool = True             # test the new values first and store nothing if the test fails
 
 
 class ProviderBody(BaseModel):
@@ -172,15 +173,37 @@ def admin_connectors(_: dict = Depends(require_admin), repo: AdminRepo = Depends
 
 @router.put("/api/admin/connectors/{connector_id}")
 def admin_save_connector(connector_id: str, body: ConnectorBody, user: dict = Depends(require_admin),
-                         repo: AdminRepo = Depends(get_repo)) -> dict:
+                         repo: AdminRepo = Depends(get_repo), store: Store = Depends(get_store)) -> dict:
+    """Store a connector's edits only once they're well-formed and (unless test=false) pass a live test."""
     try:
-        changed = connectors.save_connector(repo, connector_id, body.values, user["username"])
+        clean = connectors.clean_values(connector_id, body.values)
     except KeyError:
         raise HTTPException(404, {"code": "unknown_connector", "message": f"No connector {connector_id}"})
+    except connectors.InvalidFields as e:
+        raise HTTPException(422, {"code": "invalid", "message": "Fix the highlighted fields. Nothing was saved.",
+                                  "fields": e.problems})
     except ValueError as e:
         raise HTTPException(422, {"code": "invalid", "message": str(e)})
-    logger.info("%s updated %s: %s", user["username"], connector_id, ", ".join(changed) or "nothing")
-    return _saved(repo, research_changed=connector_id == "openai")
+
+    missing = connectors.missing_after(repo, connector_id, clean, base_settings())
+    result = None
+    if body.test and clean and not missing and connector_id in health.CHECKS:
+        cfg, research = connectors.preview_settings(repo, clean, base_settings())
+        result = health.run_checks(_health_ctx(repo, store, cfg, research=research), [connector_id],
+                                   store_results=False)[0]
+        if result["status"] == "fail":
+            logger.info("%s's %s edits failed their test; nothing saved", user["username"], connector_id)
+            reason = result["message"].rstrip()
+            reason += "" if reason.endswith((".", "!", "?")) else "."
+            raise HTTPException(422, {"code": "test_failed", "message": f"{reason} Nothing was saved.",
+                                      "health": result})
+
+    changed = connectors.save_connector(repo, connector_id, clean, user["username"])
+    if result:
+        health.save_result(repo, result)
+    logger.info("%s updated %s: %s%s", user["username"], connector_id, ", ".join(changed) or "nothing",
+                f" (test {result['status']})" if result else " (not tested)")
+    return {**_saved(repo, research_changed=connector_id == "openai"), "test": result, "missing": missing}
 
 
 @router.put("/api/admin/data-provider")
@@ -202,8 +225,10 @@ def admin_trading(body: TradingBody, user: dict = Depends(require_admin), repo: 
     return _saved(repo)
 
 
-def _health_ctx(repo: AdminRepo, store: Store, cfg: OptionsSettings, send_test: bool = False) -> health.HealthContext:
-    from config.settings import settings as research
+def _health_ctx(repo: AdminRepo, store: Store, cfg: OptionsSettings, send_test: bool = False,
+                research: object | None = None) -> health.HealthContext:
+    if research is None:
+        from config.settings import settings as research
     return health.HealthContext(repo=repo, store=store, cfg=cfg, research=research, now=now_ist(),
                                 send_telegram_test=send_test)
 

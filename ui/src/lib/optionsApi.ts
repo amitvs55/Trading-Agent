@@ -17,10 +17,12 @@ export class AuthRequired extends Error {
 export class ApiError extends Error {
   status: number;
   code?: string;
-  constructor(status: number, message: string, code?: string) {
+  detail: Record<string, unknown>;
+  constructor(status: number, message: string, code?: string, detail: Record<string, unknown> = {}) {
     super(message);
     this.status = status;
     this.code = code;
+    this.detail = detail;
   }
 }
 
@@ -56,7 +58,7 @@ async function errorFrom(res: Response): Promise<ApiError | AuthRequired> {
   if (res.status === 401) {
     return new AuthRequired(d.code === "setup_required" ? "setup_required" : "login_required", message);
   }
-  return new ApiError(res.status, message, d.code);
+  return new ApiError(res.status, message, d.code, d as Record<string, unknown>);
 }
 
 /** fetch() against the API with the session attached; a 401 sends the whole app back to the login screen. */

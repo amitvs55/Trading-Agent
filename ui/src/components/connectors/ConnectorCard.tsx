@@ -1,9 +1,9 @@
 "use client";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Bot, ExternalLink, Eye, EyeOff, Loader2, LogIn, Radio, Send, Signal, Trash2, Undo2, Zap } from "lucide-react";
-import type { Connector, ConnectorField, ConnectorsResponse } from "@/types/auth";
+import { AlertCircle, Bot, ExternalLink, Eye, EyeOff, Loader2, LogIn, Radio, Send, Signal, Trash2, Undo2, Zap } from "lucide-react";
+import type { Connector, ConnectorField, ConnectorsResponse, SaveConnectorResponse } from "@/types/auth";
 import { API_URL, cn } from "@/lib/utils";
-import { sendJson } from "@/lib/optionsApi";
+import { ApiError, sendJson } from "@/lib/optionsApi";
 import { CheckBadge, CheckMeta } from "./HealthBits";
 
 const ICONS: Record<Connector["id"], typeof Signal> = { angel: Signal, kite: Radio, telegram: Send, openai: Bot };
@@ -14,8 +14,8 @@ const SOURCE: Record<ConnectorField["source"], { label: string; cls: string }> =
   unset: { label: "Not set",          cls: "text-[#64748b] border-[#1e2d45] bg-card" },
 };
 
-function FieldRow({ f, value, cleared, onChange, onClear, onUndo }: {
-  f: ConnectorField; value: string; cleared: boolean;
+function FieldRow({ f, value, cleared, error, onChange, onClear, onUndo }: {
+  f: ConnectorField; value: string; cleared: boolean; error: string | null;
   onChange: (v: string) => void; onClear: () => void; onUndo: () => void;
 }) {
   const [shown, setShown] = useState(false);
@@ -33,8 +33,9 @@ function FieldRow({ f, value, cleared, onChange, onClear, onUndo }: {
         </span>
       </div>
       <div className={cn("flex items-center gap-2 bg-card border rounded-lg px-3 transition-colors",
-        cleared ? "border-[#ef444455]" : "border-[#1e2d45] focus-within:border-[#ff9933]")}>
+        cleared ? "border-[#ef444455]" : error ? "border-[#ef444477] focus-within:border-[#ef4444]" : "border-[#1e2d45] focus-within:border-[#ff9933]")}>
         <input id={id} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
+               aria-invalid={!!error} aria-describedby={`${id}-hint`}
                type={f.secret && !shown ? "password" : "text"} autoComplete="off" spellCheck={false} disabled={cleared}
                className="flex-1 min-w-0 bg-transparent py-2 text-sm font-mono text-[#e2e8f0] outline-none placeholder:font-sans placeholder:text-[#475569] disabled:opacity-60" />
         {f.secret && !cleared && (
@@ -46,10 +47,22 @@ function FieldRow({ f, value, cleared, onChange, onClear, onUndo }: {
           ? <button type="button" onClick={onUndo} className="text-[#64748b] hover:text-[#e2e8f0]" aria-label="Keep saved value" title="Keep the saved value"><Undo2 size={14} /></button>
           : <button type="button" onClick={onClear} className="text-[#64748b] hover:text-[#fca5a5]" aria-label="Remove saved value" title="Remove the saved value"><Trash2 size={14} /></button>)}
       </div>
-      {f.help && <p className="text-[10px] text-[#475569] mt-1 leading-snug">{f.help}</p>}
+      {error
+        ? <p id={`${id}-hint`} className="flex items-start gap-1 text-[11px] text-[#fca5a5] mt-1 leading-snug">
+            <AlertCircle size={12} className="mt-px flex-shrink-0" /> {error}
+          </p>
+        : f.help && <p id={`${id}-hint`} className="text-[10px] text-[#475569] mt-1 leading-snug">{f.help}</p>}
     </div>
   );
 }
+
+type Note = { tone: "ok" | "warn" | "err"; text: string; canForce?: boolean };
+
+const NOTE_STYLE: Record<Note["tone"], string> = {
+  ok:   "border-[#22c55e33] bg-[#22c55e0d] text-green",
+  warn: "border-[#f59e0b33] bg-[#f59e0b0d] text-yellow",
+  err:  "border-[#ef444433] bg-[#ef44440d] text-[#fca5a5]",
+};
 
 export function ConnectorCard({ c, activeProvider, onSaved, onTested, testing }: {
   c: Connector;
@@ -62,8 +75,9 @@ export function ConnectorCard({ c, activeProvider, onSaved, onTested, testing }:
   const [values, setValues] = useState<Record<string, string>>(initial);
   const [cleared, setCleared] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<"save" | "provider" | null>(null);
-  const [note, setNote] = useState<{ tone: "ok" | "err"; text: string } | null>(null);
-  useEffect(() => { setValues(initial); setCleared(new Set()); }, [initial]);
+  const [note, setNote] = useState<Note | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  useEffect(() => { setValues(initial); setCleared(new Set()); setFieldErrors({}); }, [initial]);
 
   const changes = useMemo(() => {
     const out: Record<string, string | null> = {};
@@ -79,17 +93,35 @@ export function ConnectorCard({ c, activeProvider, onSaved, onTested, testing }:
   const Icon = ICONS[c.id];
   const loginUrl = c.id === "kite" && c.health?.details?.login_url ? `${API_URL}/kite/login` : null;
 
-  const save = async () => {
+  // The API checks the format of every value and tests the connection with the new values before
+  // storing anything; "Save anyway" (force) skips only the live test, never the format checks.
+  const save = async (force = false) => {
     setBusy("save");
-    setNote(null);
+    setNote(force ? null : { tone: "ok", text: "Checking and testing before saving…" });
+    setFieldErrors({});
     try {
-      const payload = await sendJson<ConnectorsResponse>(`/api/admin/connectors/${c.id}`, "PUT", { values: changes });
-      onSaved(payload);
-      setNote({ tone: "ok", text: "Saved. Testing the connection…" });
-      await onTested(c.id);
-      setNote({ tone: "ok", text: "Saved and tested." });
+      const res = await sendJson<SaveConnectorResponse>(`/api/admin/connectors/${c.id}`, "PUT",
+        { values: changes, test: !force });
+      onSaved(res);
+      if (force) {
+        await onTested(c.id);
+        setNote({ tone: "warn", text: "Saved without a passing test. Fix it before the next session starts." });
+      } else if (res.test) {
+        setNote(res.test.status === "ok"
+          ? { tone: "ok", text: `Saved. Test passed: ${res.test.message}` }
+          : { tone: "warn", text: `Saved. ${res.test.message}` });
+      } else {
+        setNote({ tone: "ok", text: res.missing.length ? `Saved. Fill in ${res.missing.join(", ")} to test it.` : "Saved." });
+      }
     } catch (e) {
-      setNote({ tone: "err", text: e instanceof Error ? e.message : "Save failed" });
+      if (e instanceof ApiError && e.code === "invalid") {
+        setFieldErrors((e.detail.fields as Record<string, string> | undefined) ?? {});
+        setNote({ tone: "err", text: e.message });
+      } else if (e instanceof ApiError && e.code === "test_failed") {
+        setNote({ tone: "err", text: e.message, canForce: true });
+      } else {
+        setNote({ tone: "err", text: e instanceof Error ? e.message : "Save failed" });
+      }
     } finally {
       setBusy(null);
     }
@@ -130,7 +162,11 @@ export function ConnectorCard({ c, activeProvider, onSaved, onTested, testing }:
       <div className="px-5 py-4 grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3.5">
         {c.fields.map(f => (
           <FieldRow key={f.key} f={f} value={values[f.key] ?? ""} cleared={cleared.has(f.key)}
-                    onChange={v => setValues(s => ({ ...s, [f.key]: v }))}
+                    error={fieldErrors[f.key] ?? (!cleared.has(f.key) && values[f.key] === initial[f.key] ? f.problem : null)}
+                    onChange={v => {
+                      setValues(s => ({ ...s, [f.key]: v }));
+                      if (fieldErrors[f.key]) setFieldErrors(s => { const n = { ...s }; delete n[f.key]; return n; });
+                    }}
                     onClear={() => setCleared(s => new Set(s).add(f.key))}
                     onUndo={() => setCleared(s => { const n = new Set(s); n.delete(f.key); return n; })} />
         ))}
@@ -144,15 +180,20 @@ export function ConnectorCard({ c, activeProvider, onSaved, onTested, testing }:
       </div>
 
       {note && (
-        <div role="status" className={cn("mx-5 mb-4 rounded-lg border px-3 py-2 text-xs",
-          note.tone === "ok" ? "border-[#22c55e33] bg-[#22c55e0d] text-green" : "border-[#ef444433] bg-[#ef44440d] text-[#fca5a5]")}>
-          {note.text}
+        <div role="status" className={cn("mx-5 mb-4 rounded-lg border px-3 py-2 text-xs flex flex-wrap items-center justify-between gap-x-3 gap-y-2", NOTE_STYLE[note.tone])}>
+          <span className="min-w-0 leading-snug">{note.text}</span>
+          {note.canForce && dirty && (
+            <button type="button" onClick={() => save(true)} disabled={busy !== null}
+                    className="flex-shrink-0 text-[11px] font-semibold text-[#94a3b8] hover:text-[#e2e8f0] underline underline-offset-2 disabled:opacity-40">
+              Save anyway
+            </button>
+          )}
         </div>
       )}
 
       <footer className="px-5 py-3 border-t border-[#1e2d45] flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2 flex-wrap">
-          <Button onClick={save} disabled={!dirty || busy !== null} primary busy={busy === "save"}>Save &amp; test</Button>
+          <Button onClick={() => save()} disabled={!dirty || busy !== null} primary busy={busy === "save"}>Save &amp; test</Button>
           <Button onClick={() => onTested(c.id)} disabled={testing || busy !== null} busy={testing && busy === null}>
             <Zap size={13} /> Test
           </Button>

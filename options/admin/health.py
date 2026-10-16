@@ -13,6 +13,7 @@ from typing import Callable
 import requests
 from sqlalchemy import text
 
+from options.admin import validation
 from options.admin.repo import AdminRepo
 from options.config import OptionsSettings
 from options.core.calendar import IST, NseCalendar, at_ist
@@ -96,6 +97,9 @@ def check_angel(ctx: HealthContext) -> Result:
     missing = [k for k in ("ANGEL_API_KEY", "ANGEL_CLIENT_CODE", "ANGEL_PIN", "ANGEL_TOTP_SECRET") if not getattr(cfg, k)]
     if missing:
         return ("fail" if in_use else "skip"), (f"Missing {', '.join(missing)}" if in_use else "Not configured"), {}
+    keys = ("ANGEL_API_KEY", "ANGEL_CLIENT_CODE", "ANGEL_PIN", "ANGEL_TOTP_SECRET", "ANGEL_HISTORICAL_API_KEY")
+    if problem := validation.first_problem({k: getattr(cfg, k) for k in keys}):
+        return "fail", problem, {}                       # don't spend a login attempt on a malformed MPIN or secret
     st = recorder_status(ctx.repo) or {}
     if in_use and _market_open(ctx) and st.get("state") == "running":
         return "skip", "The recorder is logged in and recording; the test is skipped during market hours so it " \
@@ -116,6 +120,8 @@ def check_kite(ctx: HealthContext) -> Result:
     in_use = cfg.provider == "kite"
     if not (cfg.KITE_API_KEY and cfg.KITE_API_SECRET):
         return ("fail" if in_use else "skip"), ("Missing KITE_API_KEY / KITE_API_SECRET" if in_use else "Not configured"), {}
+    if problem := validation.first_problem({k: getattr(cfg, k) for k in ("KITE_API_KEY", "KITE_API_SECRET", "KITE_USER_ID")}):
+        return "fail", problem, {}
     from options.brokers.kite import KiteBroker
     factory = ctx.kite_factory or (lambda c, token: KiteBroker(c.KITE_API_KEY, c.KITE_API_SECRET, token))
     token = ctx.store.load_access_token(ctx.now.date()) if in_use else None
@@ -130,22 +136,37 @@ def check_telegram(ctx: HealthContext) -> Result:
     token, chat = ctx.cfg.TELEGRAM_BOT_TOKEN, ctx.cfg.TELEGRAM_CHAT_ID
     if not token or not chat:
         return "fail", "Missing bot token or chat ID: no alerts will be sent", {}
-    try:
+    if problem := validation.first_problem({"TELEGRAM_BOT_TOKEN": token, "TELEGRAM_CHAT_ID": chat}):
+        return "fail", problem, {}
+    try:                                                  # never log these URLs: they hold the token
         resp = ctx.http.get(f"https://api.telegram.org/bot{token}/getMe", timeout=10)
+        body = _json(resp)
+        if resp.status_code != 200 or not body.get("ok"):
+            return "fail", f"Telegram rejected the bot token ({resp.status_code})", {}
+        bot = body["result"].get("username", "bot")
+        resp = ctx.http.get(f"https://api.telegram.org/bot{token}/getChat", params={"chat_id": chat}, timeout=10)
+        found = _json(resp)
     except requests.RequestException as e:
-        return "fail", f"Couldn't reach Telegram ({type(e).__name__})", {}       # never log the URL: it holds the token
-    body = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
-    if resp.status_code != 200 or not body.get("ok"):
-        return "fail", f"Telegram rejected the bot token ({resp.status_code})", {}
-    bot = body["result"].get("username", "bot")
+        return "fail", f"Couldn't reach Telegram ({type(e).__name__})", {}
+    if resp.status_code != 200 or not found.get("ok"):
+        if resp.status_code == 403:
+            return "fail", f"Chat {chat} has blocked @{bot}. Unblock the bot in Telegram and press Start.", {"bot": bot}
+        return "fail", (f"@{bot} can't find chat {chat}. Open @{bot} in Telegram and press Start, then check the "
+                        "number from @userinfobot."), {"bot": bot}
+    chat_info = found.get("result") or {}
+    who = chat_info.get("first_name") or chat_info.get("title") or chat_info.get("username") or f"chat {chat}"
     if ctx.send_telegram_test:
         from options.notify.telegram import TelegramNotifier
         sent = TelegramNotifier(token, chat, session=ctx.http).send(
             "✅ <b>Test message</b> from your TradingAgents Connectors page.")
         if not sent:
-            return "fail", f"@{bot} is valid, but the message to chat {chat} failed. Has the chat started the bot?", {}
-        return "ok", f"@{bot} · test message sent", {"bot": bot}
-    return "ok", f"@{bot} is reachable", {"bot": bot}
+            return "fail", f"@{bot} found {who}, but the test message didn't go through. Try again in a minute.", {"bot": bot}
+        return "ok", f"@{bot} · test message sent to {who}", {"bot": bot}
+    return "ok", f"@{bot} is ready to message {who}", {"bot": bot}
+
+
+def _json(resp) -> dict:
+    return resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
 
 
 def check_openai(ctx: HealthContext) -> Result:
@@ -153,6 +174,8 @@ def check_openai(ctx: HealthContext) -> Result:
     model = getattr(ctx.research, "MODEL_NAME", "") or "gpt-4o-mini"
     if not key:
         return "warn", "No API key: the research pages won't run (options signals don't need it)", {}
+    if problem := validation.first_problem({"OPENAI_API_KEY": key, "MODEL_NAME": model}):
+        return "fail", problem, {}
     import openai
 
     client = (ctx.openai_factory or (lambda k: openai.OpenAI(api_key=k, timeout=15, max_retries=0)))(key)
@@ -202,7 +225,7 @@ def _timed(ctx: HealthContext, check_id: str) -> dict:
             "latency_ms": latency, "checked_at": ctx.now.isoformat()}
 
 
-def run_checks(ctx: HealthContext, ids: list[str] | None = None) -> list[dict]:
+def run_checks(ctx: HealthContext, ids: list[str] | None = None, store_results: bool = True) -> list[dict]:
     ids = ids or list(CHECKS)
     unknown = [i for i in ids if i not in CHECKS]
     if unknown:
@@ -219,6 +242,11 @@ def run_checks(ctx: HealthContext, ids: list[str] | None = None) -> list[dict]:
                             "message": f"No answer within {CHECK_TIMEOUT_S}s", "details": {},
                             "latency_ms": CHECK_TIMEOUT_S * 1000, "checked_at": ctx.now.isoformat()})
     pool.shutdown(wait=False, cancel_futures=True)       # a hung check must not hold the response
-    for r in results:
-        ctx.repo.save_health(r["id"], r["status"], r["message"], r["details"], r["latency_ms"], ctx.now)
+    if store_results:
+        for r in results:
+            save_result(ctx.repo, r)
     return results
+
+
+def save_result(repo: AdminRepo, r: dict) -> None:
+    repo.save_health(r["id"], r["status"], r["message"], r["details"], r["latency_ms"], datetime.fromisoformat(r["checked_at"]))

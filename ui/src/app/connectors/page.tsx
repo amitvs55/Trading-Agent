@@ -32,7 +32,10 @@ export default function ConnectorsPage() {
     }
   };
 
-  const onSaved = (payload: ConnectorsResponse) => { conn.refresh(payload, { revalidate: false }); };
+  const onSaved = (payload: ConnectorsResponse) => {
+    conn.refresh(payload, { revalidate: false });
+    health.refresh();                          // a save stores its test result: pick it up for the tiles
+  };
   const data = conn.data;
   const forbidden = conn.error && "status" in conn.error && (conn.error as { status: number }).status === 403;
   const anyRunning = running.size > 0;
