@@ -134,6 +134,7 @@ The user asked: "use that report and build what is missing, production grade". T
 - [x] R-29 Root `README.md`. R-31: a viewer account needs a personal-use confirmation (API 422 without it, recorded in the audit log).
 - [x] R-30 Playwright E2E (`ui/e2e`, `npm run e2e`): seeds a throwaway SQLite database and runs the real API plus a production UI build. Flows: sign-in, the signal record, pause and resume, viewer limits, the 404, and an axe gate, on desktop and phone (8 tests). Locally it runs on Edge. It found and fixed: the red "paused" title contrast, the account-menu and logo label-in-name mismatches, and a non-focusable scroll area.
 - [x] Review docs updated: `docs/review/PLATFORM_REVIEW.md` §0 lists what is resolved and what is open; the SL-M wording is corrected (SL-limit or GTT).
+- **Deployed 17 Oct 2026 (commit 6f5d8ee).** Checked: health 200; the recorder is waiting for Mon 19 Oct 08:30; CORS lets the UI in and refuses another railway.app origin (400); CSP connect-src includes the API; HSTS and nosniff/DENY are present; clean start-ups on Next 16.4.2 and the lockfile build.
 - Not built: a with/without-debate LLM ablation (needs paid runs), and R-25/R-26 (held back until S1–S3 show an edge).
 
 **Needs the user:** set `SECRET_KEY` on Railway api AND recorder at the same moment (outside market hours; secrets are re-encrypted automatically). Rotate the OpenAI key. Say yes or no to downloading 2 years of NIFTY/VIX history from Angel for the backtest. Optional: set up the E-mail (SMTP) connector, and point an uptime monitor at `/health/recorder`.
