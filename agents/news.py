@@ -9,6 +9,7 @@ from agents.base import BaseAgent
 from config.prompts import NEWS_ANALYST
 from models.schemas import NewsOutput
 from utils.logger import setup_logger
+from utils.untrusted import UNTRUSTED_NOTE, clean
 
 logger = setup_logger("news")
 
@@ -40,15 +41,17 @@ class NewsAgent(BaseAgent):
 
         articles = fetch_news(ticker)
 
+        safe = [{"title": clean(a["title"]), "publisher": clean(a["publisher"], 80)} for a in articles]
         user_prompt = (
             f"Analyze the following recent news for {ticker} and classify each "
             f"article's impact on the stock.\n\n"
-            f"Recent articles:\n{json.dumps(articles, indent=2)}"
+            f'<untrusted_data source="yahoo_finance_news">\n{json.dumps(safe, indent=2, ensure_ascii=False)}\n'
+            f"</untrusted_data>"
         )
 
         schema_json = json.dumps(self.output_model.model_json_schema(), indent=2)
         system = (
-            f"{self.system_prompt}\n\n"
+            f"{self.system_prompt}\n\n{UNTRUSTED_NOTE}\n\n"
             f"You MUST respond with valid JSON matching this schema:\n{schema_json}"
         )
 

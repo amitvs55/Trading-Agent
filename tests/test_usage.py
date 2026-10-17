@@ -188,35 +188,33 @@ def test_llm_client_without_tracker_still_works(monkeypatch):
 # ─── /api/usage aggregation ──────────────────────────────────────────────────
 
 
-def test_usage_route_handles_empty_and_old_records(tmp_path, monkeypatch):
-    import asyncio
+def test_usage_route_handles_empty_and_old_records(tmp_path):
     from datetime import datetime, timezone
 
     from api.routes import usage as route
+    from options.core.calendar import now_ist
+    from options.storage import Store, make_engine
 
-    log = tmp_path / "trades.jsonl"
-    monkeypatch.setattr(route, "TRADE_LOG", log)
+    store = Store(make_engine(f"sqlite:///{tmp_path}/u.db"))
 
-    # Missing file
-    empty = asyncio.run(route.get_usage())
+    # No runs yet
+    empty = route.get_usage(store)
     assert empty["all_time"]["runs"] == 0
     assert len(empty["daily"]) == 30
     assert empty["most_expensive_agent"] is None
 
-    now = datetime.now(timezone.utc).isoformat()
-    lines = [
-        json.dumps({"ticker": "OLD.NS", "status": "held", "logged_at": "2026-01-01T00:00:00Z"}),
-        "not json",
-        json.dumps({"ticker": "NEW.NS", "status": "held", "logged_at": now, "usage": {
-            "model": "gpt-4o-mini", "calls": 3, "prompt_tokens": 3000, "completion_tokens": 600,
-            "cached_tokens": 0, "total_tokens": 3600, "cost_usd": 0.0012,
-            "by_agent": {"trader": {"calls": 1, "total_tokens": 1000, "cost_usd": 0.0002},
-                         "news_analyst": {"calls": 2, "total_tokens": 2600, "cost_usd": 0.0010}},
-        }}),
-    ]
-    log.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    old = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    store.research_start("old", "OLD.NS", "NSE", None, "m", old)
+    store.research_finish("old", old, status="done", order_status="held")           # before usage tracking
+    usage = {"model": "gpt-4o-mini", "calls": 3, "prompt_tokens": 3000, "completion_tokens": 600,
+             "cached_tokens": 0, "total_tokens": 3600, "cost_usd": 0.0012,
+             "by_agent": {"trader": {"calls": 1, "total_tokens": 1000, "cost_usd": 0.0002},
+                          "news_analyst": {"calls": 2, "total_tokens": 2600, "cost_usd": 0.0010}}}
+    store.research_start("new", "NEW.NS", "NSE", None, "m", now_ist())
+    store.research_finish("new", now_ist(), status="done", order_status="held", usage=json.dumps(usage),
+                          cost_usd=0.0012)
 
-    data = asyncio.run(route.get_usage())
+    data = route.get_usage(store)
     assert data["untracked_runs"] == 1
     assert data["all_time"]["runs"] == 1
     assert data["today"]["cost_usd"] == pytest.approx(0.0012)

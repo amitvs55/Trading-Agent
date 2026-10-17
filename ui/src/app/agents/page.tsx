@@ -28,9 +28,9 @@ function StatusPill({ status }: { status: AgentStatus }) {
 function Tile({ label, value, sub, tone }: { label: string; value: React.ReactNode; sub?: React.ReactNode; tone?: string }) {
   return (
     <div className="bg-surface border border-[#1e2d45] rounded-xl p-4 min-w-0">
-      <div className="text-[10px] text-[#64748b] tracking-widest mb-2">{label}</div>
+      <div className="text-[10px] text-[#8391a7] tracking-widest mb-2">{label}</div>
       <div className={cn("font-bold text-xl leading-7 text-[#e2e8f0] truncate", tone)}>{value}</div>
-      {sub && <div className="text-[11px] text-[#64748b] mt-1 truncate">{sub}</div>}
+      {sub && <div className="text-[11px] text-[#8391a7] mt-1 truncate">{sub}</div>}
     </div>
   );
 }
@@ -43,7 +43,7 @@ function AgentCard({ label, reads, st }: { label: string; reads: string; st: Par
       <div className="px-4 pt-3.5 pb-3 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="text-sm font-semibold text-[#e2e8f0]">{label}</h3>
-          <p className="text-[11px] text-[#64748b] mt-0.5 leading-snug">{reads}</p>
+          <p className="text-[11px] text-[#8391a7] mt-0.5 leading-snug">{reads}</p>
         </div>
         <StatusPill status={status} />
       </div>
@@ -54,7 +54,7 @@ function AgentCard({ label, reads, st }: { label: string; reads: string; st: Par
           <p className="text-[12px] text-[#94a3b8] leading-snug min-h-[34px]">{st?.detail || "No output yet."}</p>
         )}
       </div>
-      <div className="px-4 py-2.5 mt-3 border-t border-[#1e2d45] flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-[#64748b]">
+      <div className="px-4 py-2.5 mt-3 border-t border-[#1e2d45] flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-[#8391a7]">
         <span>{st?.last_run_at ? <LiveAge iso={st.last_run_at} prefix="ran " /> : "never ran"}</span>
         {st?.ms != null && <span className="font-mono">{st.ms < 1 ? "<1" : st.ms.toFixed(st.ms < 10 ? 1 : 0)} ms</span>}
         {st?.runs != null && st.runs > 0 && <span>{st.runs} run{st.runs === 1 ? "" : "s"} · {st.errors ?? 0} error{st.errors === 1 ? "" : "s"}</span>}
@@ -74,7 +74,7 @@ function SelfTestBanner({ t }: { t: SelfTest }) {
         <b className={ok ? "text-green" : "text-red"}>{ok ? "Self-test passed" : `Self-test: ${t.errors} agent${t.errors === 1 ? "" : "s"} failing`}</b>
         {" · "}{t.source === "recorded" ? `replayed the first 45 min of the ${t.day} session` : "synthetic NIFTY market"}
         {t.degraded > 0 && ` · ${t.degraded} waiting for data`} · <LiveAge iso={t.ran_at} />
-        {t.note && <span className="block text-[11px] text-[#64748b]">{t.note}</span>}
+        {t.note && <span className="block text-[11px] text-[#8391a7]">{t.note}</span>}
       </span>
     </div>
   );
@@ -119,7 +119,7 @@ export default function AgentsPage() {
       <div className="mb-5 flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-[#e2e8f0] flex items-center gap-2.5"><Bot size={20} className="text-[#ff9933]" /> Agents</h1>
-          <p className="text-sm text-[#64748b] mt-1">
+          <p className="text-sm text-[#8391a7] mt-1">
             Every agent behind the signals and the research pages: whether it ran, how long it took and what it concluded.
           </p>
         </div>
@@ -133,7 +133,9 @@ export default function AgentsPage() {
       {testError && <div className="mb-4 rounded-xl border border-[#ef444433] bg-[#ef44440d] px-4 py-3 text-sm text-[#fca5a5]">⚠ {testError}</div>}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
-        {!data ? [0, 1, 2, 3].map(i => <div key={i} className="skeleton h-[94px] rounded-xl" />) : (
+        {!data ? ["SIGNAL AGENTS", "NEW SIGNALS", "RECORDER", "RESEARCH AGENTS"].map(label => (
+          <Tile key={label} label={label} value={<span className="skeleton inline-block h-6 w-24 rounded align-middle" />} sub={" "} />
+        )) : (
           <>
             <Tile label="SIGNAL AGENTS" tone={failing ? "text-red" : working === statuses.length ? "text-green" : undefined}
                   value={`${working} / ${statuses.length} working`}
@@ -157,7 +159,7 @@ export default function AgentsPage() {
       <section className="mb-6">
         <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
           <h2 className="text-sm font-semibold text-[#e2e8f0] flex items-center gap-2"><Cpu size={14} className="text-[#ff9933]" />
-            Signal agents <span className="text-[#64748b] font-normal">· run on every 5-minute close, one after another</span></h2>
+            Signal agents <span className="text-[#8391a7] font-normal">· run on every 5-minute close, one after another</span></h2>
           {live && test && (
             <div className="flex rounded-lg border border-[#1e2d45] bg-card p-0.5 text-xs" role="tablist">
               {(["live", "selftest"] as const).map(v => (
@@ -171,7 +173,7 @@ export default function AgentsPage() {
         </div>
         {showing === "selftest" && test && <div className="mb-3"><SelfTestBanner t={test} /></div>}
         {data && !live && !test && (
-          <div className="mb-3 rounded-xl border border-dashed border-[#1e2d45] px-4 py-3 text-[12px] text-[#64748b]">
+          <div className="mb-3 rounded-xl border border-dashed border-[#1e2d45] px-4 py-3 text-[12px] text-[#8391a7]">
             No market session has run yet, so there&apos;s nothing live to show. {isAdmin ? "Run the self-test to check every agent now." : "An admin can run the self-test."}
           </div>
         )}
@@ -179,7 +181,7 @@ export default function AgentsPage() {
           {!data ? Array.from({ length: 9 }, (_, i) => <div key={i} className="skeleton h-[150px] rounded-xl" />) :
             data.catalog.map(a => <AgentCard key={a.id} label={a.label} reads={a.reads} st={group?.[a.id]} />)}
         </div>
-        <p className="text-[11px] text-[#475569] mt-3 leading-relaxed max-w-3xl">
+        <p className="text-[11px] text-[#8391a7] mt-3 leading-relaxed max-w-3xl">
           If an agent fails, its check counts as missing data, no new signal is sent until it works again, and Telegram tells you after two
           failed checks in a row. Open trades keep being managed. &ldquo;Waiting for data&rdquo; means the agent ran but its input wasn&apos;t there yet
           (for example, the first 15 minutes of futures data).
@@ -189,7 +191,7 @@ export default function AgentsPage() {
       <section className="bg-surface border border-[#1e2d45] rounded-xl overflow-hidden">
         <div className="px-4 py-3 border-b border-[#1e2d45] flex items-center justify-between gap-3 flex-wrap">
           <span className="text-xs font-semibold text-[#e2e8f0] flex items-center gap-2"><Bot size={13} className="text-[#ff9933]" /> Research agents
-            <span className="text-[10px] font-normal text-[#64748b]">the 13-step stock analysis on the <Link href="/" className="text-[#ff9933] hover:underline">Research</Link> page</span></span>
+            <span className="text-[10px] font-normal text-[#8391a7]">the 13-step stock analysis on the <Link href="/" className="text-[#ff9933] underline underline-offset-2">Research</Link> page</span></span>
           {data && !data.openai_configured && <span className="text-[11px] text-yellow">OpenAI key not set: they can&apos;t run (<Link href="/connectors" className="underline">Connectors</Link>)</span>}
         </div>
         <ul className="md:hidden divide-y divide-[#1e2d45]">
@@ -199,7 +201,7 @@ export default function AgentsPage() {
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <div className="text-[13px] text-[#e2e8f0] truncate">{r.label}</div>
-                    <div className="text-[11px] text-[#64748b] mt-0.5">
+                    <div className="text-[11px] text-[#8391a7] mt-0.5">
                       stage {r.stage} · {r.last_run_at ? <LiveAge iso={r.last_run_at} prefix="ran " /> : "never ran"}
                       {r.seconds != null && <> · <span className="font-mono">{r.seconds.toFixed(1)} s</span></>} · {r.runs} runs / {r.errors} errors
                     </div>
@@ -212,7 +214,7 @@ export default function AgentsPage() {
         </ul>
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-[12px]">
-            <thead><tr className="text-[10px] tracking-widest text-[#64748b] text-left">
+            <thead><tr className="text-[10px] tracking-widest text-[#8391a7] text-left">
               <th className="px-4 py-2 font-medium">STAGE</th><th className="px-2 py-2 font-medium">AGENT</th>
               <th className="px-2 py-2 font-medium">STATUS</th><th className="px-2 py-2 font-medium">LAST RUN</th>
               <th className="px-2 py-2 font-medium text-right">TIME</th><th className="px-4 py-2 font-medium text-right">RUNS / ERRORS</th>
@@ -221,7 +223,7 @@ export default function AgentsPage() {
               {!data ? Array.from({ length: 5 }, (_, i) => <tr key={i}><td colSpan={6} className="px-4 py-2"><div className="skeleton h-4 rounded" /></td></tr>) :
                 research.map(r => (
                   <tr key={r.id} className="hover:bg-[#ffffff04] align-top">
-                    <td className="px-4 py-2 font-mono text-[#64748b]">{r.stage}</td>
+                    <td className="px-4 py-2 font-mono text-[#8391a7]">{r.stage}</td>
                     <td className="px-2 py-2 text-[#e2e8f0] whitespace-nowrap">{r.label}
                       {r.error && <div className="text-[11px] text-[#fca5a5] font-mono whitespace-normal max-w-md mt-0.5">{r.error}</div>}</td>
                     <td className="px-2 py-2"><StatusPill status={r.status} /></td>

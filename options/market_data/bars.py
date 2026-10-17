@@ -59,8 +59,18 @@ def _top(depth: dict | None, side: str) -> dict:
     return levels[0] if levels else {}
 
 
+CONFIRM_TICKS = 3          # this many agreeing "jumps" in a row are a real move, not a bad print
+
+
 class BarAggregator:
-    def __init__(self):
+    """Ticks → 1-minute bars. Tokens listed in `jump_limits` (index, futures, VIX) also get a sanity
+    check: a tick further than the limit from the last good price is dropped as a bad print, unless
+    CONFIRM_TICKS consecutive ticks agree on the new level (a genuine gap)."""
+
+    def __init__(self, jump_limits: dict[int, float] | None = None):
+        self.jump_limits: dict[int, float] = dict(jump_limits or {})
+        self.rejected_ticks = 0
+        self._suspect: dict[int, list[float]] = {}
         self._lock = threading.Lock()
         self._bars: dict[tuple[int, datetime], Bar] = {}
         self._flushed_until: datetime | None = None   # minutes before this were already written
@@ -80,6 +90,9 @@ class BarAggregator:
         with self._lock:
             self.tick_count += 1
             self.last_tick_at = received_at
+            if not self._plausible(token, price):
+                self.rejected_ticks += 1
+                return
             self.last_price[token] = price
             if bid.get("price") or ask.get("price"):
                 self.last_quote[token] = (float(bid["price"]) if bid.get("price") else None,
@@ -104,6 +117,21 @@ class BarAggregator:
                 bar.bid, bar.bid_qty = float(bid["price"]), int(bid.get("quantity") or 0)
             if ask.get("price"):
                 bar.ask, bar.ask_qty = float(ask["price"]), int(ask.get("quantity") or 0)
+
+    def _plausible(self, token: int, price: float) -> bool:
+        """Called under the lock. False for a tick that looks like a bad print."""
+        limit, last = self.jump_limits.get(token), self.last_price.get(token)
+        if limit is None or last is None or abs(price / last - 1) <= limit:
+            self._suspect.pop(token, None)
+            return True
+        seen = self._suspect.setdefault(token, [])
+        if seen and abs(price / seen[-1] - 1) > limit:
+            seen.clear()                                   # the suspects don't agree with each other either
+        seen.append(price)
+        if len(seen) >= CONFIRM_TICKS:                     # they agree: the level really moved
+            self._suspect.pop(token, None)
+            return True
+        return False
 
     def quote(self, token: int) -> tuple[float | None, float | None]:
         with self._lock:

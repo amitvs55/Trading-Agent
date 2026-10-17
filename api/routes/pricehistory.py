@@ -1,14 +1,23 @@
 """GET /api/pricehistory/{ticker} — returns OHLCV data via yfinance for charts."""
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Path
 import yfinance as yf
 import pandas as pd
 
 router = APIRouter()
 
 
+PERIODS = {"1mo", "3mo", "6mo", "1y", "2y", "5y"}
+INTERVALS = {"1d", "1wk", "1mo"}
+
+
+# A plain def: FastAPI runs it in its thread pool, so the blocking yfinance download no longer
+# freezes every other request while it runs (it was an async def; review finding F-20)
 @router.get("/pricehistory/{ticker}")
-async def get_price_history(ticker: str, period: str = "3mo", interval: str = "1d") -> dict:
+def get_price_history(ticker: str = Path(pattern=r"^[A-Za-z0-9&\-]{1,20}(\.(NS|BO|ns|bo))?$"),
+                      period: str = "3mo", interval: str = "1d") -> dict:
+    if period not in PERIODS or interval not in INTERVALS:
+        raise HTTPException(status_code=422, detail="Unsupported period or interval")
     try:
         df: pd.DataFrame = yf.download(
             ticker.upper(),
@@ -41,4 +50,4 @@ async def get_price_history(ticker: str, period: str = "3mo", interval: str = "1
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=502, detail=f"Price data unavailable ({type(exc).__name__})")

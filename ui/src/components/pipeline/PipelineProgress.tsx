@@ -30,7 +30,7 @@ export function PipelineProgress({ status, currentStage, elapsed, ticker }: Prop
     <section className="mb-6">
       <div className="bg-surface border border-[#1e2d45] rounded-xl px-4 sm:px-6 py-4">
         <div className="flex items-center justify-between gap-2 flex-wrap mb-4">
-          <span className="text-xs font-semibold text-[#64748b] tracking-widest">
+          <span className="text-xs font-semibold text-[#8391a7] tracking-widest">
             PIPELINE PROGRESS{ticker ? ` — ${ticker}` : ""}
           </span>
           {status === "running" && (
@@ -61,21 +61,21 @@ export function PipelineProgress({ status, currentStage, elapsed, ticker }: Prop
                   )}>
                     {st === "done"    && <Check size={12} className="text-green" strokeWidth={3} />}
                     {st === "running" && <div className="w-3 h-3 rounded-full border-2 border-[#ff993333] border-t-[#ff9933] animate-spin" />}
-                    {st === "pending" && <span className="text-xs font-bold text-[#64748b]">{s.n}</span>}
+                    {st === "pending" && <span className="text-xs font-bold text-[#8391a7]">{s.n}</span>}
                   </div>
                   {/* Label */}
                   <span className={cn(
                     "hidden md:block text-xs whitespace-nowrap",
                     st === "done"    && "text-green font-medium",
                     st === "running" && "text-[#ff9933] font-medium",
-                    st === "pending" && "text-[#64748b]",
+                    st === "pending" && "text-[#8391a7]",
                   )}>
                     {s.label}
                   </span>
                   <span className={cn("hidden md:block text-xs font-mono",
-                    st === "done"    && "text-[#64748b]",
+                    st === "done"    && "text-[#8391a7]",
                     st === "running" && "text-[#ff9933]",
-                    st === "pending" && "text-[#475569]",
+                    st === "pending" && "text-[#8391a7]",
                   )}>
                     {st === "running" ? "Running…" : st === "done" ? "✓" : "Pending"}
                   </span>

@@ -13,6 +13,7 @@ from api.main import app
 from options.admin import security
 from options.admin.repo import AdminRepo
 from options.config import OptionsSettings
+from options.core.calendar import NseCalendar
 from options.storage import Store, make_engine
 
 PW = "correct horse battery"
@@ -26,6 +27,7 @@ def client(tmp_path, monkeypatch):
     app.dependency_overrides[deps.get_repo] = lambda: repo
     app.dependency_overrides[deps.get_store] = lambda: Store(engine)
     app.dependency_overrides[deps.get_cfg] = lambda: OptionsSettings(_env_file=None)
+    app.dependency_overrides[deps.get_calendar] = NseCalendar
     admin = repo.create_session(repo.create_user("admin", PW, role="admin"))
     viewer = repo.create_session(repo.create_user("guest", PW, role="viewer", full_name="Guest"))
     yield TestClient(app), {"Authorization": f"Bearer {admin}"}, {"Authorization": f"Bearer {viewer}"}
@@ -42,6 +44,15 @@ ADMIN_ONLY = [
     ("GET", "/api/admin/connectors", None),
     ("GET", "/api/admin/users", None),
     ("PUT", "/api/admin/paper", {"reset": True}),
+    ("GET", "/api/admin/controls", None),
+    ("PUT", "/api/admin/controls/pause", {"paused": True}),
+    ("POST", "/api/admin/controls/exit-all", None),
+    ("GET", "/api/admin/alerts", None),
+    ("GET", "/api/admin/audit", None),
+    ("GET", "/api/admin/recorder/events", None),
+    ("GET", "/api/admin/calendar", None),
+    ("POST", "/api/admin/calendar/holidays", {"date": "2027-01-26", "name": "Republic Day"}),
+    ("POST", "/api/admin/calendar/events", {"name": "RBI", "at": "2027-04-07T10:00:00+05:30"}),
 ]
 VIEWER_OK = ["/api/options/status", "/api/options/signals", "/api/options/performance", "/api/paper", "/api/auth/me"]
 

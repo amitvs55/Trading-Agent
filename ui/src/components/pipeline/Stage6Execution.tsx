@@ -20,11 +20,11 @@ export function Stage6Execution({ execution }: Props) {
           {style.label}
         </span>
         <div>
-          <div className="text-xs text-[#64748b]">Order ID</div>
+          <div className="text-xs text-[#8391a7]">Order ID</div>
           <div className="font-mono text-sm font-semibold text-[#e2e8f0]">{execution.order_id}</div>
         </div>
         <div>
-          <div className="text-xs text-[#64748b]">Logged At (IST)</div>
+          <div className="text-xs text-[#8391a7]">Logged At (IST)</div>
           <div className="font-mono text-xs text-[#94a3b8]">
             {(() => { try { return format(new Date(execution.logged_at), "dd MMM yyyy HH:mm:ss"); } catch { return execution.logged_at; } })()}
           </div>
@@ -32,11 +32,11 @@ export function Stage6Execution({ execution }: Props) {
       </div>
 
       <div className="bg-bg border border-[#1e2d45] rounded-lg p-4">
-        <div className="text-xs font-semibold text-[#64748b] tracking-wide mb-2">EXECUTION DETAILS</div>
+        <div className="text-xs font-semibold text-[#8391a7] tracking-wide mb-2">EXECUTION DETAILS</div>
         <p className="text-xs text-[#94a3b8] leading-relaxed">{execution.details}</p>
       </div>
 
-      <div className="mt-3 text-xs text-[#475569]">
+      <div className="mt-3 text-xs text-[#8391a7]">
         * This is a paper trade simulation. No real orders were placed on NSE/BSE.
       </div>
     </div>

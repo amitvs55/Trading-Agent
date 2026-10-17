@@ -13,7 +13,7 @@ const config = {
         green:   "#22c55e",
         red:     "#ef4444",
         yellow:  "#f59e0b",
-        muted:   "#64748b",
+        muted:   "#8391a7",
       },
       fontFamily: {
         // Self-hosted by next/font (layout.tsx), with metric-matched fallbacks: no flash, no reflow

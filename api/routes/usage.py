@@ -1,17 +1,20 @@
-"""GET /api/usage — aggregates OpenAI token usage and USD cost from logs/trades.jsonl."""
+"""GET /api/usage — OpenAI token usage and USD cost of the research runs (research_runs table).
 
-import json
-from datetime import date, datetime, timedelta, timezone
-from pathlib import Path
+Days are IST days, the same ones the daily research budget counts.
+"""
+
+from datetime import date, datetime, time, timedelta
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
+from api.deps import get_store
+from api.routes.history import record
 from config.settings import settings
+from options.core.calendar import IST, at_ist, now_ist
+from options.storage import Store
 
 router = APIRouter()
-
-TRADE_LOG = Path(__file__).resolve().parents[2] / "logs" / "trades.jsonl"
 
 
 def _empty() -> dict[str, Any]:
@@ -41,29 +44,22 @@ def _parse_day(value: Any) -> date | None:
     except ValueError:
         return None
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc).date()
-
-
-def _read_records() -> list[dict[str, Any]]:
-    if not TRADE_LOG.exists():
-        return []
-    records = []
-    with open(TRADE_LOG, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                records.append(json.loads(line))
-            except json.JSONDecodeError:
-                pass
-    return records
+        dt = dt.replace(tzinfo=IST)
+    return dt.astimezone(IST).date()
 
 
 @router.get("/usage")
-async def get_usage() -> dict:
-    today = datetime.now(timezone.utc).date()
+def get_usage(store: Store = Depends(get_store)) -> dict:
+    today = now_ist().date()
+    _, rows = store.research_runs(limit=100_000, since=at_ist(today - timedelta(days=400), time(0)))
+    report = summarize([record(r) for r in rows], today)
+    report["budget"] = {"daily_usd": settings.RESEARCH_DAILY_BUDGET_USD,
+                        "spent_today_usd": round(report["today"]["cost_usd"], 6),
+                        "max_concurrent": settings.RESEARCH_MAX_CONCURRENT}
+    return report
+
+
+def summarize(records: list[dict[str, Any]], today: date) -> dict:
     week_start = today - timedelta(days=6)
     month_start = today - timedelta(days=29)
 
@@ -73,7 +69,7 @@ async def get_usage() -> dict:
     by_model: dict[str, dict[str, Any]] = {}
     untracked_runs = 0
 
-    for rec in _read_records():
+    for rec in records:
         usage = rec.get("usage")
         if not isinstance(usage, dict):
             untracked_runs += 1

@@ -1,0 +1,973 @@
+[
+ {
+  "screen": "research",
+  "path": "/",
+  "widths": {
+   "375": {
+    "innerWidth": 375,
+    "scrollWidth": 375,
+    "h1": "Indian Market Analysis",
+    "under24px": 0,
+    "touchUnder40px": 0,
+    "cls": 0.0245,
+    "console_errors": [],
+    "axe": [
+     {
+      "id": "color-contrast",
+      "impact": "serious",
+      "help": "Elements must meet minimum color contrast ratio thresholds",
+      "nodes": 44,
+      "sample": [
+       ".sm\\:flex-shrink-0 > .mt-0\\.5",
+       ".flex-wrap.gap-2.flex > .text-\\[\\#475569\\].text-xs"
+      ]
+     },
+     {
+      "id": "select-name",
+      "impact": "critical",
+      "help": "Select element must have an accessible name",
+      "nodes": 2,
+      "sample": [
+       ".py-5 > .sm\\:gap-3.sm\\:w-auto.w-full > select",
+       ".sm\\:gap-3.sm\\:w-auto.flex-wrap > select"
+      ]
+     }
+    ]
+   },
+   "768": {
+    "innerWidth": 768,
+    "scrollWidth": 763,
+    "h1": "Indian Market Analysis",
+    "under24px": 0,
+    "touchUnder40px": 0,
+    "cls": 0.3995,
+    "console_errors": []
+   },
+   "1440": {
+    "innerWidth": 1440,
+    "scrollWidth": 1435,
+    "h1": "Indian Market Analysis",
+    "under24px": 0,
+    "touchUnder40px": null,
+    "cls": 0.1173,
+    "console_errors": [],
+    "axe": [
+     {
+      "id": "color-contrast",
+      "impact": "serious",
+      "help": "Elements must meet minimum color contrast ratio thresholds",
+      "nodes": 61,
+      "sample": [
+       ".sm\\:inline",
+       ".sm\\:flex-shrink-0 > .mt-0\\.5"
+      ]
+     },
+     {
+      "id": "select-name",
+      "impact": "critical",
+      "help": "Select element must have an accessible name",
+      "nodes": 2,
+      "sample": [
+       ".py-5 > .sm\\:gap-3.sm\\:w-auto.w-full > select",
+       ".sm\\:gap-3.sm\\:w-auto.flex-wrap > select"
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "screen": "signals",
+  "path": "/signals",
+  "widths": {
+   "375": {
+    "innerWidth": 375,
+    "scrollWidth": 375,
+    "h1": "Live Signals",
+    "under24px": 1,
+    "touchUnder40px": 0,
+    "cls": 0,
+    "console_errors": [],
+    "axe": [
+     {
+      "id": "color-contrast",
+      "impact": "serious",
+      "help": "Elements must meet minimum color contrast ratio thresholds",
+      "nodes": 53,
+      "sample": [
+       ".mb-5.items-start.gap-4 > div > .mt-1",
+       ".gap-x-2.gap-y-0\\.5.min-h-\\[34px\\]:nth-child(1) > .text-\\[\\#64748b\\]"
+      ]
+     }
+    ]
+   },
+   "768": {
+    "innerWidth": 768,
+    "scrollWidth": 763,
+    "h1": "Live Signals",
+    "under24px": 1,
+    "touchUnder40px": 0,
+    "cls": 0.0416,
+    "console_errors": []
+   },
+   "1440": {
+    "innerWidth": 1440,
+    "scrollWidth": 1435,
+    "h1": "Live Signals",
+    "under24px": 2,
+    "touchUnder40px": null,
+    "cls": 0.0764,
+    "console_errors": [],
+    "axe": [
+     {
+      "id": "color-contrast",
+      "impact": "serious",
+      "help": "Elements must meet minimum color contrast ratio thresholds",
+      "nodes": 50,
+      "sample": [
+       ".sm\\:inline",
+       ".mb-5.items-start.gap-4 > div > .mt-1"
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "screen": "signal-detail",
+  "path": "/signals/NF-261016-001",
+  "widths": {
+   "375": {
+    "innerWidth": 375,
+    "scrollWidth": 375,
+    "h1": null,
+    "under24px": 2,
+    "touchUnder40px": 0,
+    "cls": 0,
+    "console_errors": [],
+    "axe": [
+     {
+      "id": "color-contrast",
+      "impact": "serious",
+      "help": "Elements must meet minimum color contrast ratio thresholds",
+      "nodes": 48,
+      "sample": [
+       ".text-\\[11px\\].mt-0\\.5.text-\\[\\#64748b\\]",
+       ".min-w-0:nth-child(1) > .tracking-widest.text-\\[10px\\].text-\\[\\#64748b\\]"
+      ]
+     }
+    ]
+   },
+   "768": {
+    "innerWidth": 768,
+    "scrollWidth": 763,
+    "h1": null,
+    "under24px": 2,
+    "touchUnder40px": 0,
+    "cls": 0.1477,
+    "console_errors": []
+   },
+   "1440": {
+    "innerWidth": 1440,
+    "scrollWidth": 1435,
+    "h1": null,
+    "under24px": 2,
+    "touchUnder40px": null,
+    "cls": 0.0878,
+    "console_errors": [],
+    "axe": [
+     {
+      "id": "color-contrast",
+      "impact": "serious",
+      "help": "Elements must meet minimum color contrast ratio thresholds",
+      "nodes": 45,
+      "sample": [
+       ".sm\\:inline",
+       ".text-\\[11px\\].mt-0\\.5.text-\\[\\#64748b\\]"
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "screen": "paper",
+  "path": "/paper",
+  "widths": {
+   "375": {
+    "innerWidth": 375,
+    "scrollWidth": 375,
+    "h1": "Paper trading",
+    "under24px": 0,
+    "touchUnder40px": 0,
+    "cls": 0,
+    "console_errors": [],
+    "axe": [
+     {
+      "id": "aria-prohibited-attr",
+      "impact": "serious",
+      "help": "Elements must only use permitted ARIA attributes",
+      "nodes": 1,
+      "sample": [
+       ".h-64"
+      ]
+     },
+     {
+      "id": "color-contrast",
+      "impact": "serious",
+      "help": "Elements must meet minimum color contrast ratio thresholds",
+      "nodes": 56,
+      "sample": [
+       ".gap-4.flex-wrap.mb-5 > div > p",
+       ".p-4.bg-surface.rounded-xl:nth-child(1) > .mb-2.tracking-widest.text-\\[10px\\]"
+      ]
+     }
+    ]
+   },
+   "768": {
+    "innerWidth": 768,
+    "scrollWidth": 763,
+    "h1": "Paper trading",
+    "under24px": 0,
+    "touchUnder40px": 0,
+    "cls": 0.1031,
+    "console_errors": []
+   },
+   "1440": {
+    "innerWidth": 1440,
+    "scrollWidth": 1435,
+    "h1": "Paper trading",
+    "under24px": 0,
+    "touchUnder40px": null,
+    "cls": 0.0166,
+    "console_errors": [],
+    "axe": [
+     {
+      "id": "aria-prohibited-attr",
+      "impact": "serious",
+      "help": "Elements must only use permitted ARIA attributes",
+      "nodes": 1,
+      "sample": [
+       ".h-64"
+      ]
+     },
+     {
+      "id": "color-contrast",
+      "impact": "serious",
+      "help": "Elements must meet minimum color contrast ratio thresholds",
+      "nodes": 64,
+      "sample": [
+       ".sm\\:inline",
+       ".gap-4.flex-wrap.mb-5 > div > p"
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "screen": "performance",
+  "path": "/performance",
+  "widths": {
+   "375": {
+    "innerWidth": 375,
+    "scrollWidth": 375,
+    "h1": "Track record",
+    "under24px": 0,
+    "touchUnder40px": 0,
+    "cls": 0,
+    "console_errors": [],
+    "axe": [
+     {
+      "id": "aria-prohibited-attr",
+      "impact": "serious",
+      "help": "Elements must only use permitted ARIA attributes",
+      "nodes": 2,
+      "sample": [
+       ".h-72",
+       ".h-60"
+      ]
+     },
+     {
+      "id": "color-contrast",
+      "impact": "serious",
+      "help": "Elements must meet minimum color contrast ratio thresholds",
+      "nodes": 57,
+      "sample": [
+       ".mb-5:nth-child(1) > p",
+       ".p-4.bg-surface.rounded-xl:nth-child(1) > .mb-2.tracking-widest.text-\\[\\#64748b\\]"
+      ]
+     }
+    ]
+   },
+   "768": {
+    "innerWidth": 768,
+    "scrollWidth": 763,
+    "h1": "Track record",
+    "under24px": 0,
+    "touchUnder40px": 0,
+    "cls": 0.0057,
+    "console_errors": []
+   },
+   "1440": {
+    "innerWidth": 1440,
+    "scrollWidth": 1435,
+    "h1": "Track record",
+    "under24px": 0,
+    "touchUnder40px": null,
+    "cls": 0.0071,
+    "console_errors": [],
+    "axe": [
+     {
+      "id": "aria-prohibited-attr",
+      "impact": "serious",
+      "help": "Elements must only use permitted ARIA attributes",
+      "nodes": 2,
+      "sample": [
+       ".h-72",
+       ".h-60"
+      ]
+     },
+     {
+      "id": "color-contrast",
+      "impact": "serious",
+      "help": "Elements must meet minimum color contrast ratio thresholds",
+      "nodes": 45,
+      "sample": [
+       ".sm\\:inline",
+       ".mb-5:nth-child(1) > p"
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "screen": "agents",
+  "path": "/agents",
+  "widths": {
+   "375": {
+    "innerWidth": 375,
+    "scrollWidth": 375,
+    "h1": "Agents",
+    "under24px": 1,
+    "touchUnder40px": 0,
+    "cls": 0,
+    "console_errors": [],
+    "axe": [
+     {
+      "id": "color-contrast",
+      "impact": "serious",
+      "help": "Elements must meet minimum color contrast ratio thresholds",
+      "nodes": 70,
+      "sample": [
+       ".mb-5.gap-4.items-start > div > .mt-1",
+       ".p-4.bg-surface.rounded-xl:nth-child(1) > .mb-2.tracking-widest.text-\\[10px\\]"
+      ]
+     },
+     {
+      "id": "link-in-text-block",
+      "impact": "serious",
+      "help": "Links must be distinguishable without relying on color",
+      "nodes": 1,
+      "sample": [
+       ".hover\\:underline"
+      ]
+     }
+    ]
+   },
+   "768": {
+    "innerWidth": 768,
+    "scrollWidth": 763,
+    "h1": "Agents",
+    "under24px": 1,
+    "touchUnder40px": 0,
+    "cls": 0.1462,
+    "console_errors": []
+   },
+   "1440": {
+    "innerWidth": 1440,
+    "scrollWidth": 1435,
+    "h1": "Agents",
+    "under24px": 1,
+    "touchUnder40px": null,
+    "cls": 0.0638,
+    "console_errors": [],
+    "axe": [
+     {
+      "id": "color-contrast",
+      "impact": "serious",
+      "help": "Elements must meet minimum color contrast ratio thresholds",
+      "nodes": 60,
+      "sample": [
+       ".sm\\:inline",
+       ".mb-5.gap-4.items-start > div > .mt-1"
+      ]
+     },
+     {
+      "id": "link-in-text-block",
+      "impact": "serious",
+      "help": "Links must be distinguishable without relying on color",
+      "nodes": 1,
+      "sample": [
+       ".hover\\:underline"
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "screen": "history",
+  "path": "/history",
+  "widths": {
+   "375": {
+    "innerWidth": 375,
+    "scrollWidth": 375,
+    "h1": "Trade History",
+    "under24px": 0,
+    "touchUnder40px": 0,
+    "cls": 0,
+    "console_errors": [],
+    "axe": [
+     {
+      "id": "color-contrast",
+      "impact": "serious",
+      "help": "Elements must meet minimum color contrast ratio thresholds",
+      "nodes": 70,
+      "sample": [
+       ".text-sm.mt-1",
+       ".mt-0\\.5"
+      ]
+     },
+     {
+      "id": "select-name",
+      "impact": "critical",
+      "help": "Select element must have an accessible name",
+      "nodes": 1,
+      "sample": [
+       "select"
+      ]
+     }
+    ]
+   },
+   "768": {
+    "innerWidth": 768,
+    "scrollWidth": 763,
+    "h1": "Trade History",
+    "under24px": 0,
+    "touchUnder40px": 0,
+    "cls": 0.6782,
+    "console_errors": []
+   },
+   "1440": {
+    "innerWidth": 1440,
+    "scrollWidth": 1435,
+    "h1": "Trade History",
+    "under24px": 0,
+    "touchUnder40px": null,
+    "cls": 0.1872,
+    "console_errors": [],
+    "axe": [
+     {
+      "id": "color-contrast",
+      "impact": "serious",
+      "help": "Elements must meet minimum color contrast ratio thresholds",
+      "nodes": 98,
+      "sample": [
+       ".sm\\:inline",
+       ".text-sm.mt-1"
+      ]
+     },
+     {
+      "id": "select-name",
+      "impact": "critical",
+      "help": "Select element must have an accessible name",
+      "nodes": 1,
+      "sample": [
+       "select"
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "screen": "usage",
+  "path": "/usage",
+  "widths": {
+   "375": {
+    "innerWidth": 375,
+    "scrollWidth": 375,
+    "h1": "OpenAI Usage",
+    "under24px": 0,
+    "touchUnder40px": 0,
+    "cls": 0,
+    "console_errors": [],
+    "axe": [
+     {
+      "id": "color-contrast",
+      "impact": "serious",
+      "help": "Elements must meet minimum color contrast ratio thresholds",
+      "nodes": 17,
+      "sample": [
+       ".mb-6 > div > p",
+       ".p-4.bg-surface.rounded-xl:nth-child(1) > .tracking-widest.mb-2.text-\\[10px\\]"
+      ]
+     }
+    ]
+   },
+   "768": {
+    "innerWidth": 768,
+    "scrollWidth": 763,
+    "h1": "OpenAI Usage",
+    "under24px": 0,
+    "touchUnder40px": 0,
+    "cls": 0.0587,
+    "console_errors": []
+   },
+   "1440": {
+    "innerWidth": 1440,
+    "scrollWidth": 1435,
+    "h1": "OpenAI Usage",
+    "under24px": 0,
+    "touchUnder40px": null,
+    "cls": 0.0722,
+    "console_errors": [],
+    "axe": [
+     {
+      "id": "color-contrast",
+      "impact": "serious",
+      "help": "Elements must meet minimum color contrast ratio thresholds",
+      "nodes": 18,
+      "sample": [
+       ".sm\\:inline",
+       ".mb-6 > div > p"
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "screen": "connectors",
+  "path": "/connectors",
+  "widths": {
+   "375": {
+    "innerWidth": 375,
+    "scrollWidth": 375,
+    "h1": "Connectors & health",
+    "under24px": 4,
+    "touchUnder40px": 0,
+    "cls": 0,
+    "console_errors": [],
+    "axe": [
+     {
+      "id": "color-contrast",
+      "impact": "serious",
+      "help": "Elements must meet minimum color contrast ratio thresholds",
+      "nodes": 75,
+      "sample": [
+       ".mb-6.gap-4.items-start > div > .mt-1",
+       ".p-3\\.5.relative.overflow-hidden:nth-child(1) > .mt-1\\.5 > .text-\\[11px\\].text-\\[\\#64748b\\]"
+      ]
+     }
+    ]
+   },
+   "768": {
+    "innerWidth": 768,
+    "scrollWidth": 763,
+    "h1": "Connectors & health",
+    "under24px": 4,
+    "touchUnder40px": 0,
+    "cls": 0.0706,
+    "console_errors": []
+   },
+   "1440": {
+    "innerWidth": 1440,
+    "scrollWidth": 1435,
+    "h1": "Connectors & health",
+    "under24px": 14,
+    "touchUnder40px": null,
+    "cls": 0.0591,
+    "console_errors": [],
+    "axe": [
+     {
+      "id": "color-contrast",
+      "impact": "serious",
+      "help": "Elements must meet minimum color contrast ratio thresholds",
+      "nodes": 72,
+      "sample": [
+       ".sm\\:inline",
+       ".mb-6.gap-4.items-start > div > .mt-1"
+      ]
+     },
+     {
+      "id": "target-size",
+      "impact": "serious",
+      "help": "All touch targets must be 24px large, or leave sufficient space",
+      "nodes": 2,
+      "sample": [
+       "article:nth-child(4) > .md\\:grid-cols-2.gap-x-4.gap-y-3\\.5 > div:nth-child(1) > .focus-within\\:border-\\[\\#ff9933\\].px-3.rounded-lg > .hover\\:text-\\[\\#e2e8f0\\][aria-label=\"Show\"][type=\"button\"]",
+       "div:nth-child(1) > .focus-within\\:border-\\[\\#ff9933\\].px-3.rounded-lg > .hover\\:text-\\[\\#fca5a5\\][aria-label=\"Remove saved value\"][title=\"Remove the saved value\"]"
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "screen": "account",
+  "path": "/account",
+  "widths": {
+   "375": {
+    "innerWidth": 375,
+    "scrollWidth": 375,
+    "h1": "Your account",
+    "under24px": 0,
+    "touchUnder40px": 0,
+    "cls": 0,
+    "console_errors": [],
+    "axe": [
+     {
+      "id": "color-contrast",
+      "impact": "serious",
+      "help": "Elements must meet minimum color contrast ratio thresholds",
+      "nodes": 20,
+      "sample": [
+       ".mb-6 > p",
+       ".mt-1.text-\\[11px\\].gap-2 > .font-mono"
+      ]
+     }
+    ]
+   },
+   "768": {
+    "innerWidth": 768,
+    "scrollWidth": 763,
+    "h1": "Your account",
+    "under24px": 0,
+    "touchUnder40px": 0,
+    "cls": 0.0513,
+    "console_errors": []
+   },
+   "1440": {
+    "innerWidth": 1440,
+    "scrollWidth": 1435,
+    "h1": "Your account",
+    "under24px": 0,
+    "touchUnder40px": null,
+    "cls": 0.0264,
+    "console_errors": [],
+    "axe": [
+     {
+      "id": "color-contrast",
+      "impact": "serious",
+      "help": "Elements must meet minimum color contrast ratio thresholds",
+      "nodes": 17,
+      "sample": [
+       ".sm\\:inline",
+       ".mb-6 > p"
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "screen": "not-found",
+  "path": "/does-not-exist",
+  "widths": {
+   "375": {
+    "innerWidth": 375,
+    "scrollWidth": 375,
+    "h1": "404",
+    "under24px": 0,
+    "touchUnder40px": 0,
+    "cls": 0,
+    "console_errors": [
+     "Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ],
+    "axe": [
+     {
+      "id": "color-contrast",
+      "impact": "serious",
+      "help": "Elements must meet minimum color contrast ratio thresholds",
+      "nodes": 6,
+      "sample": [
+       ".text-\\[\\#ff993388\\]",
+       ".active\\:text-\\[\\#e2e8f0\\].flex-col[href$=\"signals\"] > .max-w-full.truncate"
+      ]
+     }
+    ]
+   },
+   "768": {
+    "innerWidth": 768,
+    "scrollWidth": 763,
+    "h1": "404",
+    "under24px": 0,
+    "touchUnder40px": 0,
+    "cls": 0.0071,
+    "console_errors": [
+     "Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ]
+   },
+   "1440": {
+    "innerWidth": 1440,
+    "scrollWidth": 1435,
+    "h1": "404",
+    "under24px": 0,
+    "touchUnder40px": null,
+    "cls": 0.0049,
+    "console_errors": [
+     "Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ],
+    "axe": [
+     {
+      "id": "color-contrast",
+      "impact": "serious",
+      "help": "Elements must meet minimum color contrast ratio thresholds",
+      "nodes": 2,
+      "sample": [
+       ".sm\\:inline",
+       ".text-\\[\\#ff993388\\]"
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "screen": "more-sheet",
+  "path": "/signals",
+  "widths": {
+   "375": {
+    "innerWidth": 375,
+    "scrollWidth": 375,
+    "h1": "Live Signals",
+    "under24px": 1,
+    "touchUnder40px": 0,
+    "cls": 0,
+    "console_errors": [],
+    "axe": [
+     {
+      "id": "color-contrast",
+      "impact": "serious",
+      "help": "Elements must meet minimum color contrast ratio thresholds",
+      "nodes": 53,
+      "sample": [
+       ".mb-5.items-start.gap-4 > div > .mt-1",
+       ".gap-x-2.gap-y-0\\.5.min-h-\\[34px\\]:nth-child(1) > .text-\\[\\#64748b\\]"
+      ]
+     }
+    ]
+   },
+   "768": {
+    "innerWidth": 768,
+    "scrollWidth": 763,
+    "h1": "Live Signals",
+    "under24px": 1,
+    "touchUnder40px": 0,
+    "cls": 0.0416,
+    "console_errors": []
+   },
+   "1440": {
+    "innerWidth": 1440,
+    "scrollWidth": 1435,
+    "h1": "Live Signals",
+    "under24px": 2,
+    "touchUnder40px": null,
+    "cls": 0.1191,
+    "console_errors": [],
+    "axe": [
+     {
+      "id": "color-contrast",
+      "impact": "serious",
+      "help": "Elements must meet minimum color contrast ratio thresholds",
+      "nodes": 50,
+      "sample": [
+       ".sm\\:inline",
+       ".mb-5.items-start.gap-4 > div > .mt-1"
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "screen": "viewer-signals",
+  "path": "/signals",
+  "widths": {
+   "375": {
+    "innerWidth": 375,
+    "scrollWidth": 375,
+    "h1": "Live Signals",
+    "under24px": 1,
+    "touchUnder40px": 0,
+    "cls": 0,
+    "console_errors": [],
+    "axe": [
+     {
+      "id": "color-contrast",
+      "impact": "serious",
+      "help": "Elements must meet minimum color contrast ratio thresholds",
+      "nodes": 52,
+      "sample": [
+       ".mb-5.items-start.gap-4 > div > .mt-1",
+       ".gap-x-2.gap-y-0\\.5.min-h-\\[34px\\]:nth-child(1) > .text-\\[\\#64748b\\]"
+      ]
+     }
+    ]
+   },
+   "768": {
+    "innerWidth": 768,
+    "scrollWidth": 763,
+    "h1": "Live Signals",
+    "under24px": 1,
+    "touchUnder40px": 0,
+    "cls": 0.0373,
+    "console_errors": []
+   },
+   "1440": {
+    "innerWidth": 1440,
+    "scrollWidth": 1435,
+    "h1": "Live Signals",
+    "under24px": 2,
+    "touchUnder40px": null,
+    "cls": 0.0729,
+    "console_errors": [],
+    "axe": [
+     {
+      "id": "color-contrast",
+      "impact": "serious",
+      "help": "Elements must meet minimum color contrast ratio thresholds",
+      "nodes": 50,
+      "sample": [
+       ".sm\\:inline",
+       ".mb-5.items-start.gap-4 > div > .mt-1"
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "screen": "viewer-admins-only",
+  "path": "/agents",
+  "widths": {
+   "375": {
+    "innerWidth": 375,
+    "scrollWidth": 375,
+    "h1": "This page is for admins",
+    "under24px": 0,
+    "touchUnder40px": 0,
+    "cls": 0,
+    "console_errors": [
+     "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+    ],
+    "axe": [
+     {
+      "id": "color-contrast",
+      "impact": "serious",
+      "help": "Elements must meet minimum color contrast ratio thresholds",
+      "nodes": 8,
+      "sample": [
+       "p",
+       ".flex-wrap > span:nth-child(1)"
+      ]
+     }
+    ]
+   },
+   "768": {
+    "innerWidth": 768,
+    "scrollWidth": 763,
+    "h1": "This page is for admins",
+    "under24px": 0,
+    "touchUnder40px": 0,
+    "cls": 0.1013,
+    "console_errors": [
+     "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+    ]
+   },
+   "1440": {
+    "innerWidth": 1440,
+    "scrollWidth": 1435,
+    "h1": "This page is for admins",
+    "under24px": 0,
+    "touchUnder40px": null,
+    "cls": 0.0423,
+    "console_errors": [
+     "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+    ],
+    "axe": [
+     {
+      "id": "color-contrast",
+      "impact": "serious",
+      "help": "Elements must meet minimum color contrast ratio thresholds",
+      "nodes": 5,
+      "sample": [
+       ".sm\\:inline",
+       "p"
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "screen": "sign-in",
+  "path": "/signals",
+  "widths": {
+   "375": {
+    "innerWidth": 385,
+    "scrollWidth": 385,
+    "h1": "Sign in",
+    "under24px": 0,
+    "touchUnder40px": 0,
+    "cls": 0,
+    "console_errors": [],
+    "axe": [
+     {
+      "id": "color-contrast",
+      "impact": "serious",
+      "help": "Elements must meet minimum color contrast ratio thresholds",
+      "nodes": 4,
+      "sample": [
+       ".ml-1\\.5",
+       ".mt-1"
+      ]
+     }
+    ]
+   },
+   "768": {
+    "innerWidth": 768,
+    "scrollWidth": 763,
+    "h1": "Sign in",
+    "under24px": 0,
+    "touchUnder40px": 0,
+    "cls": 0,
+    "console_errors": []
+   },
+   "1440": {
+    "innerWidth": 1440,
+    "scrollWidth": 1435,
+    "h1": "Sign in",
+    "under24px": 1,
+    "touchUnder40px": null,
+    "cls": 0,
+    "console_errors": [],
+    "axe": [
+     {
+      "id": "color-contrast",
+      "impact": "serious",
+      "help": "Elements must meet minimum color contrast ratio thresholds",
+      "nodes": 4,
+      "sample": [
+       ".ml-1\\.5",
+       ".mt-1"
+      ]
+     }
+    ]
+   }
+  }
+ }
+]

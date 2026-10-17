@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { cn, formatINR, formatINRShort, formatPct, formatVolume, changeColor, impactColor } from "@/lib/utils";
+import { cn, formatINR, formatINRShort, formatPct, formatVolume, impactColor } from "@/lib/utils";
 import type { MarketDataOutput, SentimentOutput, NewsOutput, FundamentalsOutput } from "@/types/pipeline";
 
 interface Props {
@@ -27,7 +27,7 @@ export function Stage1DataCollection({ market, sentiment, news, fundamentals }: 
             onClick={() => setTab(t)}
             className={cn(
               "px-5 py-2.5 text-xs font-semibold border-b-2 transition-colors",
-              tab === t ? "text-[#ff9933] border-[#ff9933]" : "text-[#64748b] border-transparent hover:text-[#e2e8f0]"
+              tab === t ? "text-[#ff9933] border-[#ff9933]" : "text-[#8391a7] border-transparent hover:text-[#e2e8f0]"
             )}
           >{t}</button>
         ))}
@@ -45,14 +45,14 @@ export function Stage1DataCollection({ market, sentiment, news, fundamentals }: 
                   {market.price_change_pct_1d != null ? (market.price_change_pct_1d >= 0 ? "▲" : "▼") : ""} {formatPct(market.price_change_pct_1d)}
                 </span>
               </div>
-              <div className="text-xs mt-1 text-[#64748b]">{market.ticker} · NSE/BSE</div>
+              <div className="text-xs mt-1 text-[#8391a7]">{market.ticker} · NSE/BSE</div>
             </div>
             <div className={cn(
               "px-4 py-2 rounded-lg border text-center",
               market.trend_signal === "bullish" ? "bg-[#22c55e22] border-[#22c55e44]" :
               market.trend_signal === "bearish" ? "bg-[#ef444422] border-[#ef444433]" : "bg-card border-[#1e2d45]"
             )}>
-              <div className="text-xs text-[#64748b] mb-1">Trend</div>
+              <div className="text-xs text-[#8391a7] mb-1">Trend</div>
               <div className={cn("font-bold text-sm uppercase",
                 market.trend_signal === "bullish" ? "text-green" :
                 market.trend_signal === "bearish" ? "text-red" : "text-[#94a3b8]"
@@ -64,11 +64,11 @@ export function Stage1DataCollection({ market, sentiment, news, fundamentals }: 
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
             {/* RSI */}
             <div className="bg-bg border border-[#1e2d45] rounded-lg p-3">
-              <div className="text-xs text-[#64748b] mb-2">RSI (14)</div>
+              <div className="text-xs text-[#8391a7] mb-2">RSI (14)</div>
               <div className={cn("text-xl font-bold font-mono", ind.rsi_14 != null && ind.rsi_14 > 70 ? "text-red" : ind.rsi_14 != null && ind.rsi_14 < 30 ? "text-green" : "text-yellow")}>
                 {ind.rsi_14?.toFixed(1) ?? "—"}
               </div>
-              <div className="text-xs mt-1 text-[#64748b]">
+              <div className="text-xs mt-1 text-[#8391a7]">
                 {ind.rsi_14 != null ? (ind.rsi_14 > 70 ? "Overbought" : ind.rsi_14 < 30 ? "Oversold" : "Neutral zone") : ""}
               </div>
               {ind.rsi_14 != null && (
@@ -79,11 +79,11 @@ export function Stage1DataCollection({ market, sentiment, news, fundamentals }: 
             </div>
             {/* MACD */}
             <div className="bg-bg border border-[#1e2d45] rounded-lg p-3">
-              <div className="text-xs text-[#64748b] mb-2">MACD</div>
+              <div className="text-xs text-[#8391a7] mb-2">MACD</div>
               <div className={cn("text-xl font-bold font-mono", ind.macd_line != null && ind.macd_line >= 0 ? "text-green" : "text-red")}>
                 {ind.macd_line != null ? (ind.macd_line >= 0 ? "+" : "") + ind.macd_line.toFixed(2) : "—"}
               </div>
-              <div className="text-xs mt-1 text-[#64748b]">
+              <div className="text-xs mt-1 text-[#8391a7]">
                 Signal: {ind.macd_signal?.toFixed(2) ?? "—"} · Hist: {ind.macd_histogram != null ? (ind.macd_histogram >= 0 ? "+" : "") + ind.macd_histogram.toFixed(2) : "—"}
               </div>
               {ind.macd_histogram != null && (
@@ -94,9 +94,9 @@ export function Stage1DataCollection({ market, sentiment, news, fundamentals }: 
             </div>
             {/* Volume */}
             <div className="bg-bg border border-[#1e2d45] rounded-lg p-3">
-              <div className="text-xs text-[#64748b] mb-2">Volume</div>
+              <div className="text-xs text-[#8391a7] mb-2">Volume</div>
               <div className="text-xl font-bold font-mono text-[#e2e8f0]">{formatVolume(market.volume)}</div>
-              <div className="text-xs mt-1 text-[#64748b]">Avg: {formatVolume(market.avg_volume_10d)} (10d)</div>
+              <div className="text-xs mt-1 text-[#8391a7]">Avg: {formatVolume(market.avg_volume_10d)} (10d)</div>
               {market.volume != null && market.avg_volume_10d != null && (
                 <div className={cn("text-xs mt-2", market.volume > market.avg_volume_10d ? "text-green" : "text-red")}>
                   {formatPct((market.volume - market.avg_volume_10d) / market.avg_volume_10d * 100)} vs avg
@@ -108,10 +108,10 @@ export function Stage1DataCollection({ market, sentiment, news, fundamentals }: 
           {/* BB + MA */}
           <div className="grid grid-cols-2 gap-3 mb-4">
             <div className="bg-bg border border-[#1e2d45] rounded-lg p-3">
-              <div className="text-xs text-[#64748b] mb-2">Bollinger Bands (20)</div>
+              <div className="text-xs text-[#8391a7] mb-2">Bollinger Bands (20)</div>
               <div className="flex justify-between text-xs font-mono">
                 <span className="text-red">↓ {formatINR(ind.bollinger_lower, 0)}</span>
-                <span className="text-[#64748b]">Mid: {formatINR(ind.bollinger_middle, 0)}</span>
+                <span className="text-[#8391a7]">Mid: {formatINR(ind.bollinger_middle, 0)}</span>
                 <span className="text-green">↑ {formatINR(ind.bollinger_upper, 0)}</span>
               </div>
               {ind.bollinger_lower != null && ind.bollinger_upper != null && (
@@ -122,14 +122,14 @@ export function Stage1DataCollection({ market, sentiment, news, fundamentals }: 
               )}
             </div>
             <div className="bg-bg border border-[#1e2d45] rounded-lg p-3">
-              <div className="text-xs text-[#64748b] mb-2">Moving Averages</div>
+              <div className="text-xs text-[#8391a7] mb-2">Moving Averages</div>
               {[
                 { label: "SMA 20", val: ind.sma_20 },
                 { label: "SMA 50", val: ind.sma_50 },
                 { label: "EMA 12", val: ind.ema_12 },
               ].map(({ label, val }) => (
                 <div key={label} className="flex justify-between text-xs font-mono mb-1">
-                  <span className="text-[#64748b]">{label}</span>
+                  <span className="text-[#8391a7]">{label}</span>
                   <span className="text-yellow">{formatINR(val, 0)}</span>
                   {val != null && (
                     <span className={cn("text-[10px]", market.current_price >= val ? "text-green" : "text-red")}>
@@ -145,8 +145,8 @@ export function Stage1DataCollection({ market, sentiment, news, fundamentals }: 
           {market.fifty_two_week_low != null && market.fifty_two_week_high != null && (
             <div className="bg-bg border border-[#1e2d45] rounded-lg p-3">
               <div className="flex justify-between text-xs mb-2">
-                <span className="text-[#64748b]">52-Week Range</span>
-                <span className="font-mono text-[#64748b]">{formatINR(market.fifty_two_week_low, 0)} — {formatINR(market.fifty_two_week_high, 0)}</span>
+                <span className="text-[#8391a7]">52-Week Range</span>
+                <span className="font-mono text-[#8391a7]">{formatINR(market.fifty_two_week_low, 0)} — {formatINR(market.fifty_two_week_high, 0)}</span>
               </div>
               <div className="h-1.5 bg-[#1e2d45] rounded relative">
                 <div className="h-1.5 rounded" style={{ width: "100%", background: "linear-gradient(to right,#ef444433,#22c55e33)" }} />
@@ -175,7 +175,7 @@ export function Stage1DataCollection({ market, sentiment, news, fundamentals }: 
             </div>
             <div>
               <div className="text-sm font-medium text-[#e2e8f0]">Overall Sentiment</div>
-              <div className="text-xs text-[#64748b] mt-0.5">{sentiment.data_source}</div>
+              <div className="text-xs text-[#8391a7] mt-0.5">{sentiment.data_source}</div>
             </div>
           </div>
           <div className="h-2 bg-[#1e2d45] rounded mb-4">
@@ -187,7 +187,7 @@ export function Stage1DataCollection({ market, sentiment, news, fundamentals }: 
               { label: "Reddit",         val: sentiment.reddit_score  },
             ].map(({ label, val }) => (
               <div key={label} className="bg-bg border border-[#1e2d45] rounded-lg p-3">
-                <div className="text-xs text-[#64748b] mb-1">{label}</div>
+                <div className="text-xs text-[#8391a7] mb-1">{label}</div>
                 <div className={cn("text-xl font-bold font-mono", val != null && val >= 0 ? "text-green" : "text-red")}>
                   {val != null ? (val >= 0 ? "+" : "") + val.toFixed(2) : "—"}
                 </div>
@@ -196,10 +196,10 @@ export function Stage1DataCollection({ market, sentiment, news, fundamentals }: 
           </div>
           {sentiment.sample_posts.length > 0 && (
             <div>
-              <div className="text-xs font-semibold text-[#64748b] mb-2 tracking-wide">SAMPLE POSTS</div>
+              <div className="text-xs font-semibold text-[#8391a7] mb-2 tracking-wide">SAMPLE POSTS</div>
               <div className="flex flex-col gap-2">
                 {sentiment.sample_posts.slice(0, 4).map((p, i) => (
-                  <div key={i} className="text-xs text-[#94a3b8] bg-bg border border-[#1e2d45] rounded p-2.5 leading-relaxed">"{p}"</div>
+                  <div key={i} className="text-xs text-[#94a3b8] bg-bg border border-[#1e2d45] rounded p-2.5 leading-relaxed">&ldquo;{p}&rdquo;</div>
                 ))}
               </div>
             </div>
@@ -212,7 +212,7 @@ export function Stage1DataCollection({ market, sentiment, news, fundamentals }: 
       {tab === "News" && (
         <div className="p-5">
           <div className="flex items-center gap-3 mb-4">
-            <span className="text-xs text-[#64748b]">Overall Impact:</span>
+            <span className="text-xs text-[#8391a7]">Overall Impact:</span>
             <span className={cn("text-xs font-semibold px-2 py-0.5 rounded", impactColor(news.overall_impact))}>
               {news.overall_impact.replace("_", " ").toUpperCase()}
             </span>
@@ -227,8 +227,8 @@ export function Stage1DataCollection({ market, sentiment, news, fundamentals }: 
                   </span>
                 </div>
                 <div className="flex justify-between mt-1.5">
-                  <span className="text-[10px] text-[#64748b]">{a.source}</span>
-                  <span className="text-[10px] text-[#64748b]">Relevance: {Math.round(a.relevance_score * 100)}%</span>
+                  <span className="text-[10px] text-[#8391a7]">{a.source}</span>
+                  <span className="text-[10px] text-[#8391a7]">Relevance: {Math.round(a.relevance_score * 100)}%</span>
                 </div>
               </div>
             ))}
@@ -252,18 +252,18 @@ export function Stage1DataCollection({ market, sentiment, news, fundamentals }: 
               { label: "Insider Buys",   val: formatPct(fundamentals.insider_buy_pct) },
             ].map(({ label, val }) => (
               <div key={label} className="bg-bg border border-[#1e2d45] rounded-lg p-3 flex justify-between items-center">
-                <span className="text-xs text-[#64748b]">{label}</span>
+                <span className="text-xs text-[#8391a7]">{label}</span>
                 <span className="text-xs font-mono font-semibold text-[#e2e8f0]">{val}</span>
               </div>
             ))}
           </div>
           <div className="flex items-center gap-3 mb-4">
-            <span className="text-xs text-[#64748b]">Health Score:</span>
+            <span className="text-xs text-[#8391a7]">Health Score:</span>
             <span className={cn("text-xs font-bold px-2 py-0.5 rounded uppercase",
               fundamentals.health_score === "strong"   ? "bg-[#22c55e22] text-green" :
               fundamentals.health_score === "moderate" ? "bg-[#f59e0b22] text-yellow" : "bg-[#ef444422] text-red"
             )}>{fundamentals.health_score}</span>
-            {fundamentals.sector && <span className="text-xs text-[#64748b]">· {fundamentals.sector}</span>}
+            {fundamentals.sector && <span className="text-xs text-[#8391a7]">· {fundamentals.sector}</span>}
           </div>
           {fundamentals.business_summary && (
             <p className="text-xs text-[#94a3b8] leading-relaxed">{fundamentals.business_summary.slice(0, 300)}…</p>

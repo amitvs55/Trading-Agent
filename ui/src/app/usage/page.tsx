@@ -24,7 +24,7 @@ export default function UsagePage() {
       <div className="mb-6 flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-[#e2e8f0]">OpenAI Usage</h1>
-          <p className="text-sm text-[#64748b] mt-1">
+          <p className="text-sm text-[#8391a7] mt-1">
             Token consumption and estimated cost in US dollars across pipeline runs · ₹ at {USD_INR}/$
           </p>
         </div>
@@ -46,19 +46,19 @@ export default function UsagePage() {
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-5">
         {tiles.map(t => (
           <div key={t.label} className="bg-surface border border-[#1e2d45] rounded-xl p-4">
-            <div className="text-[10px] text-[#64748b] tracking-widest mb-2">{t.label}</div>
+            <div className="text-[10px] text-[#8391a7] tracking-widest mb-2">{t.label}</div>
             {isLoading && !report
               ? <div className="skeleton h-7 rounded w-24" />
               : <div className="font-mono font-bold text-2xl text-[#e2e8f0]">{formatUSD(t.usd ?? 0)}</div>}
-            <div className="font-mono text-[11px] text-[#64748b] mt-1">≈ {formatINR((t.usd ?? 0) * USD_INR)} · {t.sub}</div>
+            <div className="font-mono text-[11px] text-[#8391a7] mt-1">≈ {formatINR((t.usd ?? 0) * USD_INR)} · {t.sub}</div>
           </div>
         ))}
         <div className="bg-surface border border-[#1e2d45] rounded-xl p-4">
-          <div className="text-[10px] text-[#64748b] tracking-widest mb-2">TOTAL TOKENS</div>
+          <div className="text-[10px] text-[#8391a7] tracking-widest mb-2">TOTAL TOKENS</div>
           {isLoading && !report
             ? <div className="skeleton h-7 rounded w-24" />
             : <div className="font-mono font-bold text-2xl text-[#ff9933]">{formatTokens(report?.all_time.total_tokens ?? 0)}</div>}
-          <div className="font-mono text-[11px] text-[#64748b] mt-1">
+          <div className="font-mono text-[11px] text-[#8391a7] mt-1">
             {formatTokens(report?.all_time.prompt_tokens ?? 0)} in · {formatTokens(report?.all_time.completion_tokens ?? 0)} out
           </div>
         </div>
@@ -69,14 +69,14 @@ export default function UsagePage() {
         <div className="bg-surface border border-[#1e2d45] rounded-xl overflow-hidden">
           <div className="px-4 py-3 border-b border-[#1e2d45] flex items-center justify-between">
             <span className="text-xs font-semibold text-[#e2e8f0]">Daily cost · last 30 days</span>
-            <span className="text-[10px] text-[#64748b]">USD · UTC days</span>
+            <span className="text-[10px] text-[#8391a7]">USD · UTC days</span>
           </div>
           <div className="p-3 h-72">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={daily} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                 <CartesianGrid stroke="#1e2d45" strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="label" tick={{ fill: "#64748b", fontSize: 10 }} tickLine={false} axisLine={{ stroke: "#1e2d45" }} interval={4} />
-                <YAxis tick={{ fill: "#64748b", fontSize: 10 }} tickLine={false} axisLine={false} width={56}
+                <XAxis dataKey="label" tick={{ fill: "#8391a7", fontSize: 10 }} tickLine={false} axisLine={{ stroke: "#1e2d45" }} interval={4} />
+                <YAxis tick={{ fill: "#8391a7", fontSize: 10 }} tickLine={false} axisLine={false} width={56}
                        tickFormatter={(v: number) => formatUSD(v)} />
                 <Tooltip
                   cursor={{ fill: "#ff99330d" }}
@@ -98,18 +98,18 @@ export default function UsagePage() {
           <div className="px-4 py-3 border-b border-[#1e2d45] flex items-center justify-between">
             <span className="text-xs font-semibold text-[#e2e8f0]">Cost by agent · all time</span>
             {report?.most_expensive_agent && (
-              <span className="text-[10px] text-[#64748b]">Top: <span className="text-[#ff9933]">{report.most_expensive_agent.agent.replace(/_/g, " ")}</span></span>
+              <span className="text-[10px] text-[#8391a7]">Top: <span className="text-[#ff9933]">{report.most_expensive_agent.agent.replace(/_/g, " ")}</span></span>
             )}
           </div>
           <div className="p-4 flex flex-col gap-2.5">
             {agents.length === 0 ? (
-              <div className="text-xs text-[#475569] text-center py-8">No tracked runs yet. Run an analysis from the Dashboard.</div>
+              <div className="text-xs text-[#8391a7] text-center py-8">No tracked runs yet. Run an analysis from the Dashboard.</div>
             ) : agents.map(a => (
               <div key={a.agent}>
                 <div className="flex justify-between text-[11px] mb-1">
                   <span className="text-[#94a3b8]">{a.agent.replace(/_/g, " ")}</span>
                   <span className="font-mono">
-                    <span className="text-[#64748b]">{formatTokens(a.total_tokens)} · </span>
+                    <span className="text-[#8391a7]">{formatTokens(a.total_tokens)} · </span>
                     <span className="text-[#e2e8f0]">{formatUSD(a.cost_usd)}</span>
                   </span>
                 </div>
@@ -123,7 +123,7 @@ export default function UsagePage() {
       </div>
 
       {report && report.untracked_runs > 0 && (
-        <p className="text-[11px] text-[#475569] mt-4">
+        <p className="text-[11px] text-[#8391a7] mt-4">
           {report.untracked_runs} older run{report.untracked_runs === 1 ? "" : "s"} in the trade log predate usage tracking and are not counted.
         </p>
       )}

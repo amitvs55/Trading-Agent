@@ -42,7 +42,7 @@ export function Stage2Research({ bullCase, bearCase, verdict }: Props) {
             ))}
           </div>
           <div className="mt-3 pt-3 border-t border-[#22c55e22] flex justify-between text-xs">
-            <span className="text-[#64748b]">Score</span>
+            <span className="text-[#8391a7]">Score</span>
             <span className="font-bold font-mono text-green">{verdict.bull_score.toFixed(1)} / 10</span>
           </div>
         </div>
@@ -62,7 +62,7 @@ export function Stage2Research({ bullCase, bearCase, verdict }: Props) {
             ))}
           </div>
           <div className="mt-3 pt-3 border-t border-[#ef444422] flex justify-between text-xs">
-            <span className="text-[#64748b]">Score</span>
+            <span className="text-[#8391a7]">Score</span>
             <span className="font-bold font-mono text-red">{verdict.bear_score.toFixed(1)} / 10</span>
           </div>
         </div>
@@ -71,18 +71,18 @@ export function Stage2Research({ bullCase, bearCase, verdict }: Props) {
       {/* Moderator Verdict */}
       <div className="bg-bg border border-[#1e2d45] rounded-xl p-4">
         <div className="flex items-center justify-between mb-3">
-          <span className="text-xs font-semibold text-[#64748b] tracking-widest">MODERATOR VERDICT</span>
+          <span className="text-xs font-semibold text-[#8391a7] tracking-widest">MODERATOR VERDICT</span>
           <div className="flex items-center gap-2">
             <span className={cn("text-xs font-bold px-3 py-1 rounded border", REC_COLOR[verdict.final_recommendation])}>
               {REC_LABEL[verdict.final_recommendation]}
             </span>
-            <span className="text-xs text-[#64748b]">Winner: {verdict.winner.toUpperCase()}</span>
+            <span className="text-xs text-[#8391a7]">Winner: {verdict.winner.toUpperCase()}</span>
           </div>
         </div>
         <p className="text-xs text-[#94a3b8] leading-relaxed mb-3">{verdict.rationale}</p>
         {verdict.key_consensus_points.length > 0 && (
           <div>
-            <div className="text-[10px] font-semibold text-[#64748b] mb-1.5 tracking-wide">CONSENSUS</div>
+            <div className="text-[10px] font-semibold text-[#8391a7] mb-1.5 tracking-wide">CONSENSUS</div>
             {verdict.key_consensus_points.map((p, i) => (
               <div key={i} className="text-xs text-green flex gap-2">
                 <span>✓</span>{p}

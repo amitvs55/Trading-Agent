@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import Link from "next/link";
 import { PlugZap, RefreshCw, ShieldAlert } from "lucide-react";
 import type { ConnectorsResponse, HealthResponse, HealthResult } from "@/types/auth";
 import { sendJson, useOptionsApi } from "@/lib/optionsApi";
@@ -8,7 +9,7 @@ import { HealthOverview } from "@/components/connectors/HealthOverview";
 import { ConnectorCard } from "@/components/connectors/ConnectorCard";
 import { AccountCard, RecorderCard, TradingCard } from "@/components/connectors/SideCards";
 
-const ALL_CHECKS = ["database", "recorder", "market_data", "angel", "kite", "telegram", "openai", "macro"];
+const ALL_CHECKS = ["database", "recorder", "market_data", "angel", "kite", "telegram", "email", "alerts", "calendar", "openai", "macro"];
 
 export default function ConnectorsPage() {
   const auth = useAuth();
@@ -45,8 +46,9 @@ export default function ConnectorsPage() {
       <div className="mb-6 flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-[#e2e8f0] flex items-center gap-2.5"><PlugZap size={20} className="text-[#ff9933]" /> Connectors &amp; health</h1>
-          <p className="text-sm text-[#64748b] mt-1">
+          <p className="text-sm text-[#8391a7] mt-1">
             Every third-party key lives here, encrypted. Nothing needs editing in .env or on Railway; the recorder picks up changes at its next session start.
+            Pausing signals, alert delivery and the trading calendar are on <Link href="/operations" className="text-[#ff9933] underline underline-offset-2">Operations</Link>.
           </p>
         </div>
         <button onClick={() => run(ALL_CHECKS)} disabled={anyRunning}

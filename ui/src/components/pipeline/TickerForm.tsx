@@ -33,7 +33,7 @@ export function TickerForm({ status, onAnalyze, onReset, lastTicker, totalRuns, 
         {/* Title */}
         <div className="min-w-0 sm:flex-shrink-0">
           <h1 className="text-lg font-bold text-[#e2e8f0]">Indian Market Analysis</h1>
-          <p className="text-xs mt-0.5 text-[#64748b]">NSE/BSE · Enter symbol (RELIANCE, TCS, INFY…) · SEBI regulated</p>
+          <p className="text-xs mt-0.5 text-[#8391a7]">NSE/BSE · Enter symbol (RELIANCE, TCS, INFY…) · SEBI regulated</p>
         </div>
 
         <div className="hidden sm:block w-px h-9 bg-[#1e2d45]" />
@@ -42,10 +42,11 @@ export function TickerForm({ status, onAnalyze, onReset, lastTicker, totalRuns, 
         <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
           {/* Exchange */}
           <select
+            aria-label="Exchange"
             value={exchange}
             onChange={e => setExchange(e.target.value)}
             disabled={running}
-            className="bg-bg border border-[#1e2d45] rounded-lg px-3 py-2.5 text-xs font-semibold text-[#94a3b8] outline-none cursor-pointer disabled:opacity-50"
+            className="bg-bg border border-[#1e2d45] rounded-lg px-3 py-2.5 text-xs font-semibold text-[#94a3b8] outline-none cursor-pointer disabled:opacity-50 focus-visible:border-[#ff9933] focus-visible:ring-2 focus-visible:ring-[#ff993355]"
           >
             <option>NSE</option>
             <option>BSE</option>
@@ -65,7 +66,7 @@ export function TickerForm({ status, onAnalyze, onReset, lastTicker, totalRuns, 
                 "bg-bg border rounded-lg px-3 py-2.5 font-mono text-base font-bold tracking-widest outline-none w-full sm:w-44 transition-colors disabled:opacity-50",
                 running
                   ? "border-[#ff9933] text-[#ff9933]"
-                  : "border-[#1e2d45] text-[#ff9933] focus:border-[#ff993355]"
+                  : "border-[#1e2d45] text-[#ff9933] focus-visible:border-[#ff9933] focus-visible:ring-2 focus-visible:ring-[#ff993355]"
               )}
             />
           </div>
@@ -89,7 +90,7 @@ export function TickerForm({ status, onAnalyze, onReset, lastTicker, totalRuns, 
           {status !== "idle" && !running && (
             <button
               onClick={onReset}
-              className="text-xs text-[#64748b] hover:text-[#e2e8f0] px-3 py-2.5 rounded-lg border border-[#1e2d45] bg-card transition-colors"
+              className="text-xs text-[#8391a7] hover:text-[#e2e8f0] px-3 py-2.5 rounded-lg border border-[#1e2d45] bg-card transition-colors"
             >
               Reset
             </button>
@@ -98,7 +99,7 @@ export function TickerForm({ status, onAnalyze, onReset, lastTicker, totalRuns, 
 
         {/* Quick picks */}
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs text-[#475569]">Quick:</span>
+          <span className="text-xs text-[#8391a7]">Quick:</span>
           {QUICK_PICKS.map(t => (
             <button
               key={t}
@@ -115,18 +116,18 @@ export function TickerForm({ status, onAnalyze, onReset, lastTicker, totalRuns, 
         <div className="sm:ml-auto flex items-center gap-6">
           {lastTicker && (
             <div className="text-center">
-              <div className="text-xs text-[#64748b]">Last Run</div>
+              <div className="text-xs text-[#8391a7]">Last Run</div>
               <div className="text-sm font-semibold text-[#e2e8f0]">{lastTicker}</div>
             </div>
           )}
           {lastDuration != null && (
             <div className="text-center">
-              <div className="text-xs text-[#64748b]">Duration</div>
+              <div className="text-xs text-[#8391a7]">Duration</div>
               <div className="text-sm font-semibold font-mono text-[#e2e8f0]">{lastDuration.toFixed(1)}s</div>
             </div>
           )}
           <div className="text-center">
-            <div className="text-xs text-[#64748b]">Total Runs</div>
+            <div className="text-xs text-[#8391a7]">Total Runs</div>
             <div className="text-sm font-semibold text-[#e2e8f0]">{totalRuns}</div>
           </div>
         </div>

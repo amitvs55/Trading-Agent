@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { useParams } from "next/navigation";
 import { ArrowLeft, Gauge, ListChecks, ScrollText } from "lucide-react";
 import type { SignalDetail } from "@/types/options";
 import { useOptionsApi } from "@/lib/optionsApi";
@@ -16,7 +17,8 @@ const KIND_LABELS: Record<string, string> = {
   EVENT_EXIT: "Exit: event window",
 };
 
-export default function SignalDetailPage({ params }: { params: { id: string } }) {
+export default function SignalDetailPage() {
+  const params = useParams<{ id: string }>();          // Next 16: a page's params prop is a Promise
   const { data, error } = useOptionsApi<SignalDetail>(`/api/options/signals/${encodeURIComponent(params.id)}`, 10_000);
   const s = data?.signal;
 
@@ -37,6 +39,7 @@ export default function SignalDetailPage({ params }: { params: { id: string } })
           </div>
         ) : (
           <div className="fade-in grid gap-5 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_380px]">
+            <h1 className="sr-only">Signal {s.signal_id}: {s.action.replace("_", " ")} {s.contract.tradingsymbol}</h1>
             <div className="flex flex-col gap-5 min-w-0">
               <SignalCard s={s} setupLabel={data.setup_label} wide showConfidence={false} />
               {s.confidence && (
@@ -44,7 +47,7 @@ export default function SignalDetailPage({ params }: { params: { id: string } })
                   <div className="px-4 py-3 border-b border-[#1e2d45] flex items-center gap-2">
                     <Gauge size={13} className="text-[#ff9933]" />
                     <span className="text-xs font-semibold text-[#e2e8f0]">Confidence</span>
-                    <span className="text-[10px] text-[#64748b]">where each of the {s.confidence.max} points came from</span>
+                    <span className="text-[10px] text-[#8391a7]">where each of the {s.confidence.max} points came from</span>
                   </div>
                   <div className="p-4 flex flex-col gap-4">
                     <ConfidenceMeter c={s.confidence} />
@@ -56,7 +59,7 @@ export default function SignalDetailPage({ params }: { params: { id: string } })
                 <div className="px-4 py-3 border-b border-[#1e2d45] flex items-center gap-2">
                   <ListChecks size={13} className="text-[#ff9933]" />
                   <span className="text-xs font-semibold text-[#e2e8f0]">Analysis at signal time</span>
-                  <span className="text-[10px] text-[#64748b]">all 13 checks, including the ones that disagreed</span>
+                  <span className="text-[10px] text-[#8391a7]">all 13 checks, including the ones that disagreed</span>
                 </div>
                 <div className="px-4"><ChecksList checks={s.checks} /></div>
               </section>
@@ -75,7 +78,7 @@ export default function SignalDetailPage({ params }: { params: { id: string } })
                       <span className="absolute left-0 top-1 w-[11px] h-[11px] rounded-full border-2 border-[#ff9933] bg-[#111827]" />
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-xs font-semibold text-[#e2e8f0]">{KIND_LABELS[e.kind] ?? e.kind}</span>
-                        <span className="font-mono text-[10px] text-[#64748b]">{fmtDateTime(e.ts)}</span>
+                        <span className="font-mono text-[10px] text-[#8391a7]">{fmtDateTime(e.ts)}</span>
                       </div>
                       <p className="text-[11px] text-[#94a3b8] mt-0.5">{e.message}</p>
                     </li>
@@ -86,15 +89,15 @@ export default function SignalDetailPage({ params }: { params: { id: string } })
               <section className="bg-surface border border-[#1e2d45] rounded-xl p-4">
                 <div className="text-xs font-semibold text-[#e2e8f0] mb-3">Result</div>
                 <dl className="grid grid-cols-2 gap-y-2.5 text-[12px]">
-                  <dt className="text-[#64748b]">Fill (ask)</dt><dd className="text-right font-mono text-[#e2e8f0]">{fmtPremium(s.fill_price)}</dd>
-                  <dt className="text-[#64748b]">Exit (bid)</dt><dd className="text-right font-mono text-[#e2e8f0]">{fmtPremium(s.exit_price)}</dd>
-                  <dt className="text-[#64748b]">Units</dt><dd className="text-right font-mono text-[#e2e8f0]">{s.lots * s.contract.lot_size}</dd>
-                  <dt className="text-[#64748b]">Risk at entry</dt><dd className="text-right font-mono text-[#e2e8f0]">{fmtRupees(s.risk_rupees)}</dd>
-                  <dt className="text-[#64748b]">Net P&amp;L after charges</dt>
+                  <dt className="text-[#8391a7]">Fill (ask)</dt><dd className="text-right font-mono text-[#e2e8f0]">{fmtPremium(s.fill_price)}</dd>
+                  <dt className="text-[#8391a7]">Exit (bid)</dt><dd className="text-right font-mono text-[#e2e8f0]">{fmtPremium(s.exit_price)}</dd>
+                  <dt className="text-[#8391a7]">Units</dt><dd className="text-right font-mono text-[#e2e8f0]">{s.lots * s.contract.lot_size}</dd>
+                  <dt className="text-[#8391a7]">Risk at entry</dt><dd className="text-right font-mono text-[#e2e8f0]">{fmtRupees(s.risk_rupees)}</dd>
+                  <dt className="text-[#8391a7]">Net P&amp;L after charges</dt>
                   <dd className="text-right font-mono font-bold text-[#e2e8f0]">{fmtRupees(s.pnl_rupees, true)}</dd>
-                  <dt className="text-[#64748b]">R multiple</dt><dd className="text-right font-mono text-[#e2e8f0]">{fmtR(s.r_multiple)}</dd>
+                  <dt className="text-[#8391a7]">R multiple</dt><dd className="text-right font-mono text-[#e2e8f0]">{fmtR(s.r_multiple)}</dd>
                 </dl>
-                <p className="text-[10px] text-[#475569] mt-3 leading-relaxed">
+                <p className="text-[10px] text-[#8391a7] mt-3 leading-relaxed">
                   Entry is assumed at the live ask, exits at the live bid. Charges include brokerage, STT (0.15% on sell
                   premium), exchange, SEBI, stamp duty and GST.
                 </p>

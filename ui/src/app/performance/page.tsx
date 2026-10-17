@@ -7,13 +7,15 @@ import { cn } from "@/lib/utils";
 import { EXIT_LABELS, fmtDateTime, fmtPct, fmtR, fmtRupees } from "@/lib/optionsFormat";
 import { EquityChart, RDistribution } from "@/components/options/PerformanceCharts";
 import { GradeBadge, ModeTag } from "@/components/options/StatusBits";
+import { CalibrationPanel, EvidencePanel } from "@/components/options/EvidencePanels";
+import { BacktestPanel } from "@/components/options/BacktestPanel";
 
 function Tile({ label, value, sub, loading }: { label: string; value: string; sub?: string; loading?: boolean }) {
   return (
     <div className="bg-surface border border-[#1e2d45] rounded-xl p-4">
-      <div className="text-[10px] text-[#64748b] tracking-widest mb-2">{label}</div>
+      <div className="text-[10px] text-[#8391a7] tracking-widest mb-2">{label}</div>
       {loading ? <div className="skeleton h-8 rounded w-20" /> : <div className="fade-in font-bold text-2xl leading-8 text-[#e2e8f0]">{value}</div>}
-      {sub && <div className="text-[11px] text-[#64748b] mt-1">{sub}</div>}
+      {sub && <div className="text-[11px] text-[#8391a7] mt-1">{sub}</div>}
     </div>
   );
 }
@@ -23,14 +25,14 @@ function StatsTable({ title, rows, labels }: { title: string; rows: Record<strin
   return (
     <section className="bg-surface border border-[#1e2d45] rounded-xl overflow-hidden">
       <div className="px-4 py-3 border-b border-[#1e2d45] text-xs font-semibold text-[#e2e8f0]">{title}</div>
-      {entries.length === 0 ? <div className="px-4 py-6 text-xs text-[#475569] text-center">No signals yet</div> : (
+      {entries.length === 0 ? <div className="px-4 py-6 text-xs text-[#8391a7] text-center">No signals yet</div> : (
         <>
         <ul className="md:hidden divide-y divide-[#1e2d45]">
           {entries.map(([k, st]) => (
             <li key={k} className="px-4 py-2.5 flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <div className="text-[13px] text-[#e2e8f0] truncate">{labels?.[k] ?? k}</div>
-                <div className="text-[11px] text-[#64748b] font-mono mt-0.5">{st.trades} trades · {fmtPct(st.win_rate)} won · {fmtR(st.avg_r)}</div>
+                <div className="text-[11px] text-[#8391a7] font-mono mt-0.5">{st.trades} trades · {fmtPct(st.win_rate)} won · {fmtR(st.avg_r)}</div>
               </div>
               <div className={cn("font-mono font-semibold text-sm flex-shrink-0", st.total_rupees > 0 ? "text-[#93c5fd]" : st.total_rupees < 0 ? "text-[#fca5a5]" : "text-[#94a3b8]")}>
                 {fmtRupees(st.total_rupees, true)}
@@ -40,7 +42,7 @@ function StatsTable({ title, rows, labels }: { title: string; rows: Record<strin
         </ul>
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-[12px] tabular-nums">
-            <thead><tr className="text-[10px] tracking-widest text-[#64748b] text-left">
+            <thead><tr className="text-[10px] tracking-widest text-[#8391a7] text-left">
               <th className="px-4 py-2 font-medium"> </th><th className="px-2 py-2 font-medium text-right">TRADES</th>
               <th className="px-2 py-2 font-medium text-right">WIN %</th><th className="px-2 py-2 font-medium text-right">AVG R</th>
               <th className="px-4 py-2 font-medium text-right">NET</th>
@@ -77,13 +79,13 @@ export default function PerformancePage() {
       <main className="max-w-screen-2xl mx-auto px-4 sm:px-6 py-6">
         <div className="mb-5">
           <h1 className="text-2xl font-bold text-[#e2e8f0] flex items-center gap-2.5"><BarChart3 size={20} className="text-[#ff9933]" /> Track record</h1>
-          <p className="text-sm text-[#64748b] mt-1">Every signal ever sent, measured on live bid/ask after all charges. Losses count exactly like wins.</p>
+          <p className="text-sm text-[#8391a7] mt-1">Every signal ever sent, measured on live bid/ask after all charges. Losses count exactly like wins.</p>
         </div>
 
         <div className="mb-5 flex items-start gap-2.5 bg-[#3987e50d] border border-[#3987e533] rounded-xl px-4 py-3 text-[12px] text-[#94a3b8] leading-relaxed">
           <Info size={14} className="text-[#60a5fa] mt-0.5 flex-shrink-0" />
           <span>
-            Signals are stored before their outcome is known and can't be edited. Signals that never filled (entry not reached,
+            Signals are stored before their outcome is known and can&apos;t be edited. Signals that never filled (entry not reached,
             cancelled) are listed below but excluded from P&amp;L. SHADOW signals are what the system would have done: they
             prove a setup before it goes LIVE. Past results don&apos;t guarantee future ones.
           </span>
@@ -100,22 +102,24 @@ export default function PerformancePage() {
           <Tile loading={loading} label="PROFIT FACTOR" value={o?.profit_factor != null ? o.profit_factor.toFixed(2) : "—"} sub="gross win ÷ gross loss" />
         </div>
 
+        <div className="mb-5"><EvidencePanel ev={p?.statistics} labels={labels} /></div>
+
         <div className="grid gap-5 grid-cols-1 xl:grid-cols-[minmax(0,1fr)_420px] mb-5">
           <section className="bg-surface border border-[#1e2d45] rounded-xl overflow-hidden min-w-0">
             <div className="px-4 py-3 border-b border-[#1e2d45] flex items-center justify-between">
               <span className="text-xs font-semibold text-[#e2e8f0]">Cumulative net P&amp;L</span>
-              <span className="text-[10px] text-[#64748b]">₹ after charges · 1 lot per signal</span>
+              <span className="text-[10px] text-[#8391a7]">₹ after charges · 1 lot per signal</span>
             </div>
             <div className="p-3">{p && p.equity.length ? <EquityChart data={p.equity} /> :
-              <div className="h-72 grid place-items-center text-xs text-[#475569]">The curve starts with the first completed trade.</div>}</div>
+              <div className="h-72 grid place-items-center text-xs text-[#8391a7]">The curve starts with the first completed trade.</div>}</div>
           </section>
           <section className="bg-surface border border-[#1e2d45] rounded-xl overflow-hidden min-w-0">
             <div className="px-4 py-3 border-b border-[#1e2d45] flex items-center justify-between">
               <span className="text-xs font-semibold text-[#e2e8f0]">Result distribution</span>
-              <span className="text-[10px] text-[#64748b]"><span className="text-[#93c5fd]">■</span> gain <span className="text-[#fca5a5] ml-1.5">■</span> loss · in R</span>
+              <span className="text-[10px] text-[#8391a7]"><span className="text-[#93c5fd]">■</span> gain <span className="text-[#fca5a5] ml-1.5">■</span> loss · in R</span>
             </div>
             <div className="p-3">{p && p.r_values.length ? <RDistribution values={p.r_values} /> :
-              <div className="h-60 grid place-items-center text-xs text-[#475569]">No completed trades yet.</div>}</div>
+              <div className="h-60 grid place-items-center text-xs text-[#8391a7]">No completed trades yet.</div>}</div>
           </section>
         </div>
 
@@ -126,6 +130,9 @@ export default function PerformancePage() {
           <StatsTable title="Intraday vs positional" rows={p?.by_horizon ?? {}} labels={{ intraday: "Intraday", positional: "Positional" }} />
         </div>
 
+        <div className="mb-5"><CalibrationPanel ev={p?.statistics} /></div>
+        <div className="mb-5"><BacktestPanel labels={labels} /></div>
+
         <section className="bg-surface border border-[#1e2d45] rounded-xl overflow-hidden">
           <div className="px-4 py-3 border-b border-[#1e2d45] text-xs font-semibold text-[#e2e8f0]">Every signal</div>
           <ul className="lg:hidden divide-y divide-[#1e2d45]">
@@ -135,7 +142,7 @@ export default function PerformancePage() {
                 <li key={s.signal_id}>
                   <Link href={`/signals/${s.signal_id}`} className="flex items-start justify-between gap-3 px-4 py-3 active:bg-[#ffffff06]">
                     <div className="min-w-0">
-                      <div className="text-[11px] text-[#64748b]"><span className="font-mono text-[#ff9933]">{s.signal_id}</span> · {fmtDateTime(s.created_at)}</div>
+                      <div className="text-[11px] text-[#8391a7]"><span className="font-mono text-[#ff9933]">{s.signal_id}</span> · {fmtDateTime(s.created_at)}</div>
                       <div className="font-mono text-[13px] text-[#e2e8f0] truncate mt-0.5">{s.contract.tradingsymbol}</div>
                       <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
                         <GradeBadge grade={s.grade} score={s.score} /><ModeTag mode={s.mode} />
@@ -143,19 +150,19 @@ export default function PerformancePage() {
                       </div>
                     </div>
                     <div className="text-right flex-shrink-0">
-                      <div className={cn("font-mono font-semibold text-sm", net > 0 ? "text-[#93c5fd]" : net < 0 ? "text-[#fca5a5]" : "text-[#64748b]")}>{fmtRupees(s.pnl_rupees, true)}</div>
+                      <div className={cn("font-mono font-semibold text-sm", net > 0 ? "text-[#93c5fd]" : net < 0 ? "text-[#fca5a5]" : "text-[#8391a7]")}>{fmtRupees(s.pnl_rupees, true)}</div>
                       <div className="font-mono text-[11px] text-[#94a3b8]">{fmtR(s.r_multiple)}</div>
-                      <div className="text-[11px] text-[#64748b] mt-1 max-w-[120px] truncate">{s.exit_reason ? EXIT_LABELS[s.exit_reason] ?? s.exit_reason : s.state.replace("_", " ").toLowerCase()}</div>
+                      <div className="text-[11px] text-[#8391a7] mt-1 max-w-[120px] truncate">{s.exit_reason ? EXIT_LABELS[s.exit_reason] ?? s.exit_reason : s.state.replace("_", " ").toLowerCase()}</div>
                     </div>
                   </Link>
                 </li>
               );
             })}
-            {!(log.data?.signals ?? []).length && <li className="px-4 py-8 text-center text-xs text-[#475569]">No signals yet. They appear here the moment they are sent.</li>}
+            {!(log.data?.signals ?? []).length && <li className="px-4 py-8 text-center text-xs text-[#8391a7]">No signals yet. They appear here the moment they are sent.</li>}
           </ul>
           <div className="hidden lg:block overflow-x-auto">
             <table className="w-full text-[12px] tabular-nums">
-              <thead><tr className="text-[10px] tracking-widest text-[#64748b] text-left">
+              <thead><tr className="text-[10px] tracking-widest text-[#8391a7] text-left">
                 <th className="px-4 py-2 font-medium">SENT</th><th className="px-2 py-2 font-medium">ID</th>
                 <th className="px-2 py-2 font-medium">SETUP</th><th className="px-2 py-2 font-medium">CONTRACT</th>
                 <th className="px-2 py-2 font-medium">GRADE</th><th className="px-2 py-2 font-medium">MODE</th>
@@ -172,11 +179,11 @@ export default function PerformancePage() {
                     <td className="px-2 py-2"><GradeBadge grade={s.grade} score={s.score} /></td>
                     <td className="px-2 py-2"><ModeTag mode={s.mode} /></td>
                     <td className="px-2 py-2 text-[#94a3b8] whitespace-nowrap">{s.exit_reason ? EXIT_LABELS[s.exit_reason] ?? s.exit_reason : s.state.replace("_", " ").toLowerCase()}</td>
-                    <td className={cn("px-2 py-2 text-right font-mono font-semibold", (s.pnl_rupees ?? 0) > 0 ? "text-[#93c5fd]" : (s.pnl_rupees ?? 0) < 0 ? "text-[#fca5a5]" : "text-[#64748b]")}>{fmtRupees(s.pnl_rupees, true)}</td>
+                    <td className={cn("px-2 py-2 text-right font-mono font-semibold", (s.pnl_rupees ?? 0) > 0 ? "text-[#93c5fd]" : (s.pnl_rupees ?? 0) < 0 ? "text-[#fca5a5]" : "text-[#8391a7]")}>{fmtRupees(s.pnl_rupees, true)}</td>
                     <td className="px-4 py-2 text-right font-mono text-[#94a3b8]">{fmtR(s.r_multiple)}</td>
                   </tr>
                 ))}
-                {!(log.data?.signals ?? []).length && <tr><td colSpan={9} className="px-4 py-8 text-center text-xs text-[#475569]">No signals yet. They appear here the moment they are sent.</td></tr>}
+                {!(log.data?.signals ?? []).length && <tr><td colSpan={9} className="px-4 py-8 text-center text-xs text-[#8391a7]">No signals yet. They appear here the moment they are sent.</td></tr>}
               </tbody>
             </table>
           </div>

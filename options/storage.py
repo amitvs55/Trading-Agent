@@ -9,8 +9,8 @@ from pathlib import Path
 
 import json
 
-from sqlalchemy import (BigInteger, Column, Date, DateTime, Float, Integer, MetaData, String,
-                        Table, Text, create_engine, func, select)
+from sqlalchemy import (BigInteger, Column, Date, DateTime, Float, Index, Integer, MetaData, String,
+                        Table, Text, create_engine, delete, func, select, update)
 from sqlalchemy.engine import Engine
 
 from options.core.schemas import OPEN_STATES, Signal
@@ -57,6 +57,8 @@ bars_1m = Table(
     Column("ask_qty", BigInteger),
     Column("ticks", Integer, nullable=False),
 )
+# The primary key leads with the token, so "latest bar" and "bars since" need their own index on ts
+Index("ix_bars_1m_ts", bars_1m.c.ts)
 
 session_events = Table(
     "session_events", metadata,
@@ -170,6 +172,73 @@ health_checks = Table(
     Column("checked_at", DateTime(timezone=True), nullable=False),
 )
 
+# Every alert goes here first; a background sender delivers it, so a slow or failing channel
+# never holds up the signal engine and nothing is lost if the process restarts
+alerts_outbox = Table(
+    "alerts_outbox", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("created_at", DateTime(timezone=True), nullable=False, index=True),
+    Column("digest", String(64), nullable=False, index=True),      # same text within a short window = duplicate
+    Column("text", Text, nullable=False),
+    Column("buttons", Text),                                        # JSON [[label, url], …]
+    Column("status", String(10), nullable=False, index=True),      # pending | sent | failed | expired
+    Column("channel", String(16)),                                  # who delivered it: telegram | email
+    Column("attempts", Integer, nullable=False, server_default="0"),
+    Column("last_error", Text),
+    Column("sent_at", DateTime(timezone=True)),
+)
+
+# Research pipeline runs (the old app's 13-agent analysis). Used to live in logs/trades.jsonl on
+# the container's disk, which every redeploy wiped; History and Usage read this table now.
+research_runs = Table(
+    "research_runs", metadata,
+    Column("run_id", String(16), primary_key=True),
+    Column("ticker", String(32), nullable=False, index=True),
+    Column("exchange", String(8), nullable=False),
+    Column("requested_by", String(64)),
+    Column("started_at", DateTime(timezone=True), nullable=False, index=True),
+    Column("finished_at", DateTime(timezone=True)),
+    Column("status", String(12), nullable=False),            # running | done | failed | cancelled
+    Column("action", String(12)),                              # execute | hold | reject
+    Column("order_status", String(24)),                        # executed_simulated | held | rejected
+    Column("order_id", String(16)),
+    Column("entry", Float), Column("stop_loss", Float), Column("take_profit", Float), Column("size_pct", Float),
+    Column("details", Text),
+    Column("model", String(80)),
+    Column("total_tokens", Integer), Column("cost_usd", Float),
+    Column("usage", Text),                                     # UsageSummary JSON
+    Column("decision", Text),                                  # FinalDecision JSON
+    Column("error", Text),
+)
+
+# Every LLM call of a research run, prompt and answer included, so any decision can be audited
+# and replayed (review finding F-16)
+research_llm_calls = Table(
+    "research_llm_calls", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("run_id", String(16), nullable=False, index=True),
+    Column("ts", DateTime(timezone=True), nullable=False),
+    Column("agent", String(48), nullable=False),
+    Column("model", String(80), nullable=False),
+    Column("temperature", Float),
+    Column("seed", Integer),
+    Column("system_prompt", Text),
+    Column("user_prompt", Text),
+    Column("response", Text),
+    Column("prompt_tokens", Integer), Column("completion_tokens", Integer),
+    Column("is_retry", Integer, nullable=False, server_default="0"),
+)
+
+# Who changed what, and when: trading rules, pauses, calendars, users
+audit_log = Table(
+    "audit_log", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("ts", DateTime(timezone=True), nullable=False, index=True),
+    Column("actor", String(64), nullable=False),
+    Column("action", String(48), nullable=False),
+    Column("detail", Text),
+)
+
 _INSTRUMENT_FIELDS = ("instrument_token", "tradingsymbol", "name", "segment", "instrument_type",
                       "strike", "lot_size", "tick_size")
 
@@ -190,7 +259,15 @@ def make_engine(url: str) -> Engine:
     engine = create_engine(url, pool_pre_ping=True)
     metadata.create_all(engine)
     _add_missing_columns(engine)
+    _add_missing_indexes(engine)
     return engine
+
+
+def _add_missing_indexes(engine: Engine) -> None:
+    """create_all() only indexes tables it creates; indexes added later go onto existing tables here."""
+    for table in metadata.sorted_tables:
+        for index in table.indexes:
+            index.create(engine, checkfirst=True)
 
 
 # Columns added after a table already existed in production: create_all() only creates
@@ -278,6 +355,23 @@ class Store:
     def write_bars(self, rows: list[dict]) -> int:
         return self._upsert(bars_1m, rows, ["instrument_token", "ts"])
 
+    def insert_bars_if_missing(self, rows: list[dict]) -> int:
+        """Warm-up history: kept so replays see what the live engine saw, but never over a recorded bar."""
+        if not rows:
+            return 0
+        dialect = self.engine.dialect.name
+        if dialect == "postgresql":
+            from sqlalchemy.dialects.postgresql import insert
+            chunk = max(1, 30_000 // len(bars_1m.columns))
+        else:
+            from sqlalchemy.dialects.sqlite import insert
+            chunk = max(1, 900 // len(bars_1m.columns))
+        with self.engine.begin() as conn:
+            for i in range(0, len(rows), chunk):
+                conn.execute(insert(bars_1m).values(rows[i:i + chunk]).on_conflict_do_nothing(
+                    index_elements=["instrument_token", "ts"]))
+        return len(rows)
+
     def log_event(self, kind: str, detail: str, now: datetime) -> None:
         with self.engine.begin() as conn:
             conn.execute(session_events.insert().values(ts=now, kind=kind, detail=detail[:2000]))
@@ -297,6 +391,162 @@ class Store:
     def last_bar_ts(self) -> datetime | None:
         with self.engine.connect() as conn:
             return conn.execute(select(func.max(bars_1m.c.ts))).scalar()
+
+    def latest_token(self, tradingsymbol: str) -> int | None:
+        """Instrument token of a symbol (e.g. "NIFTY 50") from the newest daily snapshot."""
+        q = (select(instruments_daily.c.instrument_token).where(instruments_daily.c.tradingsymbol == tradingsymbol)
+             .order_by(instruments_daily.c.trading_date.desc()).limit(1))
+        with self.engine.connect() as conn:
+            tok = conn.execute(q).scalar()
+        return int(tok) if tok is not None else None
+
+    def close_near(self, token: int, at: datetime, before: bool = True) -> float | None:
+        """The last close at or before `at` (or the first at or after it)."""
+        q = select(bars_1m.c.close).where(bars_1m.c.instrument_token == token)
+        q = (q.where(bars_1m.c.ts <= at).order_by(bars_1m.c.ts.desc()) if before
+             else q.where(bars_1m.c.ts >= at).order_by(bars_1m.c.ts))
+        with self.engine.connect() as conn:
+            v = conn.execute(q.limit(1)).scalar()
+        return float(v) if v is not None else None
+
+    def bar_counts_between(self, start: datetime, end: datetime) -> dict[int, int]:
+        """Minutes recorded per instrument: the daily completeness report."""
+        q = (select(bars_1m.c.instrument_token, func.count())
+             .where(bars_1m.c.ts >= start, bars_1m.c.ts < end).group_by(bars_1m.c.instrument_token))
+        with self.engine.connect() as conn:
+            return {int(t): int(n) for t, n in conn.execute(q)}
+
+    def purge_before(self, bars_cutoff: datetime, logs_cutoff: datetime) -> dict[str, int]:
+        """Retention: 1-minute bars older than bars_cutoff; delivered alerts, session events and research
+        prompts older than logs_cutoff. Signals, their events, evaluations and research run results are
+        the track record: never purged."""
+        with self.engine.begin() as conn:
+            bars = conn.execute(delete(bars_1m).where(bars_1m.c.ts < bars_cutoff)).rowcount
+            alerts = conn.execute(delete(alerts_outbox).where(alerts_outbox.c.created_at < logs_cutoff,
+                                                              alerts_outbox.c.status != "pending")).rowcount
+            events = conn.execute(delete(session_events).where(session_events.c.ts < logs_cutoff)).rowcount
+            calls = conn.execute(delete(research_llm_calls).where(research_llm_calls.c.ts < logs_cutoff)).rowcount
+        return {"bars": bars or 0, "alerts": alerts or 0, "session_events": events or 0, "llm_calls": calls or 0}
+
+    def session_events_since(self, since: datetime, limit: int = 100) -> list[dict]:
+        q = (select(session_events).where(session_events.c.ts >= since)
+             .order_by(session_events.c.ts.desc(), session_events.c.id.desc()).limit(limit))
+        with self.engine.connect() as conn:
+            return [dict(r._mapping) for r in conn.execute(q)]
+
+    # ── Small shared facts (app_meta), e.g. the pause switch the API sets and the engine reads ──
+
+    def get_meta_json(self, key: str) -> dict | None:
+        with self.engine.connect() as conn:
+            raw = conn.execute(select(app_meta.c.value).where(app_meta.c.key == key)).scalar()
+        try:
+            return json.loads(raw) if raw else None
+        except ValueError:
+            return None
+
+    def set_meta_json(self, key: str, value: dict, now: datetime) -> None:
+        raw = json.dumps(value, default=str)
+        with self.engine.begin() as conn:
+            done = conn.execute(update(app_meta).where(app_meta.c.key == key).values(value=raw, updated_at=now)).rowcount
+            if not done:
+                conn.execute(app_meta.insert().values(key=key, value=raw, updated_at=now))
+
+    # ── Alerts outbox ────────────────────────────────────────────────────────
+
+    def outbox_add(self, digest: str, text: str, buttons: str | None, now: datetime,
+                   duplicate_since: datetime | None = None) -> int | None:
+        """Queue an alert; returns its id, or None when the same text was queued since duplicate_since."""
+        with self.engine.begin() as conn:
+            if duplicate_since is not None and conn.execute(
+                    select(alerts_outbox.c.id).where(alerts_outbox.c.digest == digest,
+                                                     alerts_outbox.c.created_at >= duplicate_since).limit(1)).first():
+                return None
+            res = conn.execute(alerts_outbox.insert().values(created_at=now, digest=digest, text=text,
+                                                             buttons=buttons, status="pending", attempts=0))
+            return int(res.inserted_primary_key[0])
+
+    def outbox_update(self, alert_id: int, **values) -> None:
+        with self.engine.begin() as conn:
+            conn.execute(update(alerts_outbox).where(alerts_outbox.c.id == alert_id).values(**values))
+
+    def outbox_pending(self, limit: int = 500) -> list[dict]:
+        q = (select(alerts_outbox).where(alerts_outbox.c.status == "pending")
+             .order_by(alerts_outbox.c.id).limit(limit))
+        with self.engine.connect() as conn:
+            return [dict(r._mapping) for r in conn.execute(q)]
+
+    def outbox_recent(self, limit: int = 50) -> list[dict]:
+        q = select(alerts_outbox).order_by(alerts_outbox.c.id.desc()).limit(limit)
+        with self.engine.connect() as conn:
+            return [dict(r._mapping) for r in conn.execute(q)]
+
+    def outbox_counts_since(self, since: datetime) -> dict[str, int]:
+        q = (select(alerts_outbox.c.status, func.count()).where(alerts_outbox.c.created_at >= since)
+             .group_by(alerts_outbox.c.status))
+        with self.engine.connect() as conn:
+            return {s: int(n) for s, n in conn.execute(q)}
+
+    # ── Research runs ────────────────────────────────────────────────────────
+
+    def research_start(self, run_id: str, ticker: str, exchange: str, by: str | None, model: str,
+                       now: datetime) -> None:
+        with self.engine.begin() as conn:
+            conn.execute(research_runs.insert().values(run_id=run_id, ticker=ticker, exchange=exchange,
+                                                       requested_by=by, started_at=now, status="running", model=model))
+
+    def research_finish(self, run_id: str, now: datetime, **values) -> None:
+        with self.engine.begin() as conn:
+            conn.execute(update(research_runs).where(research_runs.c.run_id == run_id)
+                         .values(finished_at=now, **values))
+
+    def research_runs(self, *, ticker: str = "", status: str = "", limit: int = 50, offset: int = 0,
+                      since: datetime | None = None) -> tuple[int, list[dict]]:
+        q = select(research_runs)
+        if ticker:
+            q = q.where(research_runs.c.ticker.ilike(f"%{ticker.strip()}%"))
+        if status:
+            q = q.where(research_runs.c.order_status == status)
+        if since is not None:
+            q = q.where(research_runs.c.started_at >= since)
+        with self.engine.connect() as conn:
+            total = conn.execute(select(func.count()).select_from(q.subquery())).scalar() or 0
+            rows = conn.execute(q.order_by(research_runs.c.started_at.desc()).limit(limit).offset(offset)).all()
+        return int(total), [dict(r._mapping) for r in rows]
+
+    def research_cost_since(self, since: datetime) -> float:
+        q = select(func.coalesce(func.sum(research_runs.c.cost_usd), 0.0)).where(research_runs.c.started_at >= since)
+        with self.engine.connect() as conn:
+            return float(conn.execute(q).scalar() or 0.0)
+
+    def research_running(self) -> int:
+        q = select(func.count()).select_from(research_runs).where(research_runs.c.status == "running")
+        with self.engine.connect() as conn:
+            return int(conn.execute(q).scalar() or 0)
+
+    def research_log_calls(self, rows: list[dict]) -> None:
+        if rows:
+            with self.engine.begin() as conn:
+                conn.execute(research_llm_calls.insert(), rows)
+
+    def research_calls(self, run_id: str) -> list[dict]:
+        q = select(research_llm_calls).where(research_llm_calls.c.run_id == run_id).order_by(research_llm_calls.c.id)
+        with self.engine.connect() as conn:
+            return [dict(r._mapping) for r in conn.execute(q)]
+
+    def research_has_order(self, order_id: str) -> bool:
+        with self.engine.connect() as conn:
+            return conn.execute(select(research_runs.c.run_id).where(research_runs.c.order_id == order_id)).first() is not None
+
+    # ── Audit log ────────────────────────────────────────────────────────────
+
+    def audit(self, actor: str, action: str, detail: str, now: datetime) -> None:
+        with self.engine.begin() as conn:
+            conn.execute(audit_log.insert().values(ts=now, actor=actor[:64], action=action[:48], detail=detail[:4000]))
+
+    def audit_recent(self, limit: int = 100) -> list[dict]:
+        q = select(audit_log).order_by(audit_log.c.ts.desc(), audit_log.c.id.desc()).limit(limit)
+        with self.engine.connect() as conn:
+            return [dict(r._mapping) for r in conn.execute(q)]
 
     # ── Signals ───────────────────────────────────────────────────────────────
 
@@ -348,6 +598,13 @@ class Store:
         with self.engine.begin() as conn:
             conn.execute(evaluations.insert().values(ts=now, index_name=index, setup=setup, side=side, grade=grade,
                                                      score=score, outcome=outcome, reasons="; ".join(reasons)))
+
+    def signalled_keys_since(self, since: datetime) -> set[tuple[str, str, int]]:
+        """(index, setup, side) already decided today: a restarted engine must not send them again."""
+        q = (select(evaluations.c.index_name, evaluations.c.setup, evaluations.c.side)
+             .where(evaluations.c.ts >= since, evaluations.c.outcome.in_(("SIGNAL", "OVER_BUDGET"))).distinct())
+        with self.engine.connect() as conn:
+            return {(r.index_name, r.setup, int(r.side)) for r in conn.execute(q)}
 
     def evaluations_since(self, since: datetime, limit: int = 200) -> list[dict]:
         q = select(evaluations).where(evaluations.c.ts >= since).order_by(evaluations.c.ts.desc()).limit(limit)

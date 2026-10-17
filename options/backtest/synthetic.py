@@ -1,4 +1,4 @@
-"""A synthetic but internally consistent NIFTY market: instruments, ten sessions of history
+"""A synthetic but internally consistent NIFTY market: instruments, twenty sessions of history
 and a live morning priced with Black-76.
 
 Used by the tests and by the Agents page self-test, which runs every analysis agent on it
@@ -76,6 +76,7 @@ def nfo_rows() -> list[dict]:
 
 CAL = NseCalendar()
 SESSION_MIN = 375
+RECENT_DAYS = 10
 R = 0.06
 IV = 0.13
 
@@ -86,7 +87,7 @@ def _path(start: float, n: int, drift_day: float, vol_day: float, rng) -> np.nda
     return start * np.exp(np.cumsum(per_min + noise))
 
 
-def history_days(n: int = 10) -> list:
+def history_days(n: int = 20) -> list:
     days, d = [], TODAY
     for _ in range(n):
         d = CAL.previous_trading_day(d)
@@ -104,25 +105,37 @@ def build_market(trend: int = 1, today_minutes: int = 120, oi_flow: int = 1, wri
     drift = drift_day * trend
 
     # ── History: spot, future, VIX ──
+    # The 10 most recent sessions (and today) come from `rng` exactly as they always have, so the
+    # scenarios the tests are built on don't move; the 10 older ones come from a stream of their own.
     days = history_days()
+    older, recent = days[:-RECENT_DAYS], days[-RECENT_DAYS:]
     spot_hist, fut_hist, vix_hist = [], [], []
-    level, oi = spot0 * (1 - drift * len(days)), 12_000_000.0
-    for d in days:
-        path = _path(level, SESSION_MIN, drift, 0.006, rng)
+
+    def session(d, level, oi, gen):
+        path = _path(level, SESSION_MIN, drift, 0.006, gen)
         for i, px in enumerate(path):
             ts = at_ist(d, time(9, 15)) + timedelta(minutes=i)
             hi, lo = px * 1.0004, px * 0.9996
             spot_hist.append({"date": ts, "open": px, "high": hi, "low": lo, "close": px, "volume": 0})
             oi *= 1 + 0.00002 * oi_flow
             fut_hist.append({"date": ts, "open": px + 60, "high": hi + 60, "low": lo + 60, "close": px + 60,
-                             "volume": int(rng.integers(2000, 5000)), "oi": oi})
+                             "volume": int(gen.integers(2000, 5000)), "oi": oi})
             vix_hist.append({"date": ts, "open": 13, "high": 13.1, "low": 12.9, "close": 13.0, "volume": 0})
-        level = path[-1]
+        return path[-1], oi
+
+    old_rng = np.random.default_rng(seed + 10_000)
+    level, oi = spot0 * (1 - drift * len(days)), 11_000_000.0
+    for d in older:
+        level, oi = session(d, level, oi, old_rng)
+    level, oi = spot0 * (1 - drift * len(recent)), 12_000_000.0
+    for d in recent:
+        level, oi = session(d, level, oi, rng)
     state.load_history(ref.spot_token, spot_hist)
     state.load_history(ref.future_token, fut_hist)
     state.load_history(VIX_TOKEN, vix_hist)
+    closes = [*_path(spot0 * 0.93, len(older), 0.002, 0.008, old_rng), *_path(spot0 * 0.95, len(recent), 0.002, 0.008, rng)]
     state.load_daily(ref.spot_token, [{"date": d, "open": 1, "high": 1, "low": 1, "close": c, "volume": 0}
-                                      for d, c in zip(days, _path(spot0 * 0.95, len(days), 0.002, 0.008, rng))])
+                                      for d, c in zip(days, closes)])
 
     # ── Today ──
     start = at_ist(TODAY, time(9, 15))

@@ -6,13 +6,13 @@ import { fmtDateTime, fmtRupees } from "@/lib/optionsFormat";
 // Same validated palette as the track record charts (blue on the #1a2233 card)
 const LINE = "#3987e5";
 const GRID = "#1e2d45";
-const AXIS = "#64748b";
+const AXIS = "#8391a7";
 
 export function PaperCurve({ curve, start }: { curve: PaperAccount["curve"]; start: number }) {
   const points = curve.map((p, i) => ({ ...p, n: i }));
   const last = points[points.length - 1]?.balance ?? start;
   return (
-    <div className="h-64" aria-label={`Paper balance after ${points.length - 1} trades: ${fmtRupees(last)}`}>
+    <div className="h-64" role="img" aria-label={`Paper balance after ${points.length - 1} trades: ${fmtRupees(last)}`}>
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={points} margin={{ top: 10, right: 12, left: 4, bottom: 0 }}>
           <defs>

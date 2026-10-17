@@ -5,20 +5,42 @@ import threading
 import time
 from collections import defaultdict, deque
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from datetime import date, datetime, timedelta
+from html import escape
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
-from api.deps import base_settings, current_user, get_cfg, get_repo, get_store, invalidate_cfg, require_admin
+from api.deps import (base_settings, current_user, get_calendar, get_cfg, get_repo, get_store, invalidate_cfg,
+                      require_admin)
 from options.admin import connectors, health, security
 from options.admin.repo import ROLES, AdminRepo, LastAdmin, UserExists
 from options.config import OptionsSettings
-from options.core.calendar import NseCalendar, now_ist
+from options.core import calendar_store
+from options.core.calendar import IST, NseCalendar, now_ist
 from options.daemon import COMMAND_KEY, can_start_now
+from options.engine import controls
+from options.notify import make_notifier
 from options.storage import Store
 from utils.logger import setup_logger
 
 logger = setup_logger("options.auth")
 router = APIRouter(tags=["admin"])
+
+
+def _audit(store: Store, user: dict, action: str, detail: str) -> None:
+    try:
+        store.audit(user["username"], action, detail, now_ist())
+    except Exception:
+        logger.exception("Couldn't write the audit log")
+
+
+def _alert(cfg: OptionsSettings, text: str) -> None:
+    """Background task: tell the alert channel about an admin action."""
+    try:
+        make_notifier(cfg).send(text)
+    except Exception:
+        logger.exception("Admin alert failed")
 
 # ── Brute-force throttle (per process; enough for a single-admin tool) ────────
 
@@ -174,7 +196,8 @@ def admin_users(_: dict = Depends(require_admin), repo: AdminRepo = Depends(get_
 
 
 @router.post("/api/admin/users")
-def admin_create_user(body: NewUserBody, user: dict = Depends(require_admin), repo: AdminRepo = Depends(get_repo)) -> dict:
+def admin_create_user(body: NewUserBody, user: dict = Depends(require_admin), repo: AdminRepo = Depends(get_repo),
+                      store: Store = Depends(get_store)) -> dict:
     if body.role not in ROLES:
         raise HTTPException(422, {"code": "invalid", "message": f"Role must be one of {', '.join(ROLES)}."})
     if problem := security.password_problem(body.password, body.username):
@@ -184,12 +207,13 @@ def admin_create_user(body: NewUserBody, user: dict = Depends(require_admin), re
     except UserExists as e:
         raise HTTPException(409, {"code": "username_taken", "message": str(e)})
     logger.info("%s created %s user %s", user["username"], body.role, body.username.lower())
+    _audit(store, user, "user_created", f"{body.username.lower()} ({body.role})")
     return repo.get_user(new_id)
 
 
 @router.patch("/api/admin/users/{user_id}")
 def admin_update_user(user_id: int, body: UserPatchBody, user: dict = Depends(require_admin),
-                      repo: AdminRepo = Depends(get_repo)) -> dict:
+                      repo: AdminRepo = Depends(get_repo), store: Store = Depends(get_store)) -> dict:
     _user_or_404(repo, user_id)
     if user_id == user["id"] and (body.disabled or (body.role is not None and body.role != user["role"])):
         raise HTTPException(422, {"code": "self_change", "message": "You can't disable your own account or change "
@@ -201,23 +225,27 @@ def admin_update_user(user_id: int, body: UserPatchBody, user: dict = Depends(re
     except ValueError as e:
         raise HTTPException(422, {"code": "invalid", "message": str(e)})
     logger.info("%s updated user %s", user["username"], updated["username"])
+    _audit(store, user, "user_updated", f"{updated['username']}: " + ", ".join(
+        f"{k}={v}" for k, v in body.model_dump(exclude_none=True).items()))
     return updated
 
 
 @router.post("/api/admin/users/{user_id}/password")
 def admin_reset_password(user_id: int, body: ResetPasswordBody, user: dict = Depends(require_admin),
-                         repo: AdminRepo = Depends(get_repo)) -> dict:
+                         repo: AdminRepo = Depends(get_repo), store: Store = Depends(get_store)) -> dict:
     target = _user_or_404(repo, user_id)
     if problem := security.password_problem(body.new_password, target["username"]):
         raise HTTPException(422, {"code": "weak_password", "message": problem})
     repo.set_password(user_id, body.new_password)
     repo.revoke_user_sessions(user_id, keep_token=user["token"] if user_id == user["id"] else None)
     logger.info("%s reset the password of %s", user["username"], target["username"])
+    _audit(store, user, "password_reset", target["username"])
     return {"ok": True}
 
 
 @router.delete("/api/admin/users/{user_id}")
-def admin_delete_user(user_id: int, user: dict = Depends(require_admin), repo: AdminRepo = Depends(get_repo)) -> dict:
+def admin_delete_user(user_id: int, user: dict = Depends(require_admin), repo: AdminRepo = Depends(get_repo),
+                      store: Store = Depends(get_store)) -> dict:
     target = _user_or_404(repo, user_id)
     if user_id == user["id"]:
         raise HTTPException(422, {"code": "self_change", "message": "You can't delete the account you're signed in with."})
@@ -226,6 +254,7 @@ def admin_delete_user(user_id: int, user: dict = Depends(require_admin), repo: A
     except LastAdmin as e:
         raise HTTPException(409, {"code": "last_admin", "message": str(e)})
     logger.info("%s deleted user %s", user["username"], target["username"])
+    _audit(store, user, "user_deleted", target["username"])
     return {"ok": True}
 
 
@@ -245,6 +274,7 @@ class TradingBody(BaseModel):
     risk_per_trade_pct: float | None = None
     daily_loss_stop_pct: float | None = None
     live_setups: list[str] | None = None
+    bars_retention_days: int | None = None
 
 
 class HealthBody(BaseModel):
@@ -301,25 +331,34 @@ def admin_save_connector(connector_id: str, body: ConnectorBody, user: dict = De
         health.save_result(repo, result)
     logger.info("%s updated %s: %s%s", user["username"], connector_id, ", ".join(changed) or "nothing",
                 f" (test {result['status']})" if result else " (not tested)")
+    _audit(store, user, "connector_saved", f"{connector_id}: {', '.join(changed) or 'nothing'}"
+           + (f" (test {result['status']})" if result else " (not tested)"))
     return {**_saved(repo, research_changed=connector_id == "openai"), "test": result, "missing": missing}
 
 
 @router.put("/api/admin/data-provider")
 def admin_data_provider(body: ProviderBody, user: dict = Depends(require_admin),
-                        repo: AdminRepo = Depends(get_repo)) -> dict:
+                        repo: AdminRepo = Depends(get_repo), store: Store = Depends(get_store)) -> dict:
     try:
         connectors.set_data_provider(repo, body.provider, user["username"])
     except ValueError as e:
         raise HTTPException(422, {"code": "invalid", "message": str(e)})
+    _audit(store, user, "data_provider", body.provider)
     return _saved(repo)
 
 
 @router.put("/api/admin/trading")
-def admin_trading(body: TradingBody, user: dict = Depends(require_admin), repo: AdminRepo = Depends(get_repo)) -> dict:
+def admin_trading(body: TradingBody, user: dict = Depends(require_admin), repo: AdminRepo = Depends(get_repo),
+                  store: Store = Depends(get_store)) -> dict:
+    before = connectors.trading_view(connectors.effective_settings(repo, base_settings()))
     try:
         connectors.save_trading(repo, body.model_dump(exclude_none=True), user["username"])
     except ValueError as e:
         raise HTTPException(422, {"code": "invalid", "message": str(e)})
+    after = connectors.trading_view(connectors.effective_settings(repo, base_settings()))
+    changes = [f"{k}: {before[k]} -> {after[k]}" for k in connectors.AUDITED_TRADING_FIELDS if before[k] != after[k]]
+    if changes:
+        _audit(store, user, "trading_rules", "; ".join(changes))
     return _saved(repo)
 
 
@@ -348,11 +387,165 @@ def admin_health_run(body: HealthBody, _: dict = Depends(require_admin), repo: A
 
 
 @router.post("/api/admin/recorder/restart")
-def admin_recorder_restart(user: dict = Depends(require_admin), repo: AdminRepo = Depends(get_repo)) -> dict:
+def admin_recorder_restart(user: dict = Depends(require_admin), repo: AdminRepo = Depends(get_repo),
+                           store: Store = Depends(get_store), cal: NseCalendar = Depends(get_calendar)) -> dict:
     now = now_ist()
-    if not can_start_now(now, NseCalendar()):
+    if not can_start_now(now, cal):
         raise HTTPException(409, {"code": "market_closed",
                                   "message": "There's no session to run now. The next one starts at 08:30 on the "
                                              "next trading day."})
     repo.set_meta_json(COMMAND_KEY, {"action": "restart", "requested_at": now.isoformat(), "by": user["username"]})
+    _audit(store, user, "recorder_restart", "start today's session")
     return {"ok": True, "requested_at": now.isoformat()}
+
+
+# ── Emergency controls ───────────────────────────────────────────────────────
+
+class PauseBody(BaseModel):
+    paused: bool
+    reason: str = Field("", max_length=200)
+
+
+def _controls_view(store: Store) -> dict:
+    return {**controls.read(store), "exit_all_pending": controls.pending_exit_all(store)}
+
+
+@router.get("/api/admin/controls")
+def admin_controls(_: dict = Depends(require_admin), store: Store = Depends(get_store)) -> dict:
+    return _controls_view(store)
+
+
+@router.put("/api/admin/controls/pause")
+def admin_pause(body: PauseBody, tasks: BackgroundTasks, user: dict = Depends(require_admin),
+                store: Store = Depends(get_store), cfg: OptionsSettings = Depends(get_cfg)) -> dict:
+    """Pause or resume new signals. Open signals keep being managed either way."""
+    was = bool(controls.read(store).get("paused"))
+    controls.set_paused(store, body.paused, user["username"], body.reason, now_ist())
+    if was != body.paused:
+        _audit(store, user, "signals_paused" if body.paused else "signals_resumed", body.reason or "")
+        who = escape(user.get("full_name") or user["username"])
+        why = f": {escape(body.reason)}" if body.reason else ""
+        tasks.add_task(_alert, cfg, f"⏸ <b>New signals paused</b> by {who}{why}. Open signals are still managed."
+                       if body.paused else f"▶️ <b>New signals resumed</b> by {who}.")
+    return _controls_view(store)
+
+
+@router.post("/api/admin/controls/exit-all")
+def admin_exit_all(user: dict = Depends(require_admin), store: Store = Depends(get_store)) -> dict:
+    """Ask the engine to close every open signal at the live bid (cancel unfilled ones)."""
+    controls.request_exit_all(store, user["username"], now_ist())
+    _audit(store, user, "exit_all", f"{len(store.open_signals())} open signal(s)")
+    return _controls_view(store)
+
+
+# ── Alerts, audit log, recorder events ───────────────────────────────────────
+
+def _iso(row: dict, *keys: str) -> dict:
+    out = dict(row)
+    for k in keys:
+        v = out.get(k)
+        if isinstance(v, datetime):
+            out[k] = (v.replace(tzinfo=IST) if v.tzinfo is None else v).isoformat()
+    return out
+
+
+@router.get("/api/admin/alerts")
+def admin_alerts(limit: int = Query(50, ge=1, le=500), _: dict = Depends(require_admin),
+                 store: Store = Depends(get_store)) -> dict:
+    rows = [_iso({k: v for k, v in r.items() if k not in ("digest", "buttons")}, "created_at", "sent_at")
+            for r in store.outbox_recent(limit)]
+    return {"alerts": rows, "last_24h": store.outbox_counts_since(now_ist() - timedelta(hours=24))}
+
+
+@router.get("/api/admin/audit")
+def admin_audit(limit: int = Query(100, ge=1, le=1000), _: dict = Depends(require_admin),
+                store: Store = Depends(get_store)) -> dict:
+    return {"entries": [_iso(r, "ts") for r in store.audit_recent(limit)]}
+
+
+@router.get("/api/admin/recorder/events")
+def admin_recorder_events(days: int = Query(3, ge=1, le=30), _: dict = Depends(require_admin),
+                          store: Store = Depends(get_store)) -> dict:
+    """Disconnects, reconnects and daily summaries the session logged (the session_events table)."""
+    return {"events": [_iso(r, "ts") for r in store.session_events_since(now_ist() - timedelta(days=days))]}
+
+
+# ── Trading calendar ─────────────────────────────────────────────────────────
+
+class HolidayBody(BaseModel):
+    date: date
+    name: str = Field(min_length=1, max_length=80)
+
+
+class YearBody(BaseModel):
+    complete: bool
+
+
+class EventBody(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    at: datetime
+    impact: str = "high"
+
+
+def _calendar_payload(repo: AdminRepo) -> dict:
+    invalidate_cfg()                                   # drops the cached calendar too
+    return calendar_store.calendar_view(repo, now_ist().date())
+
+
+@router.get("/api/admin/calendar")
+def admin_calendar(_: dict = Depends(require_admin), repo: AdminRepo = Depends(get_repo)) -> dict:
+    return calendar_store.calendar_view(repo, now_ist().date())
+
+
+@router.post("/api/admin/calendar/holidays")
+def admin_add_holiday(body: HolidayBody, user: dict = Depends(require_admin), repo: AdminRepo = Depends(get_repo),
+                      store: Store = Depends(get_store)) -> dict:
+    try:
+        calendar_store.add_holiday(repo, body.date, body.name)
+    except ValueError as e:
+        raise HTTPException(422, {"code": "invalid", "message": str(e)})
+    _audit(store, user, "holiday_added", f"{body.date.isoformat()} {body.name}")
+    return _calendar_payload(repo)
+
+
+@router.delete("/api/admin/calendar/holidays/{day}")
+def admin_remove_holiday(day: date, user: dict = Depends(require_admin), repo: AdminRepo = Depends(get_repo),
+                         store: Store = Depends(get_store)) -> dict:
+    try:
+        calendar_store.remove_holiday(repo, day)
+    except KeyError:
+        raise HTTPException(404, {"code": "unknown_holiday", "message": "Only holidays added here can be removed."})
+    _audit(store, user, "holiday_removed", day.isoformat())
+    return _calendar_payload(repo)
+
+
+@router.put("/api/admin/calendar/years/{year}")
+def admin_year_complete(year: int, body: YearBody, user: dict = Depends(require_admin),
+                        repo: AdminRepo = Depends(get_repo), store: Store = Depends(get_store)) -> dict:
+    if not 2020 <= year <= 2100:
+        raise HTTPException(422, {"code": "invalid", "message": "Year out of range."})
+    calendar_store.set_year_complete(repo, year, body.complete)
+    _audit(store, user, "holiday_year", f"{year} complete={body.complete}")
+    return _calendar_payload(repo)
+
+
+@router.post("/api/admin/calendar/events")
+def admin_add_event(body: EventBody, user: dict = Depends(require_admin), repo: AdminRepo = Depends(get_repo),
+                    store: Store = Depends(get_store)) -> dict:
+    try:
+        ev = calendar_store.add_event(repo, body.name, body.at, body.impact)
+    except ValueError as e:
+        raise HTTPException(422, {"code": "invalid", "message": str(e)})
+    _audit(store, user, "event_added", f"{ev['name']} at {ev['at']} ({ev['impact']})")
+    return _calendar_payload(repo)
+
+
+@router.delete("/api/admin/calendar/events/{event_id}")
+def admin_remove_event(event_id: str, user: dict = Depends(require_admin), repo: AdminRepo = Depends(get_repo),
+                       store: Store = Depends(get_store)) -> dict:
+    try:
+        calendar_store.remove_event(repo, event_id)
+    except KeyError:
+        raise HTTPException(404, {"code": "unknown_event", "message": "Only events added here can be removed."})
+    _audit(store, user, "event_removed", event_id)
+    return _calendar_payload(repo)

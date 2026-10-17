@@ -78,6 +78,7 @@ def gates(snap, cand: Candidate, setup_regimes: frozenset[str], pillar: dict[str
         Gate("data_fresh", age is not None and age <= MAX_DATA_AGE_S, "market data is stale"),
         Gate("session_open", session_ok, "outside the entry window"),
         Gate("no_event_window", event_ok, "high-impact event window"),
+        Gate("no_fresh_news", pillar["news"].status != "fail", pillar["news"].detail),
         Gate("liquidity", pillar["option_quality"].status != "fail", "contract spread or decay too high"),
         Gate("premium_not_rich", pillar["volatility"].status != "fail", "option premium too expensive to buy"),
         Gate("min_rr", trade.rr1 >= MIN_RR, f"reward:risk to T1 {trade.rr1:.2f} < {MIN_RR}"),

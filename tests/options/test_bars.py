@@ -68,3 +68,20 @@ def test_tick_time_falls_back_to_receipt_time():
     assert tick_time({}, received) == received
     skewed = received - timedelta(hours=5, minutes=30)    # e.g. a UTC time mislabelled as IST
     assert tick_time({"exchange_timestamp": skewed.replace(tzinfo=IST)}, received) == received
+
+
+def test_bad_prints_are_dropped_but_a_real_gap_is_accepted():
+    from options.market_data.bars import BarAggregator
+    agg = BarAggregator(jump_limits={1: 0.05})
+    t = ist(2026, 10, 19, 10, 0, 5)
+    for px in (25000.0, 25010.0, 2501.0, 25020.0):            # 2501 is a dropped digit
+        agg.add({"instrument_token": 1, "last_price": px}, t)
+    assert agg.rejected_ticks == 1 and agg.last_price[1] == 25020.0
+    bar = agg.pop_all()[0]
+    assert bar.low == 25000.0 and bar.high == 25020.0
+    for px in (22000.0, 22010.0, 22005.0):                     # three ticks agree: a genuine gap
+        agg.add({"instrument_token": 1, "last_price": px}, t)
+    assert agg.rejected_ticks == 3 and agg.last_price[1] == 22005.0
+    agg.add({"instrument_token": 2, "last_price": 100.0}, t)     # unguarded token (an option): never checked
+    agg.add({"instrument_token": 2, "last_price": 210.0}, t)
+    assert agg.last_price[2] == 210.0

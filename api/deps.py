@@ -9,6 +9,8 @@ from fastapi import Depends, Header, HTTPException
 from options.admin.connectors import effective_settings
 from options.admin.repo import AdminRepo
 from options.config import OptionsSettings
+from options.core.calendar import NseCalendar
+from options.core.calendar_store import calendar_from_db
 from options.storage import Store, make_engine
 
 CFG_TTL_S = 5.0          # UI edits reach every request within this long (and at once on this worker)
@@ -48,6 +50,24 @@ def get_cfg(repo: AdminRepo = Depends(get_repo)) -> OptionsSettings:
 
 def invalidate_cfg() -> None:
     _cfg_cache.clear()
+    _calendar_cache.clear()
+
+
+_calendar_cache: dict[str, tuple[float, NseCalendar]] = {}
+CALENDAR_TTL_S = 60.0
+
+
+def get_calendar() -> NseCalendar:
+    """Built-in holidays plus those added on the Connectors page (re-read at most once a minute)."""
+    hit = _calendar_cache.get("cal")
+    if hit and time.monotonic() - hit[0] < CALENDAR_TTL_S:
+        return hit[1]
+    try:
+        cal = calendar_from_db(_engine())
+    except Exception:
+        cal = NseCalendar()
+    _calendar_cache["cal"] = (time.monotonic(), cal)
+    return cal
 
 
 def _bearer(authorization: str | None) -> str:

@@ -7,7 +7,7 @@ and its latest result is stored so the page shows it without re-running anything
 import time
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
 from dataclasses import dataclass, field
-from datetime import datetime, time as dtime
+from datetime import datetime, time as dtime, timedelta
 from typing import Callable
 
 import requests
@@ -39,7 +39,8 @@ class HealthContext:
     http: requests.Session = field(default_factory=requests.Session)
     openai_factory: Callable | None = None            # api_key → OpenAI-like client
     macro_probe: Callable[[], float] | None = None    # returns one global quote
-    send_telegram_test: bool = False
+    smtp_factory: Callable | None = None              # (host, port) → smtplib.SMTP-like, for tests
+    send_telegram_test: bool = False                  # also sends a test e-mail when the e-mail check runs
 
 
 def _market_open(ctx: HealthContext) -> bool:
@@ -65,10 +66,20 @@ def check_recorder(ctx: HealthContext) -> Result:
         return "fail", "No heartbeat yet. Is the recorder service deployed and running?", {}
     seen = datetime.fromisoformat(st["ts"])
     age = (ctx.now - seen).total_seconds()
-    details = {k: st.get(k) for k in ("state", "next_start", "session_started_at", "last_exit_code", "last_command")}
+    details = {k: st.get(k) for k in ("state", "next_start", "session_started_at", "last_exit_code", "last_command",
+                                      "restarts_today", "gave_up")}
     if age > RECORDER_STALE_S:
         return "fail", f"Last heartbeat {age / 60:.0f} min ago. The recorder service looks down.", details
+    if st.get("gave_up"):
+        return "fail", (f"Today's session stopped {(st.get('restarts_today') or 0) + 1} times and is no longer "
+                        "restarted automatically. Check the recorder logs, then start it again."), details
+    if st.get("state") == "restarting":
+        nxt = datetime.fromisoformat(st["next_start"]).astimezone(IST).strftime("%H:%M:%S") if st.get("next_start") else "soon"
+        return "warn", f"Session stopped unexpectedly; restarting at {nxt} (attempt {st.get('restarts_today')} of 3)", details
     if st.get("state") == "running":
+        restarts = st.get("restarts_today") or 0
+        if restarts:
+            return "warn", f"Running today's session (restarted {restarts} time{'s' if restarts > 1 else ''})", details
         return "ok", "Running today's session", details
     nxt = st.get("next_start")
     when = datetime.fromisoformat(nxt).astimezone(IST).strftime("%a %d %b %H:%M") if nxt else "—"
@@ -192,6 +203,63 @@ def check_openai(ctx: HealthContext) -> Result:
     return "ok", f"Key valid · {model} answered", {"model": model}
 
 
+def check_email(ctx: HealthContext) -> Result:
+    cfg = ctx.cfg
+    if not (cfg.SMTP_HOST or cfg.ALERT_EMAIL_TO or cfg.SMTP_USERNAME):
+        return "skip", "Not set up (optional: e-mails the alerts Telegram can't deliver)", {}
+    missing = [k for k in ("SMTP_HOST", "SMTP_USERNAME", "SMTP_PASSWORD", "ALERT_EMAIL_TO") if not getattr(cfg, k)]
+    if missing:
+        return "fail", f"Missing {', '.join(missing)}", {}
+    if problem := validation.first_problem({k: str(getattr(cfg, k)) for k in
+                                            ("SMTP_HOST", "SMTP_PORT", "SMTP_USERNAME", "ALERT_EMAIL_TO")}):
+        return "fail", problem, {}
+    import smtplib
+    from options.notify.email import EmailNotifier
+    mail = EmailNotifier(cfg.SMTP_HOST, cfg.SMTP_PORT, cfg.SMTP_USERNAME, cfg.SMTP_PASSWORD, cfg.ALERT_EMAIL_TO,
+                         smtp_factory=ctx.smtp_factory)
+    if ctx.send_telegram_test:
+        res = mail.deliver("✅ <b>Test e-mail</b> from your TradingAgents Connectors page. Alerts Telegram can't "
+                           "deliver will arrive like this.")
+        if not res.ok:
+            return "fail", res.error or "The test e-mail wasn't accepted", {}
+        return "ok", f"Test e-mail sent to {cfg.ALERT_EMAIL_TO}", {}
+    try:
+        mail.verify()
+    except smtplib.SMTPAuthenticationError:
+        return "fail", "The mail server rejected the username or password (Gmail needs an app password)", {}
+    except (smtplib.SMTPException, OSError) as e:
+        return "fail", f"Couldn't reach {cfg.SMTP_HOST}:{cfg.SMTP_PORT} ({type(e).__name__})", {}
+    return "ok", f"Logged in to {cfg.SMTP_HOST} · fallback alerts go to {cfg.ALERT_EMAIL_TO}", {}
+
+
+def check_alerts(ctx: HealthContext) -> Result:
+    """Were the last day's alerts actually delivered?"""
+    since = ctx.now - timedelta(hours=24)
+    counts = ctx.store.outbox_counts_since(since)
+    total = sum(counts.values())
+    lost = counts.get("failed", 0) + counts.get("expired", 0)
+    pending = counts.get("pending", 0)
+    details = {"counts": counts}
+    if not total:
+        return "ok", "No alerts in the last 24 hours", details
+    if lost:
+        return "fail", f"{lost} of {total} alerts in the last 24 hours were never delivered. See Alerts below.", details
+    if pending:
+        return "warn", f"{pending} alert(s) waiting to be delivered", details
+    return "ok", f"All {total} alerts in the last 24 hours delivered", details
+
+
+def check_calendar(ctx: HealthContext) -> Result:
+    from options.core.calendar_store import calendar_from_db
+    cal = calendar_from_db(ctx.repo.engine)
+    year = ctx.now.year
+    if not cal.has_year(year):
+        return "fail", f"No NSE holiday list for {year}: every weekday counts as a trading day. Add it below.", {}
+    if not cal.has_year(year + 1) and ctx.now.month == 12:
+        return "warn", f"No NSE holiday list for {year + 1} yet. Add it below before 1 Jan.", {}
+    return "ok", f"NSE holidays loaded for {year}" + (f" and {year + 1}" if cal.has_year(year + 1) else ""), {}
+
+
 def check_macro(ctx: HealthContext) -> Result:
     def probe() -> float:
         import yfinance as yf
@@ -208,6 +276,9 @@ CHECKS: dict[str, tuple[str, Callable[[HealthContext], Result]]] = {
     "angel": ("Angel One SmartAPI", check_angel),
     "kite": ("Zerodha Kite Connect", check_kite),
     "telegram": ("Telegram", check_telegram),
+    "email": ("E-mail (SMTP)", check_email),
+    "alerts": ("Alert delivery", check_alerts),
+    "calendar": ("Trading calendar", check_calendar),
     "openai": ("OpenAI", check_openai),
     "macro": ("Global markets (Yahoo)", check_macro),
 }

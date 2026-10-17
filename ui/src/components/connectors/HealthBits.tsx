@@ -9,7 +9,7 @@ export const CHECK_STYLE: Record<CheckStatus | "none", { icon: typeof CheckCircl
   warn: { icon: AlertTriangle, text: "text-yellow",    label: "Attention",   ring: "border-[#f59e0b33] bg-[#f59e0b0d]", bar: "bg-yellow" },
   fail: { icon: XCircle,       text: "text-red",       label: "Failing",     ring: "border-[#ef444433] bg-[#ef44440d]", bar: "bg-red" },
   skip: { icon: MinusCircle,   text: "text-[#94a3b8]", label: "Skipped",     ring: "border-[#1e2d45] bg-card",          bar: "bg-[#475569]" },
-  none: { icon: CircleDashed,  text: "text-[#64748b]", label: "Not checked", ring: "border-[#1e2d45] bg-card",          bar: "bg-[#334155]" },
+  none: { icon: CircleDashed,  text: "text-[#8391a7]", label: "Not checked", ring: "border-[#1e2d45] bg-card",          bar: "bg-[#334155]" },
 };
 
 export function CheckBadge({ status }: { status: CheckStatus | null | undefined }) {
@@ -22,9 +22,9 @@ export function CheckBadge({ status }: { status: CheckStatus | null | undefined 
 }
 
 export function CheckMeta({ result }: { result: HealthResult | null | undefined }) {
-  if (!result) return <span className="text-[11px] text-[#475569]">Never tested</span>;
+  if (!result) return <span className="text-[11px] text-[#8391a7]">Never tested</span>;
   return (
-    <span className="text-[11px] text-[#64748b]">
+    <span className="text-[11px] text-[#8391a7]">
       checked <LiveAge iso={result.checked_at} />{result.latency_ms != null ? ` · ${result.latency_ms.toLocaleString("en-IN")} ms` : ""}
     </span>
   );

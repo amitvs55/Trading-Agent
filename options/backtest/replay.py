@@ -26,7 +26,7 @@ from options.reference import VIX_SYMBOL, build_reference, find_token
 from options.setups.base import Setup
 from options.storage import Store, make_engine
 
-HISTORY_DAYS = 10
+HISTORY_DAYS = 20               # the same warm-up the live session loads (session.HISTORY_SESSIONS)
 FLUSH_DELAY = timedelta(seconds=4)
 
 

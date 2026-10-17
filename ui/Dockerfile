@@ -1,8 +1,9 @@
 # ── Stage 1: install dependencies ──────────────────────────────────────────
 FROM node:20-alpine AS deps
 WORKDIR /app
-COPY package.json ./
-RUN npm install
+# Exact versions from the lockfile: every build installs the same packages (Next 16 needs Node 20.9+)
+COPY package.json package-lock.json ./
+RUN npm ci --no-audit --no-fund
 
 # ── Stage 2: build ──────────────────────────────────────────────────────────
 FROM node:20-alpine AS builder

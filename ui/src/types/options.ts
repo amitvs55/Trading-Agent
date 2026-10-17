@@ -154,6 +154,7 @@ export interface OptionsStatus {
   bars_today: number;
   last_bar_at: string | null;
   risk: { capital: number; risk_per_trade_pct: number; daily_loss_stop_pct: number };
+  signals_paused: { by: string | null; at: string | null; reason: string | null } | null;
 }
 
 export interface Stats {
@@ -178,6 +179,39 @@ export interface Performance {
   counts: { signals: number; traded: number; expired: number; cancelled: number };
   setup_labels: Record<string, string>;
   capital: number;
+  statistics?: Evidence;
+}
+
+/** options/engine/statistics.py: how sure we can be about a set of trades (R multiples). */
+export interface RecordStats {
+  trades: number;
+  enough: boolean;
+  min_trades: number;
+  mean_r: number | null;
+  sd_r: number | null;
+  ci_r: [number, number] | null;      // 95% interval of the average R per trade
+  t_stat: number | null;
+  significant: boolean;               // the interval's lower end is above zero
+  trades_needed: number | null;       // more trades before a positive edge would be significant
+  sharpe_per_trade: number | null;
+  psr: number | null;                 // probability the true Sharpe is above zero
+  dsr: number | null;                 // the same, discounted for the number of setups tried
+}
+
+export interface CalibrationRow { trades: number; win_rate: number | null; avg_r: number | null }
+
+export interface Evidence {
+  overall: RecordStats;
+  by_setup: Record<string, RecordStats>;
+  account: { days: number; return_pct: number; annualised_pct: number | null; sharpe: number | null; sortino: number | null };
+  benchmark: { index: string; from: string; to: string; start: number; end: number; return_pct: number } | null;
+  calibration: {
+    trades: number;
+    enough: boolean;
+    by_score: ({ band: string } & CalibrationRow)[];
+    score_monotonic: boolean | null;
+    by_pillar: Record<string, { by_status: Record<string, CalibrationRow>; lift_r: number | null }>;
+  };
 }
 
 export interface Evaluation {

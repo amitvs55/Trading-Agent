@@ -3,6 +3,7 @@
 import asyncio
 import json
 import math
+import threading
 from typing import Any
 
 from orchestrator.pipeline import TradingPipeline
@@ -23,6 +24,10 @@ def _serialize(obj: Any) -> Any:
     return obj
 
 
+class PipelineCancelled(Exception):
+    """The browser went away: stop before the next stage instead of spending more on LLM calls."""
+
+
 class StreamingPipeline(TradingPipeline):
     """
     Subclass of TradingPipeline that pushes SSE events onto an asyncio.Queue
@@ -30,14 +35,18 @@ class StreamingPipeline(TradingPipeline):
     (via run_in_executor) so we use call_soon_threadsafe to post to the queue.
     """
 
-    def __init__(self, ticker: str, queue: asyncio.Queue, loop: asyncio.AbstractEventLoop):
+    def __init__(self, ticker: str, queue: asyncio.Queue, loop: asyncio.AbstractEventLoop,
+                 cancelled: threading.Event | None = None):
         super().__init__(ticker)
         self._q = queue
         self._loop = loop
+        self.cancelled = cancelled or threading.Event()
 
     # ── internal helpers ──────────────────────────────────────────────────────
 
     def _emit(self, event: dict) -> None:
+        if event.get("status") == "running" and self.cancelled.is_set():
+            raise PipelineCancelled(f"cancelled before stage {event.get('stage')}")
         # Attach running token/cost totals so the dashboard can update live
         if event.get("status") == "complete":
             event["usage"] = self.usage.summary()

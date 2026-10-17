@@ -2,6 +2,7 @@
 import { useState, useCallback, useRef } from "react";
 import type { PipelineState, SSEEvent, StageData } from "@/types/pipeline";
 import { API_URL } from "@/lib/utils";
+import { mutate as globalMutate } from "swr";
 import { authHeaders } from "@/lib/optionsApi";
 
 const INITIAL_STATE: PipelineState = {
@@ -43,7 +44,17 @@ export function usePipelineStream() {
         signal:  abortRef.current.signal,
       });
 
-      if (!res.ok || !res.body) throw new Error(`API error ${res.status}`);
+      if (!res.ok || !res.body) {
+        // The API explains refusals (bad ticker, daily budget used up, a run already in progress)
+        let message = `API error ${res.status}`;
+        try {
+          const detail = (await res.json())?.detail;
+          if (typeof detail === "string") message = detail;
+          else if (detail?.message) message = detail.message;
+          else if (Array.isArray(detail) && res.status === 422) message = "That doesn't look like an NSE/BSE symbol.";
+        } catch { /* not JSON */ }
+        throw new Error(message);
+      }
 
       const reader  = res.body.getReader();
       const decoder = new TextDecoder();
@@ -72,8 +83,9 @@ export function usePipelineStream() {
             break;
           }
 
-          // Done event
+          // Done event: the run is saved, so History and Usage have something new
           if ("done" in event && event.done) {
+            globalMutate((k: unknown) => typeof k === "string" && (k.startsWith("/api/history") || k.startsWith("/api/usage")));
             setState(prev => ({
               ...prev,
               status:     "done",

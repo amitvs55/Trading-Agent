@@ -24,7 +24,7 @@ export function LiveClock() {
       <span className="font-mono font-semibold text-[#e2e8f0] tabular-nums w-[64px]" suppressHydrationWarning>
         {now ? fmtClock(now) : "--:--:--"}
       </span>
-      <span className="hidden sm:inline text-[#64748b]">IST</span>
+      <span className="hidden sm:inline text-[#8391a7]">IST</span>
       {label && (
         <span className={cn("hidden md:inline tabular-nums whitespace-nowrap", open ? "text-green" : "text-[#94a3b8]")}>
           · NSE {label}

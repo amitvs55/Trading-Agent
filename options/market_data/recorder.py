@@ -18,6 +18,7 @@ from utils.logger import setup_logger
 logger = setup_logger("options.recorder")
 
 MAX_PENDING_ROWS = 200_000      # bars kept in memory while the database is unreachable
+INDEX_JUMP, VIX_JUMP = 0.05, 0.25
 
 
 class Ticker(Protocol):
@@ -90,6 +91,10 @@ class Recorder:
         self.subscribed = {t for ref in self.refs for t in (ref.spot_token, ref.future_token)}
         if self.vix_token:
             self.subscribed.add(self.vix_token)
+        # Bad-print guard: the index and its future can't move 5% between two ticks; VIX can jump more
+        self.agg.jump_limits.update({t: INDEX_JUMP for ref in self.refs for t in (ref.spot_token, ref.future_token)})
+        if self.vix_token:
+            self.agg.jump_limits[self.vix_token] = VIX_JUMP
         self.subscribed |= self.extra_tokens
         self.subscribed |= self.window_tokens(prices)
         logger.info("Subscribing %d instruments", len(self.subscribed))
@@ -185,6 +190,7 @@ class Recorder:
             "bars_written": self.bars_written,
             "bars_unsaved": len(self._pending),
             "late_ticks": self.agg.late_ticks,
+            "rejected_ticks": self.agg.rejected_ticks,
             "disconnects": self.disconnects,
             "stale_alerts": self.stale_alerts,
             "engine_errors": self._hook_errors,

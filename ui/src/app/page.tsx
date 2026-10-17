@@ -25,8 +25,7 @@ export default function DashboardPage() {
   const { state, startPipeline, reset } = usePipelineStream();
   const [activeTicker,   setActiveTicker]   = useState("");
   const [activeExchange, setActiveExchange] = useState("NSE");
-  const [histPage,       setHistPage]       = useState(0);
-  const { records, total, isLoading, refresh } = useTradeHistory({ limit: LIMIT, offset: histPage * LIMIT });
+  const { total } = useTradeHistory({ limit: 1 });            // run count for the form
 
   function handleAnalyze(ticker: string, exchange: string) {
     setActiveTicker(ticker);
@@ -196,13 +195,13 @@ export default function DashboardPage() {
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-semibold text-[#e2e8f0]">Price Chart</span>
                   {yf && <span className="bg-bg text-[#ff9933] text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border border-[#ff993322]">{yf}</span>}
-                  <span className="text-[10px] text-[#64748b]">3 months · 1D</span>
+                  <span className="text-[10px] text-[#8391a7]">3 months · 1D</span>
                 </div>
                 <div className="flex items-center gap-3">
                   {[["#ff9933","Price"],["#f59e0b","SMA20"],["#f97316","SMA50"]].map(([c,l]) => (
                     <div key={l} className="flex items-center gap-1">
                       <div className="w-2 h-0.5" style={{ background: c }} />
-                      <span className="text-[10px] text-[#64748b]">{l}</span>
+                      <span className="text-[10px] text-[#8391a7]">{l}</span>
                     </div>
                   ))}
                 </div>
@@ -210,7 +209,7 @@ export default function DashboardPage() {
               <div className="p-3">
                 {yf
                   ? <TechnicalChart ticker={yf} proposal={stages.stage3?.trade_proposal} />
-                  : <div className="h-48 flex items-center justify-center text-xs text-[#475569]">Enter a ticker to load chart</div>
+                  : <div className="h-48 flex items-center justify-center text-xs text-[#8391a7]">Enter a ticker to load chart</div>
                 }
               </div>
             </div>
@@ -220,7 +219,7 @@ export default function DashboardPage() {
               <div className="bg-surface border border-[#1e2d45] rounded-xl overflow-hidden">
                 <div className="px-4 py-3 border-b border-[#1e2d45]">
                   <span className="text-xs font-semibold text-[#e2e8f0]">Market Sentiment</span>
-                  <span className="text-xs ml-2 text-[#64748b]">Dalal Street · News analysis</span>
+                  <span className="text-xs ml-2 text-[#8391a7]">Dalal Street · News analysis</span>
                 </div>
                 <div className="p-4 flex items-center gap-4">
                   <SentimentGauge score={stages.stage1.sentiment.overall_score} />
@@ -231,13 +230,13 @@ export default function DashboardPage() {
                       { label: "Reddit",         val: stages.stage1.sentiment.reddit_score  },
                     ].map(({ label, val }) => (
                       <div key={label} className="flex justify-between text-xs">
-                        <span className="text-[#64748b]">{label}</span>
+                        <span className="text-[#8391a7]">{label}</span>
                         <span className={`font-mono font-bold ${val != null && val >= 0 ? "text-green" : "text-red"}`}>
                           {val != null ? (val >= 0 ? "+" : "") + val.toFixed(2) : "—"}
                         </span>
                       </div>
                     ))}
-                    <div className="text-[10px] text-[#64748b] mt-1 border-t border-[#1e2d45] pt-2">{stages.stage1.sentiment.data_source}</div>
+                    <div className="text-[10px] text-[#8391a7] mt-1 border-t border-[#1e2d45] pt-2">{stages.stage1.sentiment.data_source}</div>
                   </div>
                 </div>
               </div>
@@ -260,7 +259,7 @@ export default function DashboardPage() {
                     {[["#ef4444","Aggressive"],["#f59e0b","Neutral"],["#22c55e","Conservative"]].map(([c,l]) => (
                       <div key={l} className="flex items-center gap-1">
                         <div className="w-2 h-0.5 rounded" style={{ background: c }} />
-                        <span className="text-[9px] text-[#64748b]">{l}</span>
+                        <span className="text-[9px] text-[#8391a7]">{l}</span>
                       </div>
                     ))}
                   </div>
@@ -273,7 +272,7 @@ export default function DashboardPage() {
                 <div className="h-28 flex items-center justify-center">
                   <div className="text-center">
                     <div className="w-5 h-5 rounded-full border-2 border-[#1e2d45] border-t-[#64748b] animate-spin mx-auto mb-2" />
-                    <div className="text-xs text-[#475569]">Awaiting Stage 4…</div>
+                    <div className="text-xs text-[#8391a7]">Awaiting Stage 4…</div>
                   </div>
                 </div>
               </div>
@@ -283,15 +282,7 @@ export default function DashboardPage() {
       )}
 
       {/* Trade History */}
-      <TradeHistoryTable
-        records={records}
-        total={total}
-        isLoading={isLoading}
-        onRefresh={refresh}
-        page={histPage}
-        setPage={setHistPage}
-        limit={LIMIT}
-      />
+      <TradeHistoryTable limit={LIMIT} />
     </main>
   );
 }

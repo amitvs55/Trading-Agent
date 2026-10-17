@@ -34,7 +34,7 @@ function PriceTrack({ s, current }: { s: Signal; current: number | null }) {
         {marks.map(m => (
           <div key={m.label} className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2" style={{ left: `${pos(m.v)}%` }}>
             <div className="w-0.5 h-3 bg-[#64748b]" />
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 text-[9px] text-[#64748b] whitespace-nowrap">{m.label}</div>
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 text-[9px] text-[#8391a7] whitespace-nowrap">{m.label}</div>
           </div>
         ))}
         {current != null && (
@@ -53,10 +53,10 @@ function PriceTrack({ s, current }: { s: Signal; current: number | null }) {
 function Price({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: "risk" | "reward" }) {
   return (
     <div className="min-w-0">
-      <div className="text-[10px] tracking-widest text-[#64748b]">{label}</div>
+      <div className="text-[10px] tracking-widest text-[#8391a7]">{label}</div>
       <div className={cn("font-mono text-base font-bold mt-0.5 tabular-nums",
         tone === "risk" ? "text-[#fca5a5]" : tone === "reward" ? "text-[#93c5fd]" : "text-[#e2e8f0]")}>{value}</div>
-      {sub && <div className="text-[10px] text-[#64748b] mt-0.5 leading-snug">{sub}</div>}
+      {sub && <div className="text-[10px] text-[#8391a7] mt-0.5 leading-snug">{sub}</div>}
     </div>
   );
 }
@@ -97,7 +97,7 @@ export const SignalCard = memo(function SignalCard({ s, quote, setupLabel, compa
             {s.horizon === "positional" && <span className="text-[10px] font-bold tracking-widest px-1.5 py-0.5 rounded bg-[#a78bfa14] text-[#c4b5fd] border border-[#a78bfa33]">POSITIONAL</span>}
           </div>
           <div className="mt-2 font-mono font-bold text-[#e2e8f0] text-[15px] truncate">{s.contract.tradingsymbol}</div>
-          <div className="text-[11px] text-[#64748b] mt-0.5">
+          <div className="text-[11px] text-[#8391a7] mt-0.5">
             {setupLabel} · expiry {fmtDate(s.contract.expiry)} · lot {s.contract.lot_size} · {s.signal_id} · {fmtTime(s.created_at)}
           </div>
         </div>
@@ -135,15 +135,15 @@ export const SignalCard = memo(function SignalCard({ s, quote, setupLabel, compa
       <div className="px-4 py-3 mt-1 border-t border-[#1e2d45] flex flex-wrap items-center justify-between gap-3 text-[11px]">
         <div className="flex items-center gap-4 flex-wrap text-[#94a3b8]">
           <span className="inline-flex items-center gap-1.5">
-            <ShieldAlert size={12} className={s.over_budget ? "text-yellow" : "text-[#64748b]"} />
+            <ShieldAlert size={12} className={s.over_budget ? "text-yellow" : "text-[#8391a7]"} />
             {s.lots} lot · risk <span className="font-mono text-[#e2e8f0]">{fmtRupees(s.risk_rupees)}</span>
           </span>
           <span className="inline-flex items-center gap-1.5">
-            {s.horizon === "intraday" ? <Clock size={12} className="text-[#64748b]" /> : <Hourglass size={12} className="text-[#64748b]" />}
+            {s.horizon === "intraday" ? <Clock size={12} className="text-[#8391a7]" /> : <Hourglass size={12} className="text-[#8391a7]" />}
             {s.horizon === "intraday" ? `time stop ${s.time_stop?.slice(0, 5) ?? "—"}` : `hold until ${fmtDate(s.exit_by)} 15:15`}
           </span>
           <CheckCounts s={s} />
-          {open && quote && <span className="text-[#64748b]">quote {fmtTime(quote.ts)} · bid {fmtPremium(quote.bid)} / ask {fmtPremium(quote.ask)}</span>}
+          {open && quote && <span className="text-[#8391a7]">quote {fmtTime(quote.ts)} · bid {fmtPremium(quote.bid)} / ask {fmtPremium(quote.ask)}</span>}
         </div>
         <Link href={`/signals/${s.signal_id}`} className="inline-flex items-center gap-0.5 text-[#ff9933] hover:underline font-medium">
           Full analysis <ChevronRight size={13} />

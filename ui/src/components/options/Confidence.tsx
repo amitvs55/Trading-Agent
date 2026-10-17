@@ -19,10 +19,10 @@ export function ConfidenceMeter({ c, className }: { c: Confidence; className?: s
   return (
     <div className={cn("min-w-0", className)}>
       <div className="flex items-baseline justify-between gap-2 mb-1.5">
-        <span className="text-[10px] tracking-widest text-[#64748b]">CONFIDENCE</span>
+        <span className="text-[10px] tracking-widest text-[#8391a7]">CONFIDENCE</span>
         <span className="text-[11px] text-[#94a3b8]">
           <span className={cn("font-mono text-sm font-bold", tone.text)}>{c.score.toFixed(0)}</span>
-          <span className="text-[#475569]">/100</span> · <span className={tone.text}>{c.level}</span>
+          <span className="text-[#8391a7]">/100</span> · <span className={tone.text}>{c.level}</span>
         </span>
       </div>
       <div className="relative h-1.5 rounded-full bg-[#0b0f1a]" role="meter" aria-valuemin={0} aria-valuemax={100}
@@ -39,7 +39,7 @@ function BandNote({ c }: { c: Confidence }) {
   const b = c.band;
   if (!b.enough) {
     return (
-      <p className="text-[11px] text-[#64748b] leading-snug">
+      <p className="text-[11px] text-[#8391a7] leading-snug">
         Track record for grade {c.grade}: <span className="text-[#94a3b8]">building history</span> ({b.trades} of {b.min_trades} completed
         trades). A win rate from fewer trades would mostly be luck, so it isn&apos;t shown yet.
       </p>
@@ -66,7 +66,7 @@ export function ConfidenceBreakdown({ c }: { c: Confidence }) {
               <StatusIcon status={p.status} size={12} />
               <span className="min-w-0">
                 <span className="text-[#e2e8f0]">{p.label}</span>
-                <span className="text-[#64748b] truncate block" title={p.detail}>{p.detail}</span>
+                <span className="text-[#8391a7] truncate block" title={p.detail}>{p.detail}</span>
               </span>
               <span className="h-1 rounded-full bg-[#0b0f1a] overflow-hidden" aria-hidden>
                 <span className={cn("block h-full rounded-full", p.status === "pass" ? "bg-green" : p.status === "fail" ? "bg-red" : "bg-yellow")}
@@ -78,7 +78,7 @@ export function ConfidenceBreakdown({ c }: { c: Confidence }) {
         })}
       </ul>
       <BandNote c={c} />
-      <p className="flex items-start gap-1.5 text-[10px] text-[#475569] leading-snug">
+      <p className="flex items-start gap-1.5 text-[10px] text-[#8391a7] leading-snug">
         <Info size={11} className="mt-px flex-shrink-0" />
         Confidence counts how much of the analysis agrees with the trade: full points for a pass, half for a caution or
         missing data, none when a check is against it. It is not a promise of winning; the track record above is.
@@ -95,7 +95,7 @@ export function ConfidenceRow({ c }: { c: Confidence }) {
     <div className="px-4 pb-3">
       <ConfidenceMeter c={c} />
       <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open}
-              className="mt-1.5 w-full flex items-center justify-between gap-2 text-left text-[11px] text-[#64748b] hover:text-[#94a3b8] transition-colors">
+              className="mt-1.5 w-full flex items-center justify-between gap-2 text-left text-[11px] text-[#8391a7] hover:text-[#94a3b8] transition-colors">
         <span className="min-w-0 truncate">
           {c.strengths.length ? <>Strong: <span className="text-[#94a3b8]">{c.strengths.join(", ")}</span></> : "No strong pillar"}
           {weak.length > 0 && <> · lost: <span className="text-[#94a3b8]">{weak.map(w => `${w.label} −${w.lost}`).join(", ")}</span></>}

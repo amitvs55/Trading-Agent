@@ -30,7 +30,7 @@ export function TokenUsageCard({ usage, status }: Props) {
           <Coins size={13} className="text-[#ff9933]" />
           <span className="text-xs font-semibold text-[#e2e8f0]">OpenAI Usage</span>
           {status === "running" && (
-            <span className="flex items-center gap-1 text-[10px] text-[#64748b]">
+            <span className="flex items-center gap-1 text-[10px] text-[#8391a7]">
               <span className="w-1.5 h-1.5 rounded-full bg-[#ff9933] animate-pulse" /> live
             </span>
           )}
@@ -44,13 +44,13 @@ export function TokenUsageCard({ usage, status }: Props) {
         {/* Run cost */}
         <div className="flex items-end justify-between mb-4">
           <div>
-            <div className="text-[10px] text-[#64748b] tracking-widest mb-1">THIS RUN</div>
+            <div className="text-[10px] text-[#8391a7] tracking-widest mb-1">THIS RUN</div>
             <div className="font-mono font-bold text-3xl text-[#e2e8f0] leading-none">{formatUSD(cost)}</div>
-            <div className="font-mono text-[11px] text-[#64748b] mt-1.5">≈ {formatINR(cost * USD_INR)}</div>
+            <div className="font-mono text-[11px] text-[#8391a7] mt-1.5">≈ {formatINR(cost * USD_INR)}</div>
           </div>
           <div className="text-right">
             <div className="font-mono text-sm font-bold text-[#e2e8f0]">{usage?.calls ?? 0}</div>
-            <div className="text-[10px] text-[#64748b]">LLM calls{usage?.retries ? ` · ${usage.retries} retry` : ""}</div>
+            <div className="text-[10px] text-[#8391a7]">LLM calls{usage?.retries ? ` · ${usage.retries} retry` : ""}</div>
           </div>
         </div>
 
@@ -71,7 +71,7 @@ export function TokenUsageCard({ usage, status }: Props) {
           ].map(({ label, val }) => (
             <div key={label} className="bg-card rounded-lg px-2 py-2 text-center">
               <div className="font-mono text-xs font-bold text-[#e2e8f0]">{formatTokens(val ?? 0)}</div>
-              <div className="text-[9px] text-[#64748b] mt-0.5">{label}</div>
+              <div className="text-[9px] text-[#8391a7] mt-0.5">{label}</div>
             </div>
           ))}
         </div>
@@ -79,7 +79,7 @@ export function TokenUsageCard({ usage, status }: Props) {
         {/* Per stage */}
         {stages.length > 0 && (
           <div className="mb-4">
-            <div className="text-[10px] text-[#64748b] tracking-widest mb-2">BY STAGE</div>
+            <div className="text-[10px] text-[#8391a7] tracking-widest mb-2">BY STAGE</div>
             <div className="flex flex-col gap-1.5">
               {stages.map(([stage, s]) => (
                 <div key={stage} className="flex items-center gap-2 text-[11px]">
@@ -98,10 +98,10 @@ export function TokenUsageCard({ usage, status }: Props) {
         {/* Per agent */}
         {agents.length > 0 ? (
           <div>
-            <div className="text-[10px] text-[#64748b] tracking-widest mb-2">BY AGENT</div>
+            <div className="text-[10px] text-[#8391a7] tracking-widest mb-2">BY AGENT</div>
             <table className="w-full text-[11px]">
               <thead>
-                <tr className="text-[#64748b] text-[9px] tracking-widest">
+                <tr className="text-[#8391a7] text-[9px] tracking-widest">
                   <th className="text-left font-semibold pb-1">AGENT</th>
                   <th className="text-right font-semibold pb-1">TOKENS</th>
                   <th className="text-right font-semibold pb-1">COST</th>
@@ -110,7 +110,7 @@ export function TokenUsageCard({ usage, status }: Props) {
               <tbody>
                 {agents.map(([name, a]) => (
                   <tr key={name} className="border-t border-[#1e2d4530]">
-                    <td className="py-1 text-[#94a3b8]">{name.replace(/_/g, " ")}{a.calls > 1 ? <span className="text-[#475569]"> ×{a.calls}</span> : null}</td>
+                    <td className="py-1 text-[#94a3b8]">{name.replace(/_/g, " ")}{a.calls > 1 ? <span className="text-[#8391a7]"> ×{a.calls}</span> : null}</td>
                     <td className="py-1 text-right font-mono text-[#94a3b8]">{formatTokens(a.total_tokens)}</td>
                     <td className="py-1 text-right font-mono text-[#e2e8f0]">{formatUSD(a.cost_usd)}</td>
                   </tr>
@@ -119,7 +119,7 @@ export function TokenUsageCard({ usage, status }: Props) {
             </table>
           </div>
         ) : (
-          <div className="text-[11px] text-[#475569] text-center py-2">
+          <div className="text-[11px] text-[#8391a7] text-center py-2">
             {status === "running" ? "Waiting for the first stage to finish…" : "No LLM calls recorded"}
           </div>
         )}

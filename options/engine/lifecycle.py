@@ -38,8 +38,9 @@ def close(sig: Signal, price: float, now: datetime, reason: str) -> Update:
     sig.state, sig.exit_price, sig.exit_reason, sig.closed_at = SignalState.CLOSED, price, reason, now
     sig.pnl_rupees = round(net, 2)
     sig.r_multiple = round(net / risk, 2) if risk > 0 else None
+    r_text = f", {sig.r_multiple:+.2f}R" if sig.r_multiple is not None else ""
     return Update(reason, price, f"closed @ {price:.2f} ({reason.replace('_', ' ').lower()}): "
-                                 f"₹{net:+,.0f} after charges, {sig.r_multiple:+.2f}R")
+                                 f"₹{net:+,.0f} after charges{r_text}")
 
 
 def on_quote(sig: Signal, bid: float | None, ask: float | None, now: datetime) -> Update | None:
@@ -48,6 +49,11 @@ def on_quote(sig: Signal, bid: float | None, ask: float | None, now: datetime) -
         if now > sig.valid_until:
             sig.state, sig.closed_at, sig.exit_reason = SignalState.EXPIRED, now, "EXPIRED"
             return Update("EXPIRED", None, "entry price not reached in time; no trade")
+        if ask and ask <= sig.stop_loss:
+            # The premium fell through the stop before it was bought: "inside the entry band" by price,
+            # but already a loser. No trade (the backtest found this filling and closing in one tick).
+            sig.state, sig.closed_at, sig.exit_reason = SignalState.CANCELLED, now, "CANCELLED"
+            return Update("CANCELLED", None, f"price fell through the stop ({sig.stop_loss:.2f}) before entry; no trade")
         if ask and ask <= sig.entry_high:
             sig.state, sig.fill_price, sig.filled_at, sig.initial_stop = SignalState.ACTIVE, ask, now, sig.stop_loss
             return Update("ENTRY_FILLED", ask, f"entry filled @ {ask:.2f}")

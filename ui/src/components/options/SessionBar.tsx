@@ -1,10 +1,10 @@
 "use client";
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { Activity, Clock, LogIn, Send, Shield, Wifi, WifiOff } from "lucide-react";
+import { Activity, Clock, LogIn, PauseCircle, Send, Shield, Wifi, WifiOff } from "lucide-react";
 import type { OptionsStatus } from "@/types/options";
 import { API_URL, cn } from "@/lib/utils";
-import { ageSeconds, fmtAge, fmtDate, fmtNum, PHASE_LABELS } from "@/lib/optionsFormat";
+import { ageSeconds, fmtDate, fmtNum, PHASE_LABELS } from "@/lib/optionsFormat";
 import { SessionBarSkeleton } from "./Skeletons";
 import { LiveAge } from "@/components/common/LiveAge";
 import { useAuth } from "@/components/auth/AuthGate";
@@ -38,8 +38,19 @@ export function SessionBar({ status }: { status: OptionsStatus | undefined }) {
       <Chip tone={open ? "good" : "neutral"}>
         <span className={cn("w-2 h-2 rounded-full", open ? "bg-green animate-pulse" : "bg-[#475569]")} />
         <span className={open ? "text-green font-medium" : "text-[#94a3b8]"}>{PHASE_LABELS[status.session_phase] ?? status.session_phase}</span>
-        {!status.trading_day && <span className="text-[#64748b]">· next session {fmtDate(status.next_trading_day)}</span>}
+        {!status.trading_day && <span className="text-[#8391a7]">· next session {fmtDate(status.next_trading_day)}</span>}
       </Chip>
+
+      {status.signals_paused && (
+        <Chip tone="bad">
+          <PauseCircle size={13} className="text-red" />
+          <span className="text-red font-medium">New signals paused</span>
+          <span className="text-[#94a3b8]">
+            {status.signals_paused.by ? `by ${status.signals_paused.by}` : ""}
+            {status.signals_paused.reason ? ` · ${status.signals_paused.reason}` : ""} · open signals still tracked
+          </span>
+        </Chip>
+      )}
 
       {status.data_connected_today ? (
         <Chip tone="good"><Wifi size={13} className="text-green" /><span className="text-green font-medium">{status.data_provider_name} connected</span></Chip>
@@ -58,7 +69,7 @@ export function SessionBar({ status }: { status: OptionsStatus | undefined }) {
         </a>
       ) : (
         <Chip tone={open ? "warn" : "neutral"}>
-          <WifiOff size={13} className={open ? "text-yellow" : "text-[#64748b]"} />
+          <WifiOff size={13} className={open ? "text-yellow" : "text-[#8391a7]"} />
           <span className={open ? "text-yellow font-medium" : "text-[#94a3b8]"}>
             {open ? `${status.data_provider_name} not connected yet` : `${status.data_provider_name} logs in at 08:30`}
           </span>
@@ -66,10 +77,10 @@ export function SessionBar({ status }: { status: OptionsStatus | undefined }) {
       )}
 
       <Chip tone={fresh ? "good" : open ? "warn" : "neutral"}>
-        <Activity size={13} className={fresh ? "text-green" : "text-[#64748b]"} />
+        <Activity size={13} className={fresh ? "text-green" : "text-[#8391a7]"} />
         <span className="text-[#94a3b8]">Market data</span>
         <span className="font-mono text-[#e2e8f0]"><LiveAge iso={status.last_bar_at} /></span>
-        <span className="text-[#475569]">· {fmtNum(status.bars_today)} bars today</span>
+        <span className="text-[#8391a7]">· {fmtNum(status.bars_today)} bars today</span>
       </Chip>
 
       <SetupLink admin={admin} href="/connectors">
@@ -86,13 +97,13 @@ export function SessionBar({ status }: { status: OptionsStatus | undefined }) {
         <Shield size={13} className="text-[#ff9933]" />
         <span className="text-[#94a3b8]">Risk</span>
         <span className="font-mono text-[#e2e8f0]">{status.risk.risk_per_trade_pct}%/trade</span>
-        <span className="text-[#475569]">·</span>
+        <span className="text-[#8391a7]">·</span>
         <span className="font-mono text-[#e2e8f0]">{status.risk.daily_loss_stop_pct}% daily stop</span>
-        <span className="text-[#475569]">· ₹{fmtNum(status.risk.capital)}</span>
+        <span className="text-[#8391a7]">· ₹{fmtNum(status.risk.capital)}</span>
       </Chip>
 
       <Chip>
-        <Clock size={13} className="text-[#64748b]" />
+        <Clock size={13} className="text-[#8391a7]" />
         <span className="text-[#94a3b8]">Signals on 5-min closes · 09:30–15:00</span>
       </Chip>
     </div>

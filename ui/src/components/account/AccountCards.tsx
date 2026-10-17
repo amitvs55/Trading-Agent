@@ -24,9 +24,9 @@ function Text({ id, label, value, onChange, placeholder, auto, hint, mono }: {
       <label htmlFor={id} className="text-[11px] font-medium text-[#94a3b8]">{label}</label>
       <input id={id} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} autoComplete={auto}
              spellCheck={false}
-             className={cn("mt-1.5 w-full bg-card border border-[#1e2d45] rounded-lg px-3 py-2 text-sm text-[#e2e8f0] outline-none focus:border-[#ff9933] placeholder:text-[#475569]",
+             className={cn("mt-1.5 w-full bg-card border border-[#1e2d45] rounded-lg px-3 py-2 text-sm text-[#e2e8f0] outline-none focus:border-[#ff9933] placeholder:text-[#8391a7]",
                mono && "font-mono")} />
-      {hint && <p className="text-[10px] text-[#475569] mt-1">{hint}</p>}
+      {hint && <p className="text-[10px] text-[#8391a7] mt-1">{hint}</p>}
     </div>
   );
 }
@@ -90,7 +90,7 @@ export function ProfileCard({ user }: { user: User }) {
         <Avatar user={{ ...user, full_name: name || user.full_name }} size="lg" />
         <div className="min-w-0">
           <div className="text-base font-semibold text-[#e2e8f0] truncate">{displayName({ ...user, full_name: name || user.full_name })}</div>
-          <div className="flex items-center gap-2 mt-1 text-[11px] text-[#64748b]">
+          <div className="flex items-center gap-2 mt-1 text-[11px] text-[#8391a7]">
             <span className="font-mono">@{user.username}</span><RoleBadge role={user.role} />
           </div>
         </div>
@@ -102,8 +102,8 @@ export function ProfileCard({ user }: { user: User }) {
       </form>
       <Note note={note} />
       <dl className="mt-4 pt-3 border-t border-[#1e2d45] grid grid-cols-2 gap-y-1.5 text-[12px]">
-        <dt className="text-[#64748b]">Member since</dt><dd className="text-right text-[#e2e8f0]">{fmtDateTime(user.created_at)}</dd>
-        <dt className="text-[#64748b]">Last sign-in</dt><dd className="text-right text-[#e2e8f0]">{user.last_login_at ? <LiveAge iso={user.last_login_at} /> : "—"}</dd>
+        <dt className="text-[#8391a7]">Member since</dt><dd className="text-right text-[#e2e8f0]">{fmtDateTime(user.created_at)}</dd>
+        <dt className="text-[#8391a7]">Last sign-in</dt><dd className="text-right text-[#e2e8f0]">{user.last_login_at ? <LiveAge iso={user.last_login_at} /> : "—"}</dd>
       </dl>
     </Panel>
   );
@@ -156,7 +156,7 @@ function RolePicker({ value, onChange, name }: { value: string; onChange: (v: st
           value === r ? "border-[#ff993366] bg-[#ff993310]" : "border-[#1e2d45] bg-card hover:border-[#2d3e58]")}>
           <input type="radio" name={name} value={r} checked={value === r} onChange={() => onChange(r)} className="sr-only" />
           <span className="text-xs font-semibold text-[#e2e8f0]">{ROLE_LABEL[r]}</span>
-          <span className="block text-[10px] text-[#64748b] leading-snug mt-0.5">{ROLE_HELP[r]}</span>
+          <span className="block text-[10px] text-[#8391a7] leading-snug mt-0.5">{ROLE_HELP[r]}</span>
         </label>
       ))}
     </div>
@@ -208,10 +208,10 @@ function AddUserForm({ onDone, onCancel }: { onDone: (u: User) => void; onCancel
         <Pw id="new-pw" label="Password (10+ characters)" value={password} onChange={setPassword} auto="new-password" />
         <Pw id="new-pw2" label="Confirm password" value={confirm} onChange={setConfirm} auto="new-password" />
       </div>
-      <p className="text-[10px] text-[#475569]">Give the password to the person privately; they can change it under Your account after signing in.</p>
+      <p className="text-[10px] text-[#8391a7]">Give the password to the person privately; they can change it under Your account after signing in.</p>
       <div className="flex items-center gap-2">
         <PrimaryButton busy={busy}><UserPlus size={12} /> Create account</PrimaryButton>
-        <button type="button" onClick={onCancel} className="px-2 py-1.5 text-xs text-[#64748b] hover:text-[#e2e8f0]">Cancel</button>
+        <button type="button" onClick={onCancel} className="px-2 py-1.5 text-xs text-[#8391a7] hover:text-[#e2e8f0]">Cancel</button>
       </div>
       <Note note={note} />
     </form>
@@ -238,7 +238,7 @@ function ResetPasswordForm({ user, onDone, onCancel }: { user: User; onDone: () 
     <form onSubmit={submit} className="menu-pop mt-2 flex flex-wrap items-end gap-2">
       <div className="min-w-[220px] flex-1"><Pw id={`reset-${user.id}`} label={`New password for ${displayName(user)}`} value={pw} onChange={setPw} auto="new-password" /></div>
       <PrimaryButton busy={busy}>Set password</PrimaryButton>
-      <button type="button" onClick={onCancel} className="px-2 py-1.5 text-xs text-[#64748b] hover:text-[#e2e8f0]">Cancel</button>
+      <button type="button" onClick={onCancel} className="px-2 py-1.5 text-xs text-[#8391a7] hover:text-[#e2e8f0]">Cancel</button>
       <div className="basis-full"><Note note={note} /></div>
     </form>
   );
@@ -273,12 +273,12 @@ function UserRow({ u, me, onChanged }: { u: User; me: User; onChanged: (text: st
         <Avatar user={u} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className={cn("text-sm font-medium truncate", u.disabled ? "text-[#64748b] line-through" : "text-[#e2e8f0]")}>{displayName(u)}</span>
+            <span className={cn("text-sm font-medium truncate", u.disabled ? "text-[#8391a7] line-through" : "text-[#e2e8f0]")}>{displayName(u)}</span>
             <RoleBadge role={u.role} />
-            {isMe && <span className="text-[10px] text-[#64748b]">you</span>}
+            {isMe && <span className="text-[10px] text-[#8391a7]">you</span>}
             {u.disabled && <span className="text-[10px] font-bold tracking-widest px-1.5 py-0.5 rounded border border-[#ef444433] text-[#fca5a5] uppercase">Disabled</span>}
           </div>
-          <div className="text-[11px] text-[#64748b] mt-0.5"><span className="font-mono">@{u.username}</span> · last sign-in {u.last_login_at ? <LiveAge iso={u.last_login_at} /> : "never"}</div>
+          <div className="text-[11px] text-[#8391a7] mt-0.5"><span className="font-mono">@{u.username}</span> · last sign-in {u.last_login_at ? <LiveAge iso={u.last_login_at} /> : "never"}</div>
         </div>
         {mode === "view" && (
           <div className="flex items-center gap-1 flex-shrink-0">
@@ -302,7 +302,7 @@ function UserRow({ u, me, onChanged }: { u: User; me: User; onChanged: (text: st
           <div className="flex items-center gap-2">
             <PrimaryButton busy={busy}>Save</PrimaryButton>
             <button type="button" onClick={() => { setMode("view"); setName(u.full_name ?? ""); setRole(u.role); }}
-                    className="px-2 py-1.5 text-xs text-[#64748b] hover:text-[#e2e8f0]">Cancel</button>
+                    className="px-2 py-1.5 text-xs text-[#8391a7] hover:text-[#e2e8f0]">Cancel</button>
           </div>
         </form>
       )}
@@ -330,7 +330,7 @@ function IconButton({ children, label, onClick, danger, busy }: {
 }) {
   return (
     <button type="button" onClick={onClick} disabled={busy} aria-label={label} title={label}
-            className={cn("w-8 h-8 grid place-items-center rounded-lg border border-transparent text-[#64748b] transition-colors disabled:opacity-50",
+            className={cn("w-8 h-8 grid place-items-center rounded-lg border border-transparent text-[#8391a7] transition-colors disabled:opacity-50",
               danger ? "hover:text-[#fca5a5] hover:border-[#ef444433]" : "hover:text-[#e2e8f0] hover:border-[#1e2d45]")}>
       {busy ? <Loader2 size={13} className="animate-spin" /> : children}
     </button>
@@ -362,7 +362,7 @@ export function UsersCard({ me, data, refresh }: { me: User; data: UsersResponse
           {data.users.map(u => <UserRow key={u.id} u={u} me={me} onChanged={changed} />)}
         </ul>
       )}
-      <p className="mt-3 text-[10px] text-[#475569]">
+      <p className="mt-3 text-[10px] text-[#8391a7]">
         There is always at least one active admin: the last one can&apos;t be disabled, demoted or deleted.</p>
     </Panel>
   );

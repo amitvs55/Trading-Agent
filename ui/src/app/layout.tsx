@@ -31,8 +31,10 @@ export const viewport: Viewport = {
 };
 
 // Runs before first paint: when this browser has no session, hide the app shell so a signed-out
-// visitor never sees it flash before the sign-in screen.
-const AUTH_HINT = `try{if(!localStorage.getItem("auth.session"))document.documentElement.classList.add("auth-out")}catch(e){}`;
+// visitor never sees it flash before the sign-in screen. It also marks the cached role (role-admin /
+// role-viewer), so role-only placeholders can hold their space from the server-rendered first paint.
+const AUTH_HINT = `try{var d=document.documentElement;if(!localStorage.getItem("auth.session"))d.classList.add("auth-out");`
+  + `var u=JSON.parse(localStorage.getItem("auth.user")||"null");if(u&&/^[a-z]+$/.test(u.role))d.classList.add("role-"+u.role)}catch(e){}`;
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
@@ -46,13 +48,13 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             <Navbar />
             {/* On phones the fixed bottom bar covers the last 56 px (+ home indicator): leave room for it */}
             <div className="pb-[calc(64px+env(safe-area-inset-bottom))] lg:pb-0">
-            <RouteGuard>{children}</RouteGuard>
+            <div className="min-h-[calc(100svh-3.5rem)]"><RouteGuard>{children}</RouteGuard></div>
             <footer className="border-t border-[#1e2d45] mt-10 py-4 px-4 sm:px-6">
               <div className="india-stripe mb-3" />
-              <div className="max-w-screen-2xl mx-auto flex flex-wrap items-center justify-between gap-2 text-xs text-[#475569]">
+              <div className="max-w-screen-2xl mx-auto flex flex-wrap items-center justify-between gap-2 text-xs text-[#8391a7]">
                 <span>
                   TradingAgents India · NSE · Live options signals + research pipeline ·{" "}
-                  <span className="text-[#ff993388]">For personal research and education. Not investment advice.</span>
+                  <span className="text-[#d98a4a]">For personal research and education. Not investment advice.</span>
                 </span>
                 <span className="font-mono">All times IST (UTC+5:30)</span>
               </div>

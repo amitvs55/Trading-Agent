@@ -21,6 +21,25 @@ def _rupees(x: float) -> str:
     return f"₹{x:,.0f}"
 
 
+STOP_LIMIT_GAP = 0.05           # SL-limit orders need room below the trigger to fill in a fast fall
+
+
+def broker_stop(trigger: float, tick: float = 0.05) -> tuple[float, float]:
+    """(trigger, limit) for a stop-loss order at the broker. NSE doesn't accept SL-M orders on
+    options, so it has to be an SL (limit) order: the limit sits ~5% under the trigger."""
+    limit = trigger - max(tick, trigger * STOP_LIMIT_GAP)
+    return round(trigger, 2), max(tick, round(round(limit / tick) * tick, 2))
+
+
+def stop_instruction(sig: Signal) -> str:
+    trig, limit = broker_stop(sig.stop_loss)
+    if sig.horizon == "positional":
+        return (f"Protect it: right after your entry, set a GTT stop at your broker (trigger {trig:.2f}, "
+                f"limit {limit:.2f}); day SL orders lapse at the close. Alerts are a backup, not a stop.")
+    return (f"Protect it: right after your entry, place an SL order at your broker (trigger {trig:.2f}, "
+            f"limit {limit:.2f}). Alerts are a backup, not a stop.")
+
+
 def checks_block(checks: list[PillarCheck]) -> str:
     counts = Counter(c.status for c in checks)
     head = " ".join(f"{counts[s]}{STATUS_ICON[s]}" for s in ("pass", "warn", "fail", "na") if counts[s])
@@ -51,12 +70,20 @@ def signal_card(sig: Signal, capital: float, setup_stats: str | None = None, con
         f"ID     {sig.signal_id}",
     ])
     stats = f"\n<i>{escape(SETUP_LABELS.get(sig.setup, sig.setup))} history: {escape(setup_stats)}</i>" if setup_stats else ""
-    return f"{head}{mode}\n<pre>{escape(body)}</pre>\n{checks_block(sig.checks)}{stats}"
+    protect = f"\n🛡 {escape(stop_instruction(sig))}" if sig.mode == "LIVE" else ""
+    return f"{head}{mode}\n<pre>{escape(body)}</pre>{protect}\n{checks_block(sig.checks)}{stats}"
 
 
 def update_message(sig: Signal, kind: str, message: str) -> str:
     icon = UPDATE_ICONS.get(kind, "🔄")
-    return f"{icon} <b>{escape(sig.signal_id)}</b> {escape(sig.contract.tradingsymbol)}: {escape(message)}"
+    text = f"{icon} <b>{escape(sig.signal_id)}</b> {escape(sig.contract.tradingsymbol)}: {escape(message)}"
+    if sig.mode == "LIVE" and kind == "T1_HIT":
+        trig, limit = broker_stop(sig.stop_loss)
+        text += f"\n🛡 Move your broker stop up: trigger {trig:.2f}, limit {limit:.2f}."
+    if sig.mode == "LIVE" and kind in ("SL_HIT", "TRAIL_STOP", "INVALIDATED", "TIME_STOP", "SQUARE_OFF",
+                                       "EXIT_SIGNAL", "EVENT_EXIT", "KILL"):
+        text += "\nExit at your broker now if you're still in it, and cancel the pending stop order."
+    return text
 
 
 def morning_brief(today: date, sections: list[dict]) -> str:

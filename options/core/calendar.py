@@ -32,12 +32,14 @@ def at_ist(d: date, t: time) -> datetime:
 
 
 class NseCalendar:
-    def __init__(self, holidays: dict[int, frozenset[date]] | None = None):
+    def __init__(self, holidays: dict[int, frozenset[date]] | None = None, complete_years: set[int] | None = None):
         self._holidays = NSE_HOLIDAYS if holidays is None else holidays
+        # Years whose full list is known; a year with only a few holidays entered still warns
+        self._complete = set(self._holidays) if complete_years is None else set(complete_years)
         self._warned: set[int] = set()
 
     def has_year(self, year: int) -> bool:
-        return year in self._holidays
+        return year in self._complete
 
     def is_trading_day(self, d: date) -> bool:
         if d.weekday() >= 5:

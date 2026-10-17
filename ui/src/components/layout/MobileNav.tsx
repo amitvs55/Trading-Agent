@@ -13,7 +13,7 @@ function Tab({ item, active }: { item: NavItem; active: boolean }) {
   return (
     <Link href={item.href} aria-current={active ? "page" : undefined}
           className={cn("flex-1 min-w-0 flex flex-col items-center justify-center gap-0.5 h-14 text-[10px] font-medium transition-colors",
-            active ? "text-[#ff9933]" : "text-[#64748b] active:text-[#e2e8f0]")}>
+            active ? "text-[#ff9933]" : "text-[#8391a7] active:text-[#e2e8f0]")}>
       <span className={cn("grid place-items-center w-10 h-7 rounded-full transition-colors", active && "bg-[#ff99331f]")}>
         <Icon size={18} strokeWidth={active ? 2.4 : 2} />
       </span>
@@ -37,7 +37,11 @@ export function MobileNav() {
   const rest = [...items.filter(i => !i.primary), ACCOUNT_ITEM];
   const moreActive = !open && rest.some(i => isActive(path, i.href));
 
-  useEffect(() => { setOpen(false); }, [path]);                 // navigating closes the sheet
+  const [shownFor, setShownFor] = useState(path);
+  if (shownFor !== path) {                                       // navigating closes the sheet
+    setShownFor(path);
+    setOpen(false);
+  }
   useEffect(() => {                                              // closed sheet: not focusable, not read out
     const el = sheetRef.current;
     if (!el) return;
@@ -61,7 +65,7 @@ export function MobileNav() {
           {tabs.map(t => <Tab key={t.href} item={t} active={isActive(path, t.href)} />)}
           <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} aria-controls="more-sheet"
                   className={cn("flex-1 min-w-0 flex flex-col items-center justify-center gap-0.5 h-14 text-[10px] font-medium transition-colors",
-                    open || moreActive ? "text-[#ff9933]" : "text-[#64748b]")}>
+                    open || moreActive ? "text-[#ff9933]" : "text-[#8391a7]")}>
             <span className={cn("grid place-items-center w-10 h-7 rounded-full transition-colors", (open || moreActive) && "bg-[#ff99331f]")}>
               {open ? <X size={18} /> : <Menu size={18} />}
             </span>
@@ -85,7 +89,7 @@ export function MobileNav() {
               <span className="w-11 h-11 rounded-xl grid place-items-center bg-[#ff993326] text-[#ff9933] text-sm font-bold">{initials(user)}</span>
               <div className="min-w-0">
                 <div className="text-sm font-semibold text-[#e2e8f0] truncate">{displayName(user)}</div>
-                <div className="text-[11px] text-[#64748b]">@{user.username} · {ROLE_LABEL[user.role] ?? user.role}</div>
+                <div className="text-[11px] text-[#8391a7]">@{user.username} · {ROLE_LABEL[user.role] ?? user.role}</div>
               </div>
             </div>
           )}

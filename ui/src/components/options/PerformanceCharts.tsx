@@ -6,9 +6,9 @@ import { fmtDateTime, fmtRupees } from "@/lib/optionsFormat";
 // Validated (dataviz validator, dark, on the #1a2233 card): blue ↔ red diverging poles, gray midpoint.
 const GAIN = "#3987e5";
 const LOSS = "#e66767";
-const NEUTRAL = "#475569";
+const NEUTRAL = "#64748b";
 const GRID = "#1e2d45";
-const AXIS = "#64748b";
+const AXIS = "#8391a7";
 
 const tooltipStyle = {
   contentStyle: { background: "#1a2233", border: "1px solid #1e2d45", borderRadius: 8, fontSize: 11, padding: "8px 10px" },
@@ -20,7 +20,7 @@ export function EquityChart({ data }: { data: Performance["equity"] }) {
   const points = [{ t: "", equity: 0, pnl: 0, id: "start", mode: "" }, ...data].map((d, i) => ({ ...d, n: i }));
   const last = points[points.length - 1]?.equity ?? 0;
   return (
-    <div className="h-72" aria-label={`Cumulative P&L after ${data.length} trades: ${fmtRupees(last, true)}`}>
+    <div className="h-72" role="img" aria-label={`Cumulative P&L after ${data.length} trades: ${fmtRupees(last, true)}`}>
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={points} margin={{ top: 10, right: 12, left: 4, bottom: 0 }}>
           <defs>
@@ -61,7 +61,7 @@ export function RDistribution({ values }: { values: number[] }) {
     return { label, range, count, mid: (lo + hi) / 2 };
   });
   return (
-    <div className="h-60" aria-label="Distribution of trade results in R multiples">
+    <div className="h-60" role="img" aria-label="Distribution of trade results in R multiples">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={bins} margin={{ top: 16, right: 8, left: 0, bottom: 8 }} barCategoryGap={2}>
           <CartesianGrid stroke={GRID} vertical={false} />

@@ -82,6 +82,11 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
   const user = me ?? cached;
   const signedIn = !!token && !expired;
+  useEffect(() => {                                   // keep the pre-paint role marker (layout.tsx) current
+    const html = document.documentElement;
+    html.classList.remove("role-admin", "role-viewer");
+    if (user?.role === "admin" || user?.role === "viewer") html.classList.add(`role-${user.role}`);
+  }, [user?.role]);
   const confirmedRole = me?.role;                     // prefetch only once the session is confirmed
   useEffect(() => {
     if (!confirmedRole) return;
@@ -131,7 +136,7 @@ function Shell({ children }: { children: ReactNode }) {
             </div>
             <div>
               <span className="font-bold tracking-wide text-[#ff9933]">TradingAgents</span>
-              <span className="text-[#64748b] text-sm ml-1.5">India</span>
+              <span className="text-[#8391a7] text-sm ml-1.5">India</span>
             </div>
           </div>
           {children}
@@ -146,7 +151,7 @@ function Card({ icon, title, subtitle, children }: { icon: ReactNode; title: str
     <div className="fade-in bg-surface border border-[#1e2d45] rounded-2xl p-7 shadow-[0_20px_60px_rgba(0,0,0,.45)]">
       <div className="w-12 h-12 rounded-xl grid place-items-center mb-5 bg-[#ff993314] border border-[#ff993333]">{icon}</div>
       <h1 className="text-lg font-bold text-[#e2e8f0]">{title}</h1>
-      {subtitle && <div className="text-sm text-[#64748b] mt-1 mb-5 leading-relaxed">{subtitle}</div>}
+      {subtitle && <div className="text-sm text-[#8391a7] mt-1 mb-5 leading-relaxed">{subtitle}</div>}
       {children}
     </div>
   );
@@ -159,14 +164,14 @@ function Input({ id, label, icon, type = "text", value, onChange, autoComplete, 
   const [shown, setShown] = useState(false);
   return (
     <div className="mb-3.5">
-      <label htmlFor={id} className="text-[10px] tracking-widest text-[#64748b]">{label}</label>
+      <label htmlFor={id} className="text-[10px] tracking-widest text-[#8391a7]">{label}</label>
       <div className="mt-1.5 flex items-center gap-2 bg-card border border-[#1e2d45] rounded-lg px-3 focus-within:border-[#ff9933] transition-colors">
-        <span className="text-[#64748b]">{icon}</span>
+        <span className="text-[#8391a7]">{icon}</span>
         <input id={id} type={reveal && shown ? "text" : type} value={value} autoComplete={autoComplete} placeholder={placeholder}
                onChange={e => onChange(e.target.value)} spellCheck={false}
-               className="flex-1 min-w-0 bg-transparent py-2.5 text-sm text-[#e2e8f0] outline-none placeholder:text-[#475569]" />
+               className="flex-1 min-w-0 bg-transparent py-2.5 text-sm text-[#e2e8f0] outline-none placeholder:text-[#8391a7]" />
         {reveal && (
-          <button type="button" onClick={() => setShown(s => !s)} className="text-[#64748b] hover:text-[#e2e8f0]" aria-label={shown ? "Hide" : "Show"}>
+          <button type="button" onClick={() => setShown(s => !s)} className="text-[#8391a7] hover:text-[#e2e8f0]" aria-label={shown ? "Hide" : "Show"}>
             {shown ? <EyeOff size={14} /> : <Eye size={14} />}
           </button>
         )}
@@ -263,7 +268,7 @@ function SetupScreen() {
                  onChange={setPassword} autoComplete="new-password" reveal />
           <Input id="setup-confirm" label="CONFIRM PASSWORD" icon={<Lock size={14} />} type="password" value={confirm}
                  onChange={setConfirm} autoComplete="new-password" reveal />
-          <div className={cn("text-[11px] -mt-1 mb-2", tooShort || mismatch ? "text-yellow" : "text-[#475569]")}>
+          <div className={cn("text-[11px] -mt-1 mb-2", tooShort || mismatch ? "text-yellow" : "text-[#8391a7]")}>
             {tooShort ? "At least 10 characters." : mismatch ? "Passwords don't match yet." : "A passphrase of a few words works well."}
           </div>
           <SubmitButton busy={busy}>Create account and sign in</SubmitButton>

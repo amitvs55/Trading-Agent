@@ -2,9 +2,15 @@
 
 Every signal is saved before it is sent and never edited afterwards except by the
 lifecycle, so the track record cannot be cherry-picked (plan §1).
+
+It also obeys the admin's controls (pause new signals, exit all; options/engine/controls.py)
+and the plan's kill rule: a LIVE setup whose last 30 trades lost money after costs goes back
+to SHADOW automatically (plan §1, rule 8).
 """
 
+import time as _clock
 from datetime import datetime, time, timedelta
+from html import escape
 from typing import Callable
 
 from options.agents import events as event_agent, macro as macro_agent
@@ -17,7 +23,7 @@ from options.core.calendar import IST, MARKET_OPEN, NseCalendar, at_ist, now_ist
 from options.core.events import EVENTS, Event
 from options.core.schemas import OPEN_STATES, Action, Contract, Grade, Signal, SignalState
 from options.delivery import cards
-from options.engine import confidence, grading, lifecycle, performance
+from options.engine import confidence, controls, grading, lifecycle, performance
 from options.engine.levels import plan
 from options.engine.risk import RiskConfig, budget_gate, size
 from options.engine.selection import pick_expiry, pick_strike
@@ -26,7 +32,7 @@ from options.engine.state import MarketState
 from options.notify.base import Notifier
 from options.quant import indicators as ind
 from options.reference import IndexReference
-from options.setups import INTRADAY_SETUPS, POSITIONAL_SETUPS
+from options.setups import INTRADAY_SETUPS, POSITIONAL_SETUPS, SETUP_LABELS
 from options.setups.base import Candidate, Setup
 from options.storage import Store
 from utils.logger import setup_logger
@@ -38,6 +44,8 @@ INTRADAY_TIME_STOP = time(14, 45)
 SIGNAL_VALIDITY = timedelta(minutes=15)
 POSITIONAL_CHECK = time(15, 20)          # daily-close invalidation check for positional signals
 EVAL_DELAY_S = 4                         # evaluate once the bucket's last 1m bar has been flushed
+CONTROL_POLL_S = 5.0                     # how often the pause / exit-all controls are re-read
+DEMOTE_AFTER = 30                        # plan §1: judge a LIVE setup on its last 30 trades
 
 Quote = tuple[float | None, float | None]
 
@@ -57,6 +65,7 @@ class SignalEngine:
                  cfg: OptionsSettings, calendar: NseCalendar, *, vix_token: int | None = None,
                  constituents: dict[str, list[Constituent]] | None = None, vix_history: list[float] | None = None,
                  macro: Callable[[], dict | None] | None = None, events: list[Event] | None = None,
+                 news: Callable[[], dict | None] | None = None,
                  quote_fn: Callable[[int], Quote] | None = None, now_fn: Callable[[], datetime] = now_ist,
                  setups: list[Setup] | None = None):
         self.refs, self.state, self.store, self.notifier = refs, state, store, notifier
@@ -65,17 +74,23 @@ class SignalEngine:
         self.constituents = constituents or {}
         self.vix_history = vix_history or []
         self.macro = macro or (lambda: None)
+        self.news = news or (lambda: None)
         self.events = EVENTS if events is None else events
         self.quote_fn = quote_fn
         self.now_fn = now_fn
         self.setups = INTRADAY_SETUPS + POSITIONAL_SETUPS if setups is None else setups
         self.risk = RiskConfig(cfg.OPTIONS_CAPITAL, cfg.OPTIONS_RISK_PER_TRADE_PCT, cfg.OPTIONS_DAILY_LOSS_STOP_PCT)
+        self.live_setups: set[str] = set(cfg.OPTIONS_LIVE_SETUPS)
         self.open: list[Signal] = store.open_signals()          # positional signals survive overnight
-        self._signalled: set[tuple] = set()
+        # Setups already decided today: rebuilt from the log, so a restarted session never repeats one
+        today = now_fn().astimezone(IST).date()
+        self._signalled: set[tuple] = {(today, *k) for k in store.signalled_keys_since(at_ist(today, time(0, 0)))}
         self._flow_alerted: set[str] = set()
         self._last_bucket: datetime | None = None
         self.snapshots: dict[str, Snapshot] = {}
         self.agent_health: dict[str, AgentTracker] = {i: AgentTracker() for i in refs}
+        self.control: dict = {"paused": False}
+        self._control_read_at = float("-inf")
 
     # ── Inputs ───────────────────────────────────────────────────────────────
 
@@ -93,11 +108,13 @@ class SignalEngine:
     def context(self, index: str, now: datetime) -> AgentContext:
         return AgentContext(index, self.refs[index], self.state, now, self.calendar, vix_token=self.vix_token,
                             constituents=self.constituents.get(index, []), events=self.events,
-                            vix_history=self.vix_history, macro=self.macro(), r=self.cfg.OPTIONS_RISK_FREE_RATE)
+                            vix_history=self.vix_history, macro=self.macro(), news=self.news(),
+                            r=self.cfg.OPTIONS_RISK_FREE_RATE)
 
     # ── Main loop hook ───────────────────────────────────────────────────────
 
     def on_tick(self, now: datetime) -> None:
+        self._read_controls(now)
         for sig in list(self.open):
             bid, ask = self.quote(sig.contract.token)
             update = lifecycle.on_quote(sig, bid, ask, now)
@@ -107,6 +124,37 @@ class SignalEngine:
         if end and end != self._last_bucket:
             self._last_bucket = end
             self.evaluate(now)
+
+    # ── Admin controls ───────────────────────────────────────────────────────
+
+    def _read_controls(self, now: datetime, force: bool = False) -> None:
+        if not force and _clock.monotonic() - self._control_read_at < CONTROL_POLL_S:
+            return
+        self._control_read_at = _clock.monotonic()
+        try:
+            self.control = controls.read(self.store)
+            asked = controls.pending_exit_all(self.store)
+        except Exception:
+            logger.exception("Couldn't read the admin controls")       # keep the last known state
+            return
+        if asked:
+            self.exit_all(now, asked)
+
+    def exit_all(self, now: datetime, asked_at: str) -> None:
+        """Close every open signal at the live bid (cancel unfilled ones), once per request."""
+        closed = 0
+        for sig in list(self.open):
+            bid, _ = self.quote(sig.contract.token)
+            update = lifecycle.exit_now(sig, bid or self.state.last_price(sig.contract.token), now, "KILL")
+            if update:
+                self._apply(sig, update, now)
+                closed += 1
+            else:
+                logger.error("No price to exit %s; left open", sig.signal_id)
+        controls.ack_exit_all(self.store, asked_at, now)
+        by = self.control.get("exit_all_by") or "admin"
+        self.notifier.send(f"🛑 <b>Exit all</b> requested by {escape(by)}: {closed} open signal(s) closed"
+                           + ("." if closed else " (none were open)."))
 
     def evaluate(self, now: datetime) -> None:
         for index in self.refs:
@@ -142,6 +190,37 @@ class SignalEngine:
             self.open = [s for s in self.open if s.signal_id != sig.signal_id]
         if update.kind != "EXPIRED" or sig.mode == "LIVE":
             self.notifier.send(cards.update_message(sig, update.kind, update.message))
+        if sig.state is SignalState.CLOSED and sig.pnl_rupees is not None:
+            try:
+                self._review_setup(sig.setup, now)
+            except Exception:
+                logger.exception("Reviewing setup %s failed", sig.setup)
+
+    def _review_setup(self, setup_id: str, now: datetime) -> None:
+        """Plan §1 kill rule: a LIVE setup whose last 30 trades lost money after costs goes back to SHADOW."""
+        if setup_id not in self.live_setups:
+            return
+        history = self.store.signals_since(now - timedelta(days=3650))
+        recent = sorted(performance.traded([s for s in history if s.setup == setup_id]),
+                        key=lambda s: s.closed_at)[-DEMOTE_AFTER:]
+        if len(recent) < DEMOTE_AFTER:
+            return
+        st = performance.stats(recent)
+        if st["expectancy_rupees"] > 0:
+            return
+        self.live_setups.discard(setup_id)
+        from options.admin.repo import AdminRepo           # the same settings row the Connectors page edits
+        AdminRepo(self.store.engine, now_fn=lambda: now).set_setting(
+            "OPTIONS_LIVE_SETUPS", sorted(self.live_setups), secret=False, by="auto-demote")
+        label = SETUP_LABELS.get(setup_id, setup_id)
+        detail = (f"{label}: last {DEMOTE_AFTER} trades averaged ₹{st['expectancy_rupees']:+,.0f} after costs "
+                  f"({st['win_rate'] * 100:.0f}% wins)")
+        self.store.audit("auto-demote", "setup_demoted", detail, now)
+        logger.warning("Auto-demoted %s", detail)
+        self.notifier.send(f"⬇️ <b>{escape(label)} moved back to SHADOW</b>: its last {DEMOTE_AFTER} trades averaged "
+                           f"₹{st['expectancy_rupees']:+,.0f} after costs ({st['win_rate'] * 100:.0f}% wins). "
+                           "New signals from it are tracked but not for trading. Promote it again on the "
+                           "Connectors page once its shadow record recovers.")
 
     def _manage_open(self, snap: Snapshot, now: datetime) -> None:
         index = snap.ctx.index
@@ -171,12 +250,17 @@ class SignalEngine:
     # ── New signals ──────────────────────────────────────────────────────────
 
     def _scan(self, snap: Snapshot, now: datetime) -> None:
+        paused = bool(self.control.get("paused"))
         for setup in self.setups:
             cand = setup.detect(snap)
             if cand is None:
                 continue
             key = (now.date(), snap.ctx.index, setup.id, cand.side)
             if key in self._signalled:
+                continue
+            if paused:
+                self._log(now, snap.ctx.index, cand, "NO_TRADE",
+                          [f"new signals paused by {self.control.get('paused_by') or 'admin'}"])
                 continue
             self._consider(snap, setup, cand, key, now)
 
@@ -271,7 +355,7 @@ class SignalEngine:
             t1=trade.t1, t2=trade.t2, valid_until=valid, time_stop=None if positional else INTRADAY_TIME_STOP,
             lots=sizing.lots, risk_rupees=round(sizing.risk_rupees, 2), over_budget=sizing.over_budget,
             checks=checks, rationale=[c.detail for c in checks if c.status == "pass"][:5],
-            mode="LIVE" if setup.id in self.cfg.OPTIONS_LIVE_SETUPS else "SHADOW",
+            mode="LIVE" if setup.id in self.live_setups else "SHADOW",
         )
 
     def close_session(self, now: datetime) -> None:
@@ -291,8 +375,12 @@ class SignalEngine:
 
     # ── Daily messages ───────────────────────────────────────────────────────
 
-    def morning_brief(self, now: datetime) -> str:
+    def morning_brief(self, now: datetime, notes: list[str] | None = None) -> str:
         sections = []
+        self._read_controls(now, force=True)
+        if self.control.get("paused"):
+            notes = [f"⏸ New signals are paused (by {self.control.get('paused_by') or 'admin'}). "
+                     "Resume them on the Connectors page.", *(notes or [])]
         for index, ref in self.refs.items():
             ctx = self.context(index, now)
             lines = []
@@ -318,6 +406,8 @@ class SignalEngine:
             if ev.blocks_positional and ev.next_event:
                 lines.append(f"No positional signals before {ev.next_event.name} ({ev.next_event.at:%d %b})")
             sections.append({"title": index, "lines": lines})
+        if notes:
+            sections.append({"title": "System", "lines": [n for n in notes if n]})
         return cards.morning_brief(now.date(), sections)
 
     def end_of_day(self, now: datetime) -> str:

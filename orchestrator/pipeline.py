@@ -65,10 +65,12 @@ class TradingPipeline:
         # Token/cost tracking for this run. Handed to each agent's client explicitly
         # (rather than via contextvars) so the parallel stages' worker threads see it.
         self.usage = UsageTracker(settings.MODEL_NAME)
+        self.call_log: list[dict] = []              # every prompt and answer of this run (audit, replay)
         for agent in vars(self).values():
             llm = getattr(agent, "llm", None)
             if isinstance(llm, LLMClient):
                 llm.tracker = self.usage
+                llm.call_log = self.call_log
 
     def run(self) -> PipelineResult:
         """Run the full 6-stage pipeline."""

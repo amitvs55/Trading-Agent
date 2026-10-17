@@ -104,10 +104,53 @@ def _model(v: str) -> str | None:
     return None if re.fullmatch(r"[A-Za-z0-9._:/-]{2,80}", v) else "Model names look like gpt-4o-mini."
 
 
+EMAIL = re.compile(r"[^@\s,]+@[^@\s,]+\.[A-Za-z]{2,}")
+
+
+def _smtp_host(v: str) -> str | None:
+    if "@" in v:
+        return "That's an e-mail address. The SMTP host is the mail server, like smtp.gmail.com."
+    if not re.fullmatch(r"[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+", v):
+        return "The SMTP host is the mail server's name, like smtp.gmail.com."
+    return None
+
+
+def _smtp_port(v: str) -> str | None:
+    if not re.fullmatch(r"\d{1,5}", v) or not 1 <= int(v) <= 65535:
+        return "The port is a number: 587 (STARTTLS, most providers) or 465 (SSL)."
+    return None
+
+
+def _smtp_user(v: str) -> str | None:
+    return None if re.fullmatch(r"\S{1,254}", v) else "The SMTP username is usually your full e-mail address."
+
+
+def _smtp_password_normalize(v: str) -> str:
+    # Gmail shows app passwords as four groups of four letters; the spaces aren't part of it
+    return v.replace(" ", "") if re.fullmatch(r"[a-z]{4}( [a-z]{4}){3}", v) else v
+
+
+def _usd(v: str) -> str | None:
+    try:
+        ok = 0 <= float(v) <= 100
+    except ValueError:
+        ok = False
+    return None if ok else "Enter a dollar amount between 0 and 100, like 2.00 (0 means no limit)."
+
+
+def _email_to(v: str) -> str | None:
+    parts = [a.strip() for a in v.split(",") if a.strip()]
+    if not parts or not all(EMAIL.fullmatch(a) for a in parts):
+        return "Enter one or more e-mail addresses, separated by commas."
+    return None
+
+
 NORMALIZERS: dict[str, Callable[[str], str]] = {
     "ANGEL_CLIENT_CODE": str.upper,
     "ANGEL_TOTP_SECRET": _totp_normalize,
     "KITE_USER_ID": str.upper,
+    "SMTP_PASSWORD": _smtp_password_normalize,
+    "SMTP_HOST": str.lower,
 }
 
 CHECKS: dict[str, Check] = {
@@ -123,6 +166,11 @@ CHECKS: dict[str, Check] = {
     "TELEGRAM_CHAT_ID": _chat_id,
     "OPENAI_API_KEY": _openai_key,
     "MODEL_NAME": _model,
+    "SMTP_HOST": _smtp_host,
+    "SMTP_PORT": _smtp_port,
+    "SMTP_USERNAME": _smtp_user,
+    "ALERT_EMAIL_TO": _email_to,
+    "RESEARCH_DAILY_BUDGET_USD": _usd,
 }
 
 

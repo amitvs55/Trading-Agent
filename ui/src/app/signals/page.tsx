@@ -41,7 +41,7 @@ export default function SignalsPage() {
             <h1 className="text-2xl font-bold text-[#e2e8f0] flex items-center gap-2.5">
               <Radio size={20} className="text-[#ff9933]" /> Live Signals
             </h1>
-            <p className="text-sm text-[#64748b] mt-1">
+            <p className="text-sm text-[#8391a7] mt-1">
               NIFTY options · buy-only · every signal checked against 12 analysis pillars and tracked to its result
             </p>
           </div>
@@ -60,7 +60,7 @@ export default function SignalsPage() {
               <section className="fade-in bg-surface border border-[#1e2d45] rounded-xl px-6 py-14 text-center">
                 <Satellite size={28} className="mx-auto text-[#334155] mb-3" />
                 <div className="text-sm font-semibold text-[#e2e8f0]">No analysis yet</div>
-                <p className="text-xs text-[#64748b] mt-1.5 max-w-md mx-auto leading-relaxed">
+                <p className="text-xs text-[#8391a7] mt-1.5 max-w-md mx-auto leading-relaxed">
                   The board fills in after the first 5-minute close of a session (09:20 IST), once market data is connected and
                   the recorder is running.
                 </p>
@@ -70,15 +70,15 @@ export default function SignalsPage() {
 
           <aside className="flex flex-col gap-4 min-w-0 order-first 2xl:order-none" aria-label="Open signals">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-[#e2e8f0]">Open signals <span className="text-[#64748b] font-normal">({open.length})</span></h2>
-              <span className="text-[10px] text-[#64748b]">updates every 5s</span>
+              <h2 className="text-sm font-semibold text-[#e2e8f0]">Open signals <span className="text-[#8391a7] font-normal">({open.length})</span></h2>
+              <span className="text-[10px] text-[#8391a7]">updates every 5s</span>
             </div>
             {signalsLoading ? <SignalCardSkeleton /> : open.length ? open.map(s => (
               <SignalCard key={s.signal_id} s={s} quote={signals.data?.quotes[s.signal_id]} setupLabel={labels[s.setup] ?? s.setup} />
             )) : (
               <div className="fade-in bg-surface border border-dashed border-[#1e2d45] rounded-xl px-5 py-10 text-center">
                 <div className="text-sm text-[#e2e8f0] font-medium">No open signal</div>
-                <p className="text-xs text-[#64748b] mt-1.5 leading-relaxed">
+                <p className="text-xs text-[#8391a7] mt-1.5 leading-relaxed">
                   The engine checks every setup on each 5-minute close. When nothing meets every rule, the answer is
                   NO TRADE, and the decision log below says why.
                 </p>
@@ -87,7 +87,7 @@ export default function SignalsPage() {
 
             {closedToday.length > 0 && (
               <>
-                <h2 className="text-sm font-semibold text-[#e2e8f0] mt-2">Closed today <span className="text-[#64748b] font-normal">({closedToday.length})</span></h2>
+                <h2 className="text-sm font-semibold text-[#e2e8f0] mt-2">Closed today <span className="text-[#8391a7] font-normal">({closedToday.length})</span></h2>
                 {closedToday.map(s => <SignalCard key={s.signal_id} s={s} setupLabel={labels[s.setup] ?? s.setup} compact />)}
               </>
             )}

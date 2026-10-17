@@ -1,0 +1,94 @@
+{
+  "data": "synthetic 5m OHLCV, 3000 bars, seed 11",
+  "warmup_bars_ignored": 150,
+  "results": [
+    {
+      "indicator": "EMA(20)",
+      "steady_state_max_abs_err": 5.074798536952585e-06,
+      "steady_state_max_rel_err": 2.0165234012465286e-10,
+      "first_50_valid_max_abs_err": 2.5085606192660634,
+      "bars_until_converged": 19,
+      "nan_count_ours": 0,
+      "nan_count_ref": 19
+    },
+    {
+      "indicator": "RSI(14) Wilder",
+      "steady_state_max_abs_err": 0.001382293712303806,
+      "steady_state_max_rel_err": 3.6445010723347836e-05,
+      "first_50_valid_max_abs_err": 18.377132142209142,
+      "bars_until_converged": 117,
+      "nan_count_ours": 14,
+      "nan_count_ref": 14
+    },
+    {
+      "indicator": "MACD hist(12,26,9)",
+      "steady_state_max_abs_err": 0.0003414013679439165,
+      "steady_state_max_rel_err": 0.00014164308675227523,
+      "first_50_valid_max_abs_err": 4.1497710085383055,
+      "bars_until_converged": 119,
+      "nan_count_ours": 0,
+      "nan_count_ref": 33
+    },
+    {
+      "indicator": "ATR(14)",
+      "steady_state_max_abs_err": 0.00011164819278519644,
+      "steady_state_max_rel_err": 3.913297158750476e-06,
+      "first_50_valid_max_abs_err": 2.6605329145607044,
+      "bars_until_converged": 99,
+      "nan_count_ours": 13,
+      "nan_count_ref": 14
+    },
+    {
+      "indicator": "ADX(14)",
+      "steady_state_max_abs_err": 0.0015282308437072345,
+      "steady_state_max_rel_err": 8.659474035098152e-05,
+      "first_50_valid_max_abs_err": 4.568107163942958,
+      "bars_until_converged": 125,
+      "nan_count_ours": 26,
+      "nan_count_ref": 27
+    },
+    {
+      "indicator": "Bollinger width(20,2)",
+      "steady_state_max_abs_err": 1.765915538798346e-12,
+      "steady_state_max_rel_err": 6.763055670042018e-10,
+      "first_50_valid_max_abs_err": 1.6471199404399783e-15,
+      "bars_until_converged": 19,
+      "nan_count_ours": 19,
+      "nan_count_ref": 19
+    },
+    {
+      "indicator": "Supertrend(10,3) direction",
+      "agreement_pct": 100.0,
+      "bars_compared": 2850
+    },
+    {
+      "indicator": "Session VWAP",
+      "steady_state_max_abs_err": 0.0,
+      "steady_state_max_rel_err": 0.0,
+      "first_50_valid_max_abs_err": 0.0,
+      "bars_until_converged": 0,
+      "nan_count_ours": 0,
+      "nan_count_ref": 0
+    },
+    {
+      "indicator": "Black-76 price vs independent closed form",
+      "cases": 328,
+      "max_abs_err_rupees": 1.8189894035458565e-12
+    },
+    {
+      "indicator": "research RSI(14) [SMA] vs TA-Lib RSI(14) [Wilder]",
+      "samples": 10,
+      "mean_abs_diff_points": 3.32,
+      "p95_abs_diff_points": 6.94,
+      "max_abs_diff_points": 7.32,
+      "share_crossing_30_70_bands_differently": null
+    }
+  ],
+  "repaint_test": {
+    "test": "partial (forming) 5m bar must not change 5m/15m/60m indicator outputs",
+    "partial_minutes_added": 3,
+    "changed_outputs": {},
+    "passed": true,
+    "note": "futures_flow and the 1m-based opening range read the newest 1m bars by design"
+  }
+}

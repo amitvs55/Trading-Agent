@@ -36,7 +36,7 @@ export function Stage4RiskAssessment({ assessments }: Props) {
               {/* Risk score */}
               <div className="mb-3">
                 <div className="flex justify-between text-xs mb-1">
-                  <span className="text-[#64748b]">Risk Score</span>
+                  <span className="text-[#8391a7]">Risk Score</span>
                   <span className={cn("font-bold font-mono", riskColor(a.risk_score))}>{a.risk_score.toFixed(1)} / 10</span>
                 </div>
                 <div className="h-1.5 bg-[#1e2d45] rounded">
@@ -48,7 +48,7 @@ export function Stage4RiskAssessment({ assessments }: Props) {
               </div>
 
               <div className="flex justify-between text-xs mb-3">
-                <span className="text-[#64748b]">Max Position</span>
+                <span className="text-[#8391a7]">Max Position</span>
                 <span className="font-mono font-semibold text-[#e2e8f0]">{a.max_position_size_pct.toFixed(1)}%</span>
               </div>
 
@@ -62,7 +62,7 @@ export function Stage4RiskAssessment({ assessments }: Props) {
                 </div>
               )}
 
-              <p className="text-[10px] text-[#64748b] leading-relaxed border-t border-[#1e2d4566] pt-2">{a.recommendation}</p>
+              <p className="text-[10px] text-[#8391a7] leading-relaxed border-t border-[#1e2d4566] pt-2">{a.recommendation}</p>
             </div>
           );
         })}

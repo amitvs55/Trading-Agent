@@ -1,4 +1,4 @@
-import { cn, formatINR, formatPct } from "@/lib/utils";
+import { cn, formatINR } from "@/lib/utils";
 import type { FinalDecision } from "@/types/pipeline";
 
 interface Props { decision: FinalDecision; }
@@ -23,7 +23,7 @@ export function Stage5Decision({ decision }: Props) {
           {style.label}
         </div>
         <div className="flex flex-col gap-2">
-          <div className="text-xs text-[#64748b]">Portfolio Manager decision based on consensus from all 3 risk managers</div>
+          <div className="text-xs text-[#8391a7]">Portfolio Manager decision based on consensus from all 3 risk managers</div>
           <div className="text-xs text-[#94a3b8] leading-relaxed max-w-md">{decision.risk_consensus}</div>
         </div>
       </div>
@@ -38,7 +38,7 @@ export function Stage5Decision({ decision }: Props) {
             { label: "Position Size", val: decision.final_position_size_pct != null ? decision.final_position_size_pct.toFixed(1) + "%" : "—", color: "text-[#ff9933]" },
           ].map(({ label, val, color }) => (
             <div key={label} className="bg-bg border border-[#1e2d45] rounded-lg p-3 text-center">
-              <div className="text-xs text-[#64748b] mb-1">{label}</div>
+              <div className="text-xs text-[#8391a7] mb-1">{label}</div>
               <div className={cn("font-mono font-bold text-sm", color ?? "text-[#e2e8f0]")}>{val}</div>
             </div>
           ))}
@@ -46,7 +46,7 @@ export function Stage5Decision({ decision }: Props) {
       )}
 
       <div className="bg-bg border border-[#1e2d45] rounded-lg p-4">
-        <div className="text-xs font-semibold text-[#64748b] tracking-wide mb-2">REASONING</div>
+        <div className="text-xs font-semibold text-[#8391a7] tracking-wide mb-2">REASONING</div>
         <p className="text-xs text-[#94a3b8] leading-relaxed">{decision.reasoning}</p>
       </div>
     </div>

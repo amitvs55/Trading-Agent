@@ -25,14 +25,13 @@ const SHOW_AFTER_MS = 4_000;           // a single slow or dropped poll isn't wo
 /** Floats over the page (never shifts it) while API reads keep failing. */
 function ConnectionNotice() {
   const since = useFailingSince();
-  const [visible, setVisible] = useState(false);
+  const [shownFor, setShownFor] = useState<number | null>(null);   // the failure streak it was shown for
   useEffect(() => {
-    if (since == null) { setVisible(false); return; }
-    const wait = Math.max(0, since + SHOW_AFTER_MS - Date.now());
-    const t = setTimeout(() => setVisible(true), wait);
+    if (since == null) return;
+    const t = setTimeout(() => setShownFor(since), Math.max(0, since + SHOW_AFTER_MS - Date.now()));
     return () => clearTimeout(t);
   }, [since]);
-  if (!visible) return null;
+  if (since == null || shownFor !== since) return null;
   return (
     <div role="status" aria-live="polite"
          className="fade-in fixed bottom-[calc(72px+env(safe-area-inset-bottom))] lg:bottom-4 left-1/2 -translate-x-1/2 z-[60] max-w-[calc(100vw-32px)] flex items-center gap-2 rounded-full border border-[#f59e0b44] bg-[#1a2233f2] px-4 py-2 text-xs text-yellow shadow-[0_12px_32px_rgba(0,0,0,.5)] backdrop-blur">

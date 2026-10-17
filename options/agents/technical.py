@@ -12,6 +12,14 @@ from options.agents.context import AgentContext
 from options.core.schemas import PillarView
 from options.quant import indicators as ind
 
+# Bars needed before an indicator is trusted. The recursive ones (EMA50, Wilder RSI/ATR/ADX)
+# take ~100-125 bars to forget their seed and match a reference library to 1e-4 (see
+# docs/review/scripts/indicator_reference_check.py); the session loads 20 sessions of history,
+# so these are met from the first bar of the day whenever history loaded.
+TREND_MIN_BARS = 100          # 15m and 60m: EMA20/50 and Supertrend
+MOMENTUM_MIN_BARS = 100       # 5m: RSI and MACD
+ADX_MIN_BARS = 100            # 15m ADX (double smoothing)
+
 
 @dataclass
 class TechView:
@@ -41,7 +49,7 @@ class TechView:
 
 
 def _trend_votes(df: pd.DataFrame, label: str) -> tuple[list[int], str]:
-    if len(df) < 55:
+    if len(df) < TREND_MIN_BARS:
         return [], f"{label} warming up"
     close = df["close"]
     e20, e50 = ind.ema(close, 20).iloc[-1], ind.ema(close, 50).iloc[-1]
@@ -66,13 +74,13 @@ def analyse(ctx: AgentContext) -> TechView:
     trend = PillarView("trend", f"{d15} · {d60}", bias=(1 if score >= 0.5 else -1 if score <= -0.5 else 0),
                        strength=abs(score), features={"score": score})
 
-    if len(f5) < 35:
+    if len(f5) < MOMENTUM_MIN_BARS:
         return TechView(False, htf, trend, PillarView("momentum", "5m warming up"))
 
     close = f5["close"]
     rsi = ind.rsi(close, 14)
     hist = ind.macd(close)["hist"]
-    adx15 = ind.adx(f15, 14)["adx"].iloc[-1] if len(f15) >= 30 else float("nan")
+    adx15 = ind.adx(f15, 14)["adx"].iloc[-1] if len(f15) >= ADX_MIN_BARS else float("nan")
     r_now, r_prev = float(rsi.iloc[-1]), float(rsi.iloc[-2])
     h_now, h_prev = float(hist.iloc[-1]), float(hist.iloc[-2])
     mom = (1 if r_now > 55 and r_now >= r_prev else -1 if r_now < 45 and r_now <= r_prev else 0) + \

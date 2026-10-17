@@ -29,6 +29,13 @@ class OptionsSettings(BaseSettings):
     TELEGRAM_BOT_TOKEN: str = ""
     TELEGRAM_CHAT_ID: str = ""
 
+    # E-mail alerts (optional): the fallback when Telegram can't deliver, e.g. Gmail with an app password
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""
+    ALERT_EMAIL_TO: str = ""
+
     # Dashboard password: when set, /api/options/* needs "Authorization: Bearer <token>".
     # Live NSE data is licensed for personal use, so set this on any public deployment.
     DASHBOARD_TOKEN: str = ""
@@ -50,6 +57,7 @@ class OptionsSettings(BaseSettings):
     OPTIONS_STRIKE_WINDOW: int = 15          # strikes each side of ATM, per expiry
     OPTIONS_EXPIRIES_TRACKED: int = 2        # nearest N option expiries
     OPTIONS_STALE_AFTER_S: int = 60          # alert when no ticks arrive for this long in market hours
+    OPTIONS_BARS_RETENTION_DAYS: int = 730   # 1-minute bars are the backtest data: keep two years
 
     @property
     def provider(self) -> str:

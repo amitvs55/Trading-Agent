@@ -50,7 +50,9 @@ def setup(tmp_path):
         spawned.append(FakeProcess())
         return spawned[-1]
 
-    return Supervisor(repo, spawn=spawn, now_fn=clock, calendar=CAL), repo, clock, spawned
+    sup = Supervisor(repo, spawn=spawn, now_fn=clock, calendar=CAL, notify=lambda text: None,
+                     has_open_intraday=lambda: False)
+    return sup, repo, clock, spawned
 
 
 def test_waits_then_runs_the_session_once_per_day(setup):

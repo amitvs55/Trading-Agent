@@ -60,7 +60,7 @@ def test_login_prompt_reminders_and_wait(store):
 
 def test_no_login_by_the_deadline(store):
     code, notifier = run(store, Clock(ist(2026, 10, 16, 14, 59, 30)))
-    assert code == 1
+    assert code == session.EXIT_LOGIN
     assert "Good morning" in notifier.texts()[0]
     assert "No Kite login by 15:00" in notifier.texts()[-1]
 
@@ -128,5 +128,5 @@ def test_auto_login_retries_then_records(store):
 def test_auto_login_gives_up_at_the_deadline(store):
     broker = AutoLoginBroker(fail_times=99)
     code, notifier = run(store, Clock(ist(2026, 10, 16, 14, 50)), broker)
-    assert code == 1 and broker.logins == 5        # 14:50, 14:50:30, 14:51:30, 14:53:30, 14:58:30; next would pass 15:00
+    assert code == session.EXIT_LOGIN and broker.logins == 5        # 14:50, 14:50:30, 14:51:30, 14:53:30, 14:58:30; next would pass 15:00
     assert "Angel One login failed" in notifier.texts()[-1] and "AB1050" in notifier.texts()[-1]

@@ -1,4 +1,4 @@
-from datetime import date, time
+from datetime import date, time, timedelta
 
 import pytest
 
@@ -212,3 +212,10 @@ def test_signal_card_content():
     assert "42 trades" in text and "2.6% of capital" in text
     upd = cards.update_message(s, "T1_HIT", "T1 hit @ 190")
     assert upd.startswith("🎯")
+
+
+def test_a_premium_that_falls_through_the_stop_before_entry_is_not_bought():
+    """Found by the proxy backtest: the ask was 'inside the entry band' but already below the stop."""
+    sig = make_signal()
+    upd = lifecycle.on_quote(sig, sig.stop_loss - 1.0, sig.stop_loss - 0.5, sig.created_at + timedelta(minutes=1))
+    assert upd.kind == "CANCELLED" and sig.state.value == "CANCELLED" and sig.fill_price is None

@@ -1,13 +1,12 @@
 "use client";
-import { useEffect, useState } from "react";
 import {
   ComposedChart, Line, Area, ReferenceLine,
   XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from "recharts";
 import type { TradeProposal } from "@/types/pipeline";
 import type { Candle } from "@/types/pipeline";
-import { formatINR, API_URL } from "@/lib/utils";
-import { authHeaders } from "@/lib/optionsApi";
+import { formatINR } from "@/lib/utils";
+import { useOptionsApi } from "@/lib/optionsApi";
 
 interface Props {
   ticker:   string;
@@ -15,18 +14,10 @@ interface Props {
 }
 
 export function TechnicalChart({ ticker, proposal }: Props) {
-  const [candles, setCandles] = useState<Candle[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!ticker) return;
-    setLoading(true);
-    fetch(`${API_URL}/api/pricehistory/${encodeURIComponent(ticker)}`, { headers: authHeaders() })
-      .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d?.candles) setCandles(d.candles); })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [ticker]);
+  const { data, error } = useOptionsApi<{ candles: Candle[] }>(
+    ticker ? `/api/pricehistory/${encodeURIComponent(ticker)}` : null, 0);
+  const candles = data?.candles ?? [];
+  const loading = !!ticker && !data && !error;
 
   // Compute SMA
   function sma(data: Candle[], period: number): (number | null)[] {
@@ -56,7 +47,7 @@ export function TechnicalChart({ ticker, proposal }: Props) {
   }
 
   if (!candles.length) {
-    return <div className="h-48 flex items-center justify-center text-xs text-[#64748b]">No price data</div>;
+    return <div className="h-48 flex items-center justify-center text-xs text-[#8391a7]">No price data</div>;
   }
 
   const prices = candles.map(c => c.close);
@@ -69,14 +60,14 @@ export function TechnicalChart({ ticker, proposal }: Props) {
         <CartesianGrid stroke="#1e2d45" strokeDasharray="3 3" vertical={false} />
         <XAxis
           dataKey="date"
-          tick={{ fill: "#475569", fontSize: 9, fontFamily: "monospace" }}
+          tick={{ fill: "#8391a7", fontSize: 9, fontFamily: "monospace" }}
           tickLine={false}
           axisLine={false}
           interval={Math.floor(chartData.length / 4)}
         />
         <YAxis
           domain={[yMin, yMax]}
-          tick={{ fill: "#475569", fontSize: 9, fontFamily: "monospace" }}
+          tick={{ fill: "#8391a7", fontSize: 9, fontFamily: "monospace" }}
           tickLine={false}
           axisLine={false}
           tickFormatter={v => `₹${(v/1000).toFixed(0)}k`}
@@ -84,7 +75,7 @@ export function TechnicalChart({ ticker, proposal }: Props) {
         />
         <Tooltip
           contentStyle={{ background: "#1a2233", border: "1px solid #1e2d45", borderRadius: 8, fontSize: 11 }}
-          labelStyle={{ color: "#64748b" }}
+          labelStyle={{ color: "#8391a7" }}
           formatter={(val: number, name: string) => [formatINR(val), name === "close" ? "Price" : name === "sma20" ? "SMA20" : "SMA50"]}
         />
         {/* Price area */}

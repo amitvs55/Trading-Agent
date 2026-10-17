@@ -22,7 +22,7 @@ export function RiskRadar({ assessments }: Props) {
     <ResponsiveContainer width="100%" height={160}>
       <RadarChart data={data} margin={{ top: 4, right: 16, bottom: 4, left: 16 }}>
         <PolarGrid stroke="#1e2d45" />
-        <PolarAngleAxis dataKey="subject" tick={{ fill: "#64748b", fontSize: 9 }} />
+        <PolarAngleAxis dataKey="subject" tick={{ fill: "#8391a7", fontSize: 9 }} />
         <Radar name="Aggressive"   dataKey="Aggressive"   stroke="#ef4444" fill="#ef4444" fillOpacity={0.08} strokeWidth={1.5} />
         <Radar name="Neutral"      dataKey="Neutral"      stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.08} strokeWidth={1.5} />
         <Radar name="Conservative" dataKey="Conservative" stroke="#22c55e" fill="#22c55e" fillOpacity={0.08} strokeWidth={1.5} />

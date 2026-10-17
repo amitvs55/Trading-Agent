@@ -13,6 +13,7 @@ from api.routes import admin as admin_routes
 from options.admin import connectors, health, security, validation
 from options.admin.repo import AdminRepo
 from options.config import OptionsSettings
+from options.core.calendar import NseCalendar
 from options.storage import Store, app_settings, make_engine
 from tests.options.fixtures import ist
 
@@ -306,6 +307,7 @@ def api(repo, monkeypatch):
     app.dependency_overrides[deps.get_store] = lambda: Store(repo.engine)
     app.dependency_overrides[deps.get_cfg] = lambda: connectors.effective_settings(repo, OptionsSettings(_env_file=None))
     monkeypatch.setattr(deps, "base_settings", lambda: OptionsSettings(_env_file=None))
+    app.dependency_overrides[deps.get_calendar] = NseCalendar
     admin_routes._failures.clear()
     return TestClient(app)
 
@@ -347,7 +349,7 @@ def test_connectors_health_and_recorder_api(api, repo, monkeypatch):
     token = repo.create_session(repo.create_user("amit", "correct horse battery"))
     assert api.get("/api/admin/connectors").status_code == 401
     view = api.get("/api/admin/connectors", headers=auth(token)).json()
-    assert {c["id"] for c in view["connectors"]} == {"angel", "kite", "telegram", "openai"}
+    assert {c["id"] for c in view["connectors"]} == {"angel", "kite", "telegram", "email", "openai"}
 
     saved = api.put("/api/admin/connectors/angel", headers=auth(token),
                     json={"values": {"ANGEL_API_KEY": "AngelKey0987654321", "ANGEL_CLIENT_CODE": "a123"}}).json()

@@ -15,16 +15,20 @@ logger = setup_logger("market_data")
 
 
 def _compute_rsi(prices: pd.Series, period: int = 14) -> float | None:
+    """Wilder's RSI, as charting platforms and TA-Lib compute it: seeded with the simple average of
+    the first `period` moves, then smoothed by 1/period. (A plain rolling mean, used before, read
+    3–7 points away from what traders see.)"""
     if len(prices) < period + 1:
         return None
-    delta = prices.diff()
-    gain = delta.where(delta > 0, 0.0).rolling(window=period).mean()
-    loss = (-delta.where(delta < 0, 0.0)).rolling(window=period).mean()
-    last_loss = loss.iloc[-1]
-    if last_loss == 0:
+    delta = prices.astype(float).diff().dropna()
+    gain, loss = delta.clip(lower=0.0), -delta.clip(upper=0.0)
+    avg_gain, avg_loss = float(gain.iloc[:period].mean()), float(loss.iloc[:period].mean())
+    for g, l in zip(gain.iloc[period:], loss.iloc[period:]):
+        avg_gain = (avg_gain * (period - 1) + g) / period
+        avg_loss = (avg_loss * (period - 1) + l) / period
+    if avg_loss == 0:
         return 100.0
-    rs = gain.iloc[-1] / last_loss
-    return round(float(100 - (100 / (1 + rs))), 2)
+    return round(float(100 - 100 / (1 + avg_gain / avg_loss)), 2)
 
 
 def _compute_macd(

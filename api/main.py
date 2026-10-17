@@ -6,17 +6,21 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import JSONResponse
 
-from api.deps import current_user, get_repo, get_store, require_admin
+from api.deps import base_settings, current_user, get_calendar, get_repo, get_store, require_admin
 from api.routes.admin import router as admin_router
 from api.routes.agents import install_research_sink, router as agents_router
 from api.routes.analyze import router as analyze_router
-from api.routes.history import router as history_router
+from api.routes.history import import_legacy_log, router as history_router
 from api.routes.options import router as options_router
 from api.routes.paper import ensure_account, router as paper_router
 from api.routes.pricehistory import router as pricehistory_router
 from api.routes.usage import router as usage_router
-from options.admin.connectors import apply_research_overrides
+from options.admin import watchdog
+from options.admin.connectors import apply_research_overrides, effective_settings
+from options.core.calendar import now_ist
+from options.notify import make_notifier
 from utils.logger import setup_logger
 
 logger = setup_logger("api")
@@ -37,9 +41,22 @@ async def lifespan(_: FastAPI):
         repo = get_repo()
         ensure_account(repo)                        # the paper account counts from the first start-up
         install_research_sink(get_store())          # research agents' outcomes survive redeploys
+        import_legacy_log(get_store())              # research runs from the old JSONL ledger, once
     except Exception:
         logger.exception("Paper account / agent health start-up failed")
+    dog = None
+    if os.getenv("WATCHDOG", "on").lower() not in ("0", "off", "false"):
+        try:
+            repo = get_repo()
+            dog = watchdog.Watchdog(repo, get_store(),
+                                    lambda text: make_notifier(effective_settings(repo, base_settings())).send(text),
+                                    get_calendar)
+            dog.start()                             # alerts if the recorder goes quiet in market hours
+        except Exception:
+            logger.exception("Recorder watchdog didn't start")
     yield
+    if dog:
+        dog.stop()
 
 
 app = FastAPI(
@@ -81,3 +98,11 @@ app.include_router(paper_router)    # /api/paper (signed-in) + /api/admin/paper
 @app.get("/health")
 async def health() -> dict:
     return {"status": "ok", "service": "TradingAgents India API"}
+
+
+@app.get("/health/recorder")
+def health_recorder(repo=Depends(get_repo), store=Depends(get_store), cal=Depends(get_calendar)) -> JSONResponse:
+    """Public, for an external uptime monitor: 503 while the recorder is down, hung or not running in
+    market hours; 200 otherwise (including outside trading hours). Reveals no data or settings."""
+    code, body = watchdog.status(repo, store, now_ist(), cal)
+    return JSONResponse(body, status_code=code)

@@ -31,6 +31,7 @@ class AgentContext:
     events: list[Event] = field(default_factory=list)
     vix_history: list[float] = field(default_factory=list)     # ~1 year of daily closes
     macro: dict | None = None                                  # latest MacroFetcher snapshot
+    news: dict | None = None                                   # latest NewsFetcher snapshot
     r: float = 0.06                                            # risk-free rate for Black-76
 
     @property

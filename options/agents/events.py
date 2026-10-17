@@ -1,4 +1,4 @@
-"""Events agent (pillar 11): scheduled-event windows. Pillar 12 (news) has no feed yet."""
+"""Events agent (pillar 11): scheduled-event windows. Pillar 12 (news) lives in news_feed.py."""
 
 from dataclasses import dataclass
 from datetime import timedelta
@@ -45,4 +45,5 @@ def analyse(ctx: AgentContext, positional_days: int = 2) -> EventView:
 
 
 def news(ctx: AgentContext) -> PillarView:
-    return PillarView("news", "No news feed connected", status="na")
+    from options.agents import news_feed
+    return news_feed.analyse(ctx)

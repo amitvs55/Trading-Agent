@@ -1,6 +1,14 @@
 """Shared test fixtures with mock LLM responses."""
 
+import os
+import tempfile
+
 import pytest
+
+# Any code path that falls back to the configured database (instead of a test's own) must never
+# reach the real one or leave files in the repo: point the default at a throwaway file.
+os.environ["DATABASE_URL"] = f"sqlite:///{tempfile.gettempdir()}/trading-agent-tests-{os.getpid()}.db"
+os.environ.setdefault("WATCHDOG", "off")
 
 
 # ─── Mock LLM Responses ─────────────────────────────────────────────────────

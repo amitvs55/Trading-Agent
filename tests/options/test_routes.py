@@ -6,7 +6,7 @@ from api import deps
 from api.routes import options as routes
 from options.admin.repo import AdminRepo
 from options.config import OptionsSettings
-from options.core.calendar import now_ist
+from options.core.calendar import NseCalendar, now_ist
 from options.storage import Store, make_engine
 from tests.options.fixtures import FakeBroker, RecordingNotifier
 
@@ -22,6 +22,7 @@ def ctx(tmp_path):
     app.dependency_overrides[routes.get_allowed_user] = lambda: "AB1234"
     app.dependency_overrides[routes.get_cfg] = lambda: OptionsSettings(_env_file=None)
     app.dependency_overrides[routes.current_user] = lambda: ADMIN          # signed in unless a test removes it
+    app.dependency_overrides[routes.get_calendar] = NseCalendar
     return TestClient(app), store, notifier, app
 
 

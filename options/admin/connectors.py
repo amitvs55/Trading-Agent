@@ -65,15 +65,29 @@ CONNECTORS: dict[str, ConnectorSpec] = {c.id: c for c in [
                    help="Your own Telegram ID (a number): press Start on your bot, then send /start to @userinfobot")),
         docs_url="https://core.telegram.org/bots#how-do-i-create-a-bot"),
     ConnectorSpec(
+        "email", "E-mail (SMTP)", "Alerts · fallback", "Optional. Alerts Telegram can't deliver within 15 minutes, "
+        "or rejects, are e-mailed instead. Gmail works with an app password.",
+        (FieldSpec("SMTP_HOST", "SMTP host", placeholder="smtp.gmail.com"),
+         FieldSpec("SMTP_PORT", "Port", required=False, placeholder="587", help="587 (STARTTLS) or 465 (SSL)"),
+         FieldSpec("SMTP_USERNAME", "Username", placeholder="you@gmail.com"),
+         FieldSpec("SMTP_PASSWORD", "Password", secret=True,
+                   help="For Gmail: an app password (Google Account → Security → App passwords)"),
+         FieldSpec("ALERT_EMAIL_TO", "Send alerts to", placeholder="you@gmail.com",
+                   help="One or more addresses, separated by commas")),
+        docs_url="https://support.google.com/accounts/answer/185833"),
+    ConnectorSpec(
         "openai", "OpenAI", "Research pipeline", "Powers the multi-agent research pages. Not used by the "
         "options signals.",
         (FieldSpec("OPENAI_API_KEY", "API key", secret=True),
-         FieldSpec("MODEL_NAME", "Model", required=False, placeholder="gpt-4o-mini")),
+         FieldSpec("MODEL_NAME", "Model", required=False, placeholder="gpt-4o-mini-2024-07-18",
+                   help="A dated snapshot keeps runs reproducible; an alias like gpt-4o-mini can change underneath"),
+         FieldSpec("RESEARCH_DAILY_BUDGET_USD", "Daily budget (USD)", required=False, placeholder="2.00",
+                   help="New research runs are refused once today's spend reaches this. 0 means no limit")),
         docs_url="https://platform.openai.com/api-keys"),
 ]}
 
 FIELD_INDEX: dict[str, tuple[ConnectorSpec, FieldSpec]] = {f.key: (c, f) for c in CONNECTORS.values() for f in c.fields}
-RESEARCH_KEYS = ("OPENAI_API_KEY", "MODEL_NAME")     # belong to config.settings, not OptionsSettings
+RESEARCH_KEYS = ("OPENAI_API_KEY", "MODEL_NAME", "RESEARCH_DAILY_BUDGET_USD")   # config.settings, not OptionsSettings
 PROVIDERS = {"angel": "Angel One", "kite": "Kite"}
 
 
@@ -90,7 +104,9 @@ TRADING_LIMITS = {
     "OPTIONS_CAPITAL": (10_000, 100_000_000),
     "OPTIONS_RISK_PER_TRADE_PCT": (0.25, 10.0),
     "OPTIONS_DAILY_LOSS_STOP_PCT": (0.5, 50.0),
+    "OPTIONS_BARS_RETENTION_DAYS": (90, 3650),
 }
+AUDITED_TRADING_FIELDS = ("capital", "risk_per_trade_pct", "daily_loss_stop_pct", "live_setups", "bars_retention_days")
 
 
 def effective_settings(repo: AdminRepo | None, base: OptionsSettings | None = None) -> OptionsSettings:
@@ -113,10 +129,12 @@ def apply_research_overrides(repo: AdminRepo) -> None:
     """Push UI-saved OpenAI settings into the research pipeline's settings object (same process)."""
     from config.settings import settings as research
 
+    from config.settings import Settings
+
     saved = repo.setting_values()
     for key in RESEARCH_KEYS:
-        if key in saved and saved[key]:
-            setattr(research, key, saved[key])
+        if key in saved and saved[key] not in (None, ""):
+            setattr(research, key, TypeAdapter(Settings.model_fields[key].annotation).validate_python(saved[key]))
 
 
 def _env_value(key: str, base: OptionsSettings) -> str:
@@ -249,6 +267,7 @@ def trading_view(cfg: OptionsSettings) -> dict:
         "risk_per_trade_pct": cfg.OPTIONS_RISK_PER_TRADE_PCT,
         "daily_loss_stop_pct": cfg.OPTIONS_DAILY_LOSS_STOP_PCT,
         "live_setups": list(cfg.OPTIONS_LIVE_SETUPS),
+        "bars_retention_days": cfg.OPTIONS_BARS_RETENTION_DAYS,
         "setups": SETUP_LABELS,
         "limits": TRADING_LIMITS,
     }
@@ -256,7 +275,8 @@ def trading_view(cfg: OptionsSettings) -> dict:
 
 def save_trading(repo: AdminRepo, values: dict, by: str) -> None:
     mapping = {"capital": "OPTIONS_CAPITAL", "risk_per_trade_pct": "OPTIONS_RISK_PER_TRADE_PCT",
-               "daily_loss_stop_pct": "OPTIONS_DAILY_LOSS_STOP_PCT"}
+               "daily_loss_stop_pct": "OPTIONS_DAILY_LOSS_STOP_PCT",
+               "bars_retention_days": "OPTIONS_BARS_RETENTION_DAYS"}
     numbers = {}
     for name, key in mapping.items():
         if name in values and values[name] is not None:
@@ -275,7 +295,7 @@ def save_trading(repo: AdminRepo, values: dict, by: str) -> None:
         if unknown:
             raise ValueError(f"unknown setup {', '.join(unknown)}")
     for key, v in numbers.items():
-        repo.set_setting(key, v, secret=False, by=by)
+        repo.set_setting(key, int(v) if key == "OPTIONS_BARS_RETENTION_DAYS" else v, secret=False, by=by)
     if live is not None:
         repo.set_setting("OPTIONS_LIVE_SETUPS", list(live), secret=False, by=by)
 

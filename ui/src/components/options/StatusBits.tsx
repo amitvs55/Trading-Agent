@@ -8,7 +8,7 @@ export const STATUS_STYLE: Record<Status, { icon: typeof CheckCircle2; text: str
   pass: { icon: CheckCircle2,  text: "text-green",       label: "Pass",    ring: "border-[#22c55e33] bg-[#22c55e0d]" },
   warn: { icon: AlertTriangle, text: "text-yellow",      label: "Caution", ring: "border-[#f59e0b33] bg-[#f59e0b0d]" },
   fail: { icon: XCircle,       text: "text-red",         label: "Against", ring: "border-[#ef444433] bg-[#ef44440d]" },
-  na:   { icon: MinusCircle,   text: "text-[#64748b]",   label: "No data", ring: "border-[#1e2d45] bg-card" },
+  na:   { icon: MinusCircle,   text: "text-[#8391a7]",   label: "No data", ring: "border-[#1e2d45] bg-card" },
 };
 
 export function StatusIcon({ status, size = 14, className }: { status: Status; size?: number; className?: string }) {
@@ -35,8 +35,8 @@ const STATE_STYLE: Record<SignalState, { label: string; cls: string; live?: bool
   ACTIVE:    { label: "In trade",          cls: "text-[#60a5fa] border-[#3987e544] bg-[#3987e50f]", live: true },
   T1_HIT:    { label: "T1 hit · trailing", cls: "text-green border-[#22c55e44] bg-[#22c55e0f]", live: true },
   CLOSED:    { label: "Closed",            cls: "text-[#94a3b8] border-[#1e2d45] bg-card" },
-  EXPIRED:   { label: "Not filled",        cls: "text-[#64748b] border-[#1e2d45] bg-card" },
-  CANCELLED: { label: "Cancelled",         cls: "text-[#64748b] border-[#1e2d45] bg-card" },
+  EXPIRED:   { label: "Not filled",        cls: "text-[#8391a7] border-[#1e2d45] bg-card" },
+  CANCELLED: { label: "Cancelled",         cls: "text-[#8391a7] border-[#1e2d45] bg-card" },
 };
 
 export function StateBadge({ state }: { state: SignalState }) {

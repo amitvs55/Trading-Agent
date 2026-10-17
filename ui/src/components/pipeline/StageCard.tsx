@@ -43,7 +43,7 @@ export function StageCard({ stageNumber, title, subtitle, status, badge, childre
           )}>
             {status === "complete" && <Check size={11} className="text-green" strokeWidth={3} />}
             {status === "running"  && <Loader2 size={11} className="text-[#ff9933] animate-spin" />}
-            {status === "pending"  && <span className="text-[10px] font-bold text-[#475569]">{stageNumber}</span>}
+            {status === "pending"  && <span className="text-[10px] font-bold text-[#8391a7]">{stageNumber}</span>}
           </div>
 
           {/* Text */}
@@ -57,10 +57,10 @@ export function StageCard({ stageNumber, title, subtitle, status, badge, childre
                 <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[#ff993311] text-[#ff9933] border border-[#ff993333]">RUNNING</span>
               )}
               {status === "pending" && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-card text-[#475569]">PENDING</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-card text-[#8391a7]">PENDING</span>
               )}
             </div>
-            {subtitle && <div className="text-xs mt-0.5 text-[#64748b]">{subtitle}</div>}
+            {subtitle && <div className="text-xs mt-0.5 text-[#8391a7]">{subtitle}</div>}
           </div>
         </div>
 
@@ -69,7 +69,7 @@ export function StageCard({ stageNumber, title, subtitle, status, badge, childre
           {canExpand && (
             <ChevronDown
               size={15}
-              className={cn("text-[#64748b] transition-transform", open && "rotate-180")}
+              className={cn("text-[#8391a7] transition-transform", open && "rotate-180")}
             />
           )}
           {status === "running" && (

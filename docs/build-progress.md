@@ -82,6 +82,59 @@
 - [x] Viewer access + mobile-first UI (17 Oct 2026). Asked: "for viewers why all pages are showing" and "not mobile responsive, I want enterprise level". Viewers get Signals, Paper, Performance and their account. Research (it spends OpenAI credit), History, Usage, Agents and Connectors are admin-only in the API (`api/main.py` routers use `require_admin`; `/api/agents` too) and in the UI (`components/layout/nav.ts` role-aware nav, `RouteGuard` sends viewers from / to /signals and shows an admins-only screen elsewhere; setup links are hidden). Tests: `tests/options/test_access.py`. Mobile: below lg a native-style bottom tab bar plus a "More" sheet (`MobileNav.tsx`), with safe-area insets and viewport-fit=cover. Every wide table has a card layout on phones (Performance, Paper, decision log, research agents, trade history; the 9-column ones until lg). Inputs are 16px below lg (no iOS zoom), touch controls are at least 40px, and the research form, progress strip and stage grids are fixed for phones. Installable app: `app/manifest.ts` plus icons drawn by `ui/scripts/make_icons.py` into ui/public (the Dockerfile now copies public/). Audited on a production build: all 9 pages at 320 and 375 px have no horizontal overflow, no sideways table scroll, no control under 40px and no zooming inputs; 768 and 1440 checked too. 255 tests passing.
 - [ ] Shadow mode for 4–6 weeks, then LIVE per setup
 
+## Phase G — Production hardening (from docs/review/, started 17 Oct 2026)
+
+The user asked: "use that report and build what is missing, production grade". The work follows the roadmap in `docs/review/PLATFORM_REVIEW.md` §9 and `docs/review/backlog.csv` (R-01…R-32). R-25 (setups S4–S7) and R-26 (BANKNIFTY/FINNIFTY) are deliberately not built: the report gates them on S1–S3 passing the evidence bar first. R-07's operational half (setting SECRET_KEY on Railway and rotating the OpenAI key) is the user's to do.
+
+**Stage 1: Stabilize (done, 290 tests passing):**
+- [x] R-01 Auto-restart a crashed session. `options/daemon.py`: restarts after 30 s, 2 min, then 5 min (at most 3 a day, until 15:20) and alerts on each restart and on giving up. A container started after 15:00 still runs a short session while intraday signals are open. Session exit codes: 0 ok, 1 crash, 2 keys missing, 3 login failed.
+- [x] R-02 Durable, non-blocking alerts. `options/notify/outbox.py` (`alerts_outbox` table, in-order sender thread, backoff for up to 15 min, duplicate guard, recovery after a restart) and `options/notify/email.py` (SMTP fallback, new "E-mail (SMTP)" connector). The session drains the outbox before it exits.
+- [x] R-03 Watchdog. `options/admin/watchdog.py` runs in the API, once a minute in trading hours. It alerts once when the heartbeat is lost, the session isn't running, or no bar was saved for 3 minutes, and again on recovery. Public `/health/recorder` (200/503) is there for an external uptime monitor. `WATCHDOG=off` disables it (local demo, tests).
+- [x] R-04 Warm-up history. Each request is tried 3 times; a `HistoryReport` goes into the morning brief, with a Telegram warning on failure. History is 20 sessions, and the indicator guards are 100 bars (above convergence). Warm-up candles are now saved to `bars_1m` (insert-if-missing), so replays warm up like the live engine.
+- [x] R-05 The duplicate-signal keys are rebuilt from today's `evaluations` when the engine starts.
+- [x] R-06 Kill switch. `options/engine/controls.py` gives "pause new signals" (everyone sees a chip on Signals) and "exit all" (carried out once, acknowledged). It is on the new admin **Operations** page.
+- [x] R-08 Calendars editable from the UI. `options/core/calendar_store.py` handles holidays and events, with a warning when next year's holiday list is missing. API is under `/api/admin/calendar/*`.
+- [x] R-10 Auto-demote: a LIVE setup whose last 30 trades average ≤ ₹0 after costs goes back to SHADOW. It is alerted and written to the audit log.
+- [x] R-19 (part): a `bars_1m(ts)` index (created on existing tables too), retention (`OPTIONS_BARS_RETENTION_DAYS`, default 730, editable in Trading rules), a minutes-recorded line in the EOD summary, and `session_events` shown on Operations.
+- [x] R-32 LIVE cards carry broker-stop guidance: an SL-limit order with trigger and limit (NSE doesn't accept SL-M on options), or a GTT for positional trades. Follow-ups say to move the stop up after T1 and to exit and cancel after an exit.
+- [x] Audit log (`audit_log`): trading rules, pauses, exit-all, connectors, users, calendar edits, restarts and auto-demotions. Shown as the change log on Operations.
+- [x] Health checks added: e-mail, alert delivery (last 24 h), trading calendar. The recorder check reports restarts and giving up.
+- [x] R-20 (most): muted text moved to #8391a7, which passes 4.5:1 on every surface. Selects are labelled, charts have `role="img"`, inline links are underlined, Signal detail has an h1, focus rings are on form controls, and icon buttons are 28 px. axe goes from 1,274 nodes to 0 serious or critical on all 11 pages at 375 and 1440 px. The navbar shows only what fits and puts the rest under "More", so there is no overflow at 1024 px.
+- Tests: `tests/options/test_hardening.py` and `tests/options/test_ops_api.py`. `tests/conftest.py` now points the default DATABASE_URL at a temp file, so no test can touch `data/`.
+
+**Stage 2: Complete (done):**
+- [x] R-11 Research runs in Postgres. `research_runs` replaces `logs/trades.jsonl` (the old file is imported once at start-up). History has real Entry and Exchange values, stop/target, server-side search and filter, and a CSV export guarded against formula injection; Usage counts IST days.
+- [x] R-12 News pillar. `options/agents/news_feed.py` polls the RBI press-release RSS every 2 min. Rule-based classification: a high-impact release (policy rate, CRR/SLR, Governor's statement) blocks entries for 15 min through the `no_fresh_news` gate; medium is a warning; routine items are ignored. Headlines never reach an LLM.
+- [x] R-13 Branded `not-found.tsx`, `error.tsx` and `global-error.tsx`. RouteGuard waits for the role on admin pages (no 403, no flash).
+- [x] R-14 `/api/analyze` validates ticker and exchange, caps concurrent runs (2), enforces a daily USD budget (editable on the OpenAI card) and stops between stages when the browser disconnects. Every run and every LLM call (prompt, response, model snapshot, seed) is stored. `/api/pricehistory` is a sync def with validated input.
+- [x] Production bug fixed (17 Oct 2026, reported from the phone): "cannot access local variable 'e'". The agent retry path (`agents/base.py`) used the exception variable after its block; it now retries only malformed output (ValueError/TypeError), not API errors.
+
+**Stage 3: Strengthen (done):**
+- [x] R-15 Proxy historical backtest, `options/backtest/proxy.py`. NIFTY spot and VIX minutes, future at fair value, options repriced by Black-76 at VIX IV, constant OI (OI pillars neutral, S3 can't fire), NSE expiry rules (Thursday→Tuesday on 1 Sep 2025). It is fed through the live engine via replay. `fetch` (needs the Angel credentials and the user's go-ahead) and `run --save` (report on Performance, `/api/options/backtest`). It found a live bug: a signal could "fill" after the premium had already fallen through the stop. Fixed in `lifecycle.on_quote` (cancelled instead).
+- [x] R-16 `options/engine/statistics.py`: 95% CI of avg R, t-stat, trades still needed, Sharpe/Sortino on daily P&L, PSR/DSR across setups, NIFTY benchmark. Shown on Performance as "Is the edge real?", with "too few trades" honesty below 20.
+- [x] R-17 Calibration (score bands, pillar lift) on Performance. `options/backtest/ablation.py` re-runs the backtest without each pillar.
+- [x] R-18 LLM: one retry layer (transient errors only), timeout 60 s, temperature 0, seed 7, model default `gpt-4o-mini-2024-07-18`, full call log (`research_llm_calls`, 90-day retention). Sentiment uses only the given headlines. Headlines are cleaned and fenced as `<untrusted_data>`. Research RSI is Wilder's. Not done: a with/without-debate ablation (needs paid LLM runs).
+- [x] R-19 Bad-tick guard: index/futures ticks more than 5% from the last (VIX 25%) are dropped unless 3 agree. `rejected_ticks` is in the EOD summary.
+- [x] R-20/R-21 Accessibility and layout shift. axe shows 0 serious/critical on all pages, and CLS ≤ 0.1 on every page at 375/768/1440 (content area at least one screen tall; a pre-paint role marker `role-admin` on `<html>` for role-only placeholders; real tiles as skeletons).
+
+**Stage 4: Scale (started):**
+- [x] R-23 (UI half): Next 16.4.2 + React 19.3.1 (clears every open Next advisory, including two RCEs), exact pins, `npm ci` in `ui/Dockerfile`, ESLint 9 flat config (`npm run lint`, 0 problems), type errors fail the build. The Signal detail page uses `useParams` (params is a Promise in Next 16).
+- [x] R-27 (half): e-mail fallback channel.
+- [x] R-32 Broker-stop guidance.
+
+**Remaining when we resume (in this order):**
+1. R-09 OI units: on the first live day, check that the ATM option OI looks like shares (multiples of the lot, millions) and, if Angel reports contracts, convert (or make MIN_OI provider-dependent). Show the result in a health check.
+2. R-22 CI: `.github/workflows/ci.yml` running pytest + coverage ≥ 85%, `npm run typecheck`, `npm run lint`, `next build`, pip-audit, npm audit and the TA-Lib/repaint checks in `docs/review/scripts`. The feature branch isn't pushed to GitHub yet (ask before pushing).
+3. R-23 (Python half): a fully pinned lockfile (e.g. `requirements.lock` from a clean venv) used by the Dockerfile. Decide whether to drop `kiteconnect` (it pulls in autobahn/twisted with CVEs) if Kite stays unused.
+4. R-24 Security headers: CSP with nonces (Next middleware/proxy) plus HSTS, X-Frame-Options and Referrer-Policy. Restrict CORS to the UI origin (`RAILWAY_SERVICE_UI_URL` or `ALLOWED_ORIGINS`) instead of `*.railway.app`. Login throttle and API rate limits in Postgres. Cookie sessions were left out: UI and API are separate sites under the public suffix up.railway.app, so it would need a same-origin proxy.
+5. R-27 Shock detector: a 1-min NIFTY return or VIX jump z-score triggers a 15-min NO-TRADE gate.
+6. R-28 Metrics: ticks/min, evaluation ms and alert latency as a time series, shown on Operations, with an alert when an evaluation takes over 2 s.
+7. R-29 Root README. R-31 "personal use only" acknowledgement when creating a viewer, plus footer terms.
+8. R-30 Playwright E2E for the core flows; reuse `docs/review/scripts/ui_screens.py` as the axe/CLS gate.
+9. Update `docs/review/PLATFORM_REVIEW.md` (scorecard, finding statuses) and correct its R-32 wording (SL-M isn't allowed on options; the code uses SL-limit/GTT).
+
+**Needs the user:** set `SECRET_KEY` on Railway api AND recorder at the same moment (outside market hours; secrets are re-encrypted automatically). Rotate the OpenAI key. Say yes or no to downloading 2 years of NIFTY/VIX history from Angel for the backtest. Optional: set up the E-mail (SMTP) connector, and point an uptime monitor at `/health/recorder`.
+
 ## User setup still pending
 - Done 16 Oct 2026: admin account created; Angel One connected on the Connectors page (health check logs in).
 - **Telegram:** bot token saved; the Chat ID must be the user's numeric Telegram ID (from @userinfobot), not the bot's username. Then press **Send test message**.

@@ -1,17 +1,17 @@
 "use client";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { AlertCircle, Bot, ExternalLink, Eye, EyeOff, Loader2, LogIn, Radio, Send, Signal, Trash2, Undo2, Zap } from "lucide-react";
+import { useMemo, useState, type ReactNode } from "react";
+import { AlertCircle, Bot, ExternalLink, Eye, EyeOff, Loader2, LogIn, Mail, Radio, Send, Signal, Trash2, Undo2, Zap } from "lucide-react";
 import type { Connector, ConnectorField, ConnectorsResponse, SaveConnectorResponse } from "@/types/auth";
 import { API_URL, cn } from "@/lib/utils";
 import { ApiError, sendJson } from "@/lib/optionsApi";
 import { CheckBadge, CheckMeta } from "./HealthBits";
 
-const ICONS: Record<Connector["id"], typeof Signal> = { angel: Signal, kite: Radio, telegram: Send, openai: Bot };
+const ICONS: Record<Connector["id"], typeof Signal> = { angel: Signal, kite: Radio, telegram: Send, email: Mail, openai: Bot };
 
 const SOURCE: Record<ConnectorField["source"], { label: string; cls: string }> = {
   app:   { label: "Saved here",       cls: "text-[#93c5fd] border-[#3987e533] bg-[#3987e50d]" },
   env:   { label: "From environment", cls: "text-[#c4b5fd] border-[#a78bfa33] bg-[#a78bfa0d]" },
-  unset: { label: "Not set",          cls: "text-[#64748b] border-[#1e2d45] bg-card" },
+  unset: { label: "Not set",          cls: "text-[#8391a7] border-[#1e2d45] bg-card" },
 };
 
 function FieldRow({ f, value, cleared, error, onChange, onClear, onUndo }: {
@@ -26,7 +26,7 @@ function FieldRow({ f, value, cleared, error, onChange, onClear, onUndo }: {
     <div>
       <div className="flex items-center justify-between gap-2 mb-1.5">
         <label htmlFor={id} className="text-[11px] font-medium text-[#94a3b8]">
-          {f.label}{!f.required && <span className="text-[#475569] font-normal"> · optional</span>}
+          {f.label}{!f.required && <span className="text-[#8391a7] font-normal"> · optional</span>}
         </label>
         <span className={cn("text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded border", SOURCE[f.source].cls)}>
           {SOURCE[f.source].label}
@@ -37,21 +37,21 @@ function FieldRow({ f, value, cleared, error, onChange, onClear, onUndo }: {
         <input id={id} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
                aria-invalid={!!error} aria-describedby={`${id}-hint`}
                type={f.secret && !shown ? "password" : "text"} autoComplete="off" spellCheck={false} disabled={cleared}
-               className="flex-1 min-w-0 bg-transparent py-2 text-sm font-mono text-[#e2e8f0] outline-none placeholder:font-sans placeholder:text-[#475569] disabled:opacity-60" />
+               className="flex-1 min-w-0 bg-transparent py-2 text-sm font-mono text-[#e2e8f0] outline-none placeholder:font-sans placeholder:text-[#8391a7] disabled:opacity-60" />
         {f.secret && !cleared && (
-          <button type="button" onClick={() => setShown(s => !s)} className="text-[#64748b] hover:text-[#e2e8f0]" aria-label={shown ? "Hide" : "Show"}>
+          <button type="button" onClick={() => setShown(s => !s)} className="grid place-items-center w-7 h-7 -mr-1 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff9933] text-[#94a3b8] hover:text-[#e2e8f0]" aria-label={shown ? "Hide" : "Show"}>
             {shown ? <EyeOff size={14} /> : <Eye size={14} />}
           </button>
         )}
         {f.source === "app" && (cleared
-          ? <button type="button" onClick={onUndo} className="text-[#64748b] hover:text-[#e2e8f0]" aria-label="Keep saved value" title="Keep the saved value"><Undo2 size={14} /></button>
-          : <button type="button" onClick={onClear} className="text-[#64748b] hover:text-[#fca5a5]" aria-label="Remove saved value" title="Remove the saved value"><Trash2 size={14} /></button>)}
+          ? <button type="button" onClick={onUndo} className="grid place-items-center w-7 h-7 -mr-1 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff9933] text-[#94a3b8] hover:text-[#e2e8f0]" aria-label="Keep saved value" title="Keep the saved value"><Undo2 size={14} /></button>
+          : <button type="button" onClick={onClear} className="grid place-items-center w-7 h-7 -mr-1 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff9933] text-[#94a3b8] hover:text-[#fca5a5]" aria-label="Remove saved value" title="Remove the saved value"><Trash2 size={14} /></button>)}
       </div>
       {error
         ? <p id={`${id}-hint`} className="flex items-start gap-1 text-[11px] text-[#fca5a5] mt-1 leading-snug">
             <AlertCircle size={12} className="mt-px flex-shrink-0" /> {error}
           </p>
-        : f.help && <p id={`${id}-hint`} className="text-[10px] text-[#475569] mt-1 leading-snug">{f.help}</p>}
+        : f.help && <p id={`${id}-hint`} className="text-[10px] text-[#8391a7] mt-1 leading-snug">{f.help}</p>}
     </div>
   );
 }
@@ -77,7 +77,13 @@ export function ConnectorCard({ c, activeProvider, onSaved, onTested, testing }:
   const [busy, setBusy] = useState<"save" | "provider" | null>(null);
   const [note, setNote] = useState<Note | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  useEffect(() => { setValues(initial); setCleared(new Set()); setFieldErrors({}); }, [initial]);
+  const [syncedTo, setSyncedTo] = useState(initial);
+  if (syncedTo !== initial) {
+    setSyncedTo(initial);
+    setValues(initial);
+    setCleared(new Set());
+    setFieldErrors({});
+  }
 
   const changes = useMemo(() => {
     const out: Record<string, string | null> = {};
@@ -150,10 +156,10 @@ export function ConnectorCard({ c, activeProvider, onSaved, onTested, testing }:
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h3 className="text-sm font-semibold text-[#e2e8f0]">{c.name}</h3>
-              <span className="text-[10px] tracking-wider uppercase text-[#64748b]">{c.role}</span>
+              <span className="text-[10px] tracking-wider uppercase text-[#8391a7]">{c.role}</span>
               {active && <span className="text-[10px] font-bold tracking-widest px-1.5 py-0.5 rounded bg-[#ff993314] text-[#ff9933] border border-[#ff993333]">ACTIVE SOURCE</span>}
             </div>
-            <p className="text-[12px] text-[#64748b] mt-0.5 leading-snug">{c.description}</p>
+            <p className="text-[12px] text-[#8391a7] mt-0.5 leading-snug">{c.description}</p>
           </div>
         </div>
         <CheckBadge status={c.health?.status} />
@@ -202,13 +208,18 @@ export function ConnectorCard({ c, activeProvider, onSaved, onTested, testing }:
               <Send size={13} /> Send test message
             </Button>
           )}
+          {c.id === "email" && (
+            <Button onClick={() => onTested(c.id, true)} disabled={testing || !c.configured}>
+              <Mail size={13} /> Send test e-mail
+            </Button>
+          )}
           {isProvider && !active && (
             <Button onClick={useAsProvider} disabled={busy !== null} busy={busy === "provider"}>Use for market data</Button>
           )}
           {loginUrl && <a href={loginUrl} className="inline-flex items-center gap-1.5 text-xs text-[#ff9933] hover:underline px-2"><LogIn size={13} /> Log in to Kite today</a>}
         </div>
         {c.docs_url && (
-          <a href={c.docs_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[11px] text-[#64748b] hover:text-[#e2e8f0]">
+          <a href={c.docs_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[11px] text-[#8391a7] hover:text-[#e2e8f0]">
             Where to get these <ExternalLink size={11} />
           </a>
         )}

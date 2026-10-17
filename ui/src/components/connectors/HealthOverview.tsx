@@ -1,5 +1,5 @@
 "use client";
-import { Activity, Bot, Cpu, Database, Globe2, Loader2, Radio, Send, Signal } from "lucide-react";
+import { Activity, BellRing, Bot, CalendarDays, Cpu, Database, Globe2, Loader2, Mail, Radio, Send, Signal } from "lucide-react";
 import type { HealthResponse } from "@/types/auth";
 import { cn } from "@/lib/utils";
 import { CHECK_STYLE, CheckMeta } from "./HealthBits";
@@ -7,6 +7,7 @@ import { CHECK_STYLE, CheckMeta } from "./HealthBits";
 const ORDER: { id: string; icon: typeof Database }[] = [
   { id: "database", icon: Database }, { id: "recorder", icon: Cpu }, { id: "market_data", icon: Activity },
   { id: "angel", icon: Signal }, { id: "kite", icon: Radio }, { id: "telegram", icon: Send },
+  { id: "email", icon: Mail }, { id: "alerts", icon: BellRing }, { id: "calendar", icon: CalendarDays },
   { id: "openai", icon: Bot }, { id: "macro", icon: Globe2 },
 ];
 
@@ -20,7 +21,7 @@ export function HealthOverview({ health, running }: { health: HealthResponse | u
     <section aria-label="System health">
       <div className="flex items-baseline justify-between gap-3 mb-3 flex-wrap">
         <h2 className="text-sm font-semibold text-[#e2e8f0]">System health</h2>
-        <span className={cn("text-xs", failing ? "text-red" : warnings ? "text-yellow" : counted.length ? "text-green" : "text-[#64748b]")}>
+        <span className={cn("text-xs", failing ? "text-red" : warnings ? "text-yellow" : counted.length ? "text-green" : "text-[#8391a7]")}>
           {!counted.length ? "No checks run yet" : failing ? `${failing} failing` + (warnings ? ` · ${warnings} need attention` : "")
             : warnings ? `${warnings} need attention` : "All checks healthy"}
         </span>
@@ -35,7 +36,7 @@ export function HealthOverview({ health, running }: { health: HealthResponse | u
               <div className={cn("absolute left-0 inset-y-0 w-0.5", S.bar, busy && "animate-pulse")} />
               <div className="flex items-center justify-between gap-2">
                 <span className="flex items-center gap-2 min-w-0">
-                  <Icon size={14} className="text-[#64748b] flex-shrink-0" />
+                  <Icon size={14} className="text-[#8391a7] flex-shrink-0" />
                   <span className="text-xs font-semibold text-[#e2e8f0] truncate">{health?.checks[id] ?? id}</span>
                 </span>
                 {busy ? <Loader2 size={15} className="text-[#ff9933] animate-spin flex-shrink-0" aria-label="Checking" />

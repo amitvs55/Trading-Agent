@@ -6,17 +6,17 @@ in the Kite developer console (plan Appendix A).
 
 import threading
 import time as clock
-from datetime import time, timedelta
+from datetime import datetime, time, timedelta
 from html import escape
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from api.deps import current_user, get_cfg, get_store
+from api.deps import current_user, get_calendar, get_cfg, get_store
 from options.config import OptionsSettings
 from options.core.calendar import NseCalendar, at_ist, now_ist
 from options.core.schemas import OPEN_STATES, Signal
-from options.engine import confidence, performance
+from options.engine import confidence, controls, performance, statistics
 from options.notify import make_notifier
 from options.notify.base import Notifier
 from options.setups import SETUP_LABELS
@@ -96,9 +96,9 @@ def server_time() -> dict:
 
 
 @router.get("/api/options/status", dependencies=[Depends(current_user)])
-def options_status(store: Store = Depends(get_store), settings: OptionsSettings = Depends(get_cfg)) -> dict:
+def options_status(store: Store = Depends(get_store), settings: OptionsSettings = Depends(get_cfg),
+                   cal: NseCalendar = Depends(get_calendar)) -> dict:
     now = now_ist()
-    cal = NseCalendar()
     today = now.date()
     trading_day = cal.is_trading_day(today)
     last_bar = store.last_bar_ts()
@@ -127,7 +127,16 @@ def options_status(store: Store = Depends(get_store), settings: OptionsSettings 
             "risk_per_trade_pct": settings.OPTIONS_RISK_PER_TRADE_PCT,
             "daily_loss_stop_pct": settings.OPTIONS_DAILY_LOSS_STOP_PCT,
         },
+        "signals_paused": _paused(store),
     }
+
+
+def _paused(store: Store) -> dict | None:
+    """Everyone sees when new signals are paused (who and why), not just admins."""
+    state = controls.read(store)
+    if not state.get("paused"):
+        return None
+    return {"by": state.get("paused_by"), "at": state.get("paused_at"), "reason": state.get("reason") or None}
 
 
 # ── Dashboard data ───────────────────────────────────────────────────────────
@@ -187,8 +196,56 @@ def options_signal(signal_id: str, store: Store = Depends(get_store)) -> dict:
             "setup_label": SETUP_LABELS.get(sig.setup, sig.setup)}
 
 
+_stats_cache: dict[int, tuple[float, dict]] = {}
+STATS_TTL_S = 60
+
+
+def _benchmark(store: Store, first: datetime | None, last: datetime | None) -> dict | None:
+    """NIFTY buy-and-hold over the same span as the track record, for comparison."""
+    if not first or not last:
+        return None
+    token = store.latest_token("NIFTY 50")
+    if token is None:
+        return None
+    start, end = store.close_near(token, first, before=True) or store.close_near(token, first, before=False), \
+        store.close_near(token, last, before=True)
+    if not start or not end:
+        return None
+    return {"index": "NIFTY 50", "from": first.isoformat(), "to": last.isoformat(), "start": start, "end": end,
+            "return_pct": (end / start - 1) * 100}
+
+
+def _statistics(store: Store, everything: list[Signal], capital: float, cal: NseCalendar) -> dict:
+    """Uncertainty, risk-adjusted returns, a benchmark and calibration, recomputed at most once a minute."""
+    key = id(store.engine)
+    with _bands_lock:
+        hit = _stats_cache.get(key)
+        if hit and clock.monotonic() - hit[0] < STATS_TTL_S:
+            return hit[1]
+    done = sorted(performance.traded(everything), key=lambda s: s.closed_at)
+    first, last = (done[0].created_at, done[-1].closed_at) if done else (None, None)
+    days: list = []
+    if first:
+        d, end = first.date(), max(last.date(), now_ist().date())
+        while d <= end:
+            if cal.is_trading_day(d):
+                days.append(d)
+            d += timedelta(days=1)
+    out = {
+        "overall": statistics.record_stats(everything),
+        "by_setup": statistics.setup_report(everything),
+        "account": statistics.account_stats(everything, capital, days),
+        "benchmark": _benchmark(store, first, last),
+        "calibration": statistics.calibration(everything),
+    }
+    with _bands_lock:
+        _stats_cache[key] = (clock.monotonic(), out)
+    return out
+
+
 @router.get("/api/options/performance", dependencies=[Depends(current_user)])
-def options_performance(store: Store = Depends(get_store), settings: OptionsSettings = Depends(get_cfg)) -> dict:
+def options_performance(store: Store = Depends(get_store), settings: OptionsSettings = Depends(get_cfg),
+                        cal: NseCalendar = Depends(get_calendar)) -> dict:
     everything = store.signals_since(now_ist() - timedelta(days=3650))
     done = sorted(performance.traded(everything), key=lambda s: s.closed_at)
     equity, curve = 0.0, []
@@ -209,7 +266,14 @@ def options_performance(store: Store = Depends(get_store), settings: OptionsSett
                    "cancelled": sum(s.state.value == "CANCELLED" for s in everything)},
         "setup_labels": SETUP_LABELS,
         "capital": settings.OPTIONS_CAPITAL,
+        "statistics": _statistics(store, everything, settings.OPTIONS_CAPITAL, cal),
     }
+
+
+@router.get("/api/options/backtest", dependencies=[Depends(current_user)])
+def options_backtest(store: Store = Depends(get_store)) -> dict:
+    """The last proxy backtest saved with `python -m options.backtest.proxy run … --save`, if any."""
+    return {"report": store.get_meta_json("backtest_report")}
 
 
 @router.get("/api/options/evaluations", dependencies=[Depends(current_user)])

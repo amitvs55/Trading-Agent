@@ -3,7 +3,7 @@
 import json
 from typing import Any, Type, TypeVar
 
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel
 
 from utils.agent_health import tracked
 from utils.llm import LLMClient
@@ -55,19 +55,24 @@ class BaseAgent:
 
         logger.info("[%s] Running for context keys: %s", self.name, list(context.keys()))
 
-        # First attempt
+        # First attempt. Only a malformed answer (bad JSON, or JSON that doesn't match the schema;
+        # pydantic's ValidationError is a ValueError) is worth asking again with feedback. API errors
+        # were already retried in LLMClient, and a rejected key or empty account won't fix itself.
         try:
             raw = self.llm.call(system, user_prompt)
             result = self.output_model.model_validate(raw)
             logger.info("[%s] Output validated successfully", self.name)
             return result
-        except (ValidationError, Exception) as e:
-            logger.warning("[%s] First attempt failed: %s. Retrying with feedback.", self.name, e)
+        except (ValueError, TypeError) as e:
+            # Python unbinds `e` when this block ends, so keep the message for the retry prompt
+            # (using `e` below raised "cannot access local variable 'e'" in production)
+            problem = str(e)[:1500]
+            logger.warning("[%s] First attempt failed: %s. Retrying with feedback.", self.name, problem)
 
         # Retry with error feedback
         retry_prompt = (
             f"{user_prompt}\n\n"
-            f"IMPORTANT: Your previous response had an error: {e}\n"
+            f"IMPORTANT: Your previous response had an error: {problem}\n"
             f"Please fix the JSON output to match the required schema exactly."
         )
         raw = self.llm.call(system, retry_prompt, is_retry=True)

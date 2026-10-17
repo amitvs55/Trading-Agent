@@ -17,10 +17,11 @@ const pnlTone = (v: number | null | undefined) =>
 function Tile({ label, value, sub, tone, loading }: { label: string; value: string; sub?: React.ReactNode; tone?: string; loading?: boolean }) {
   return (
     <div className="bg-surface border border-[#1e2d45] rounded-xl p-4 min-w-0">
-      <div className="text-[10px] text-[#64748b] tracking-widest mb-2">{label}</div>
+      <div className="text-[10px] text-[#8391a7] tracking-widest mb-2">{label}</div>
       {loading ? <div className="skeleton h-8 rounded w-24" /> :
         <div className={cn("fade-in font-bold text-2xl leading-8 font-mono tabular-nums truncate", tone ?? "text-[#e2e8f0]")}>{value}</div>}
-      {sub && <div className="text-[11px] text-[#64748b] mt-1 truncate">{sub}</div>}
+      {sub ? <div className="text-[11px] text-[#8391a7] mt-1 truncate">{sub}</div>
+           : loading ? <div className="text-[11px] mt-1" aria-hidden>&nbsp;</div> : null}
     </div>
   );
 }
@@ -30,8 +31,8 @@ function OpenRow({ t }: { t: PaperTrade }) {
     <tr className="hover:bg-[#ffffff04]">
       <td className="px-4 py-2"><DirectionPill action={t.action} /></td>
       <td className="px-2 py-2 whitespace-nowrap"><Link href={`/signals/${t.signal_id}`} className="font-mono text-[#e2e8f0] hover:text-[#ff9933]">{t.symbol}</Link>
-        <div className="text-[10px] text-[#64748b]">{t.signal_id} · {t.lots} lot ({t.units} qty)</div></td>
-      <td className="px-2 py-2 text-right font-mono text-[#94a3b8]">{fmtPremium(t.entry)}<div className="text-[10px] text-[#64748b]">{fmtDateTime(t.entry_at)}</div></td>
+        <div className="text-[10px] text-[#8391a7]">{t.signal_id} · {t.lots} lot ({t.units} qty)</div></td>
+      <td className="px-2 py-2 text-right font-mono text-[#94a3b8]">{fmtPremium(t.entry)}<div className="text-[10px] text-[#8391a7]">{fmtDateTime(t.entry_at)}</div></td>
       <td className="px-2 py-2 text-right font-mono text-[#e2e8f0]">{t.bid != null ? fmtPremium(t.bid) : "—"}</td>
       <td className="px-2 py-2 text-right font-mono text-[#fca5a5]">{fmtPremium(t.stop)}</td>
       <td className="px-2 py-2 text-right font-mono text-[#93c5fd]">{fmtPremium(t.t1)} / {fmtPremium(t.t2)}</td>
@@ -45,12 +46,12 @@ function ClosedRow({ t }: { t: PaperTrade }) {
     <tr className="hover:bg-[#ffffff04]">
       <td className="px-4 py-2 font-mono text-[#94a3b8] whitespace-nowrap">{fmtDateTime(t.exit_at)}</td>
       <td className="px-2 py-2 whitespace-nowrap"><Link href={`/signals/${t.signal_id}`} className="font-mono text-[#e2e8f0] hover:text-[#ff9933]">{t.symbol}</Link>
-        <div className="text-[10px] text-[#64748b]">{t.signal_id}</div></td>
+        <div className="text-[10px] text-[#8391a7]">{t.signal_id}</div></td>
       <td className="px-2 py-2"><GradeBadge grade={t.grade} score={t.score} /></td>
       <td className="px-2 py-2 text-right font-mono text-[#94a3b8]">{t.lots}</td>
       <td className="px-2 py-2 text-right font-mono text-[#94a3b8]">{fmtPremium(t.entry)} → {fmtPremium(t.exit)}</td>
       <td className="px-2 py-2 text-[#94a3b8] whitespace-nowrap">{t.exit_reason ? EXIT_LABELS[t.exit_reason] ?? t.exit_reason : "—"}</td>
-      <td className="px-2 py-2 text-right font-mono text-[#64748b]">{fmtRupees(t.charges)}</td>
+      <td className="px-2 py-2 text-right font-mono text-[#8391a7]">{fmtRupees(t.charges)}</td>
       <td className={cn("px-2 py-2 text-right font-mono font-semibold", pnlTone(t.pnl))}>{fmtRupees(t.pnl, true)}</td>
       <td className="px-4 py-2 text-right font-mono text-[#94a3b8]">{fmtR(t.r)}</td>
     </tr>
@@ -64,18 +65,18 @@ function OpenCard({ t }: { t: PaperTrade }) {
       <Link href={`/signals/${t.signal_id}`} className="block px-4 py-3 active:bg-[#ffffff06]">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="flex items-center gap-2"><DirectionPill action={t.action} /><span className="text-[11px] text-[#64748b]">{t.lots} lot · {t.units} qty</span></div>
+            <div className="flex items-center gap-2"><DirectionPill action={t.action} /><span className="text-[11px] text-[#8391a7]">{t.lots} lot · {t.units} qty</span></div>
             <div className="font-mono text-[13px] text-[#e2e8f0] truncate mt-1">{t.symbol}</div>
           </div>
           <div className="text-right flex-shrink-0">
             <div className={cn("font-mono font-bold text-base", pnlTone(t.unrealised))}>{fmtRupees(t.unrealised, true)}</div>
-            <div className="text-[10px] text-[#64748b]">open P&amp;L</div>
+            <div className="text-[10px] text-[#8391a7]">open P&amp;L</div>
           </div>
         </div>
         <dl className="grid grid-cols-4 gap-2 mt-2.5 text-[11px]">
           {([["Entry", fmtPremium(t.entry), "text-[#e2e8f0]"], ["Bid", t.bid != null ? fmtPremium(t.bid) : "—", "text-[#e2e8f0]"],
              ["Stop", fmtPremium(t.stop), "text-[#fca5a5]"], ["T1", fmtPremium(t.t1), "text-[#93c5fd]"]] as const).map(([k, v, tone]) => (
-            <div key={k}><dt className="text-[10px] text-[#64748b]">{k}</dt><dd className={cn("font-mono", tone)}>{v}</dd></div>
+            <div key={k}><dt className="text-[10px] text-[#8391a7]">{k}</dt><dd className={cn("font-mono", tone)}>{v}</dd></div>
           ))}
         </dl>
       </Link>
@@ -88,7 +89,7 @@ function ClosedCard({ t }: { t: PaperTrade }) {
     <li>
       <Link href={`/signals/${t.signal_id}`} className="flex items-start justify-between gap-3 px-4 py-3 active:bg-[#ffffff06]">
         <div className="min-w-0">
-          <div className="text-[11px] text-[#64748b]">{fmtDateTime(t.exit_at)} · <span className="font-mono">{t.signal_id}</span></div>
+          <div className="text-[11px] text-[#8391a7]">{fmtDateTime(t.exit_at)} · <span className="font-mono">{t.signal_id}</span></div>
           <div className="font-mono text-[13px] text-[#e2e8f0] truncate mt-0.5">{t.symbol}</div>
           <div className="text-[11px] text-[#94a3b8] mt-1">
             <span className="font-mono">{fmtPremium(t.entry)} → {fmtPremium(t.exit)}</span> · {t.exit_reason ? EXIT_LABELS[t.exit_reason] ?? t.exit_reason : "—"}
@@ -136,11 +137,11 @@ function ResetForm({ acct, onDone }: { acct: PaperAccount; onDone: () => void })
   }
   return (
     <form onSubmit={submit} className="menu-pop w-full sm:w-auto flex flex-wrap items-end gap-2 bg-surface border border-[#1e2d45] rounded-xl p-3">
-      <label className="text-[10px] tracking-widest text-[#64748b]">STARTING BALANCE (₹)
+      <label className="text-[10px] tracking-widest text-[#8391a7]">STARTING BALANCE (₹)
         <input value={balance} onChange={e => setBalance(e.target.value.replace(/[^0-9]/g, ""))} inputMode="numeric"
                className="mt-1 block w-32 bg-card border border-[#1e2d45] focus:border-[#ff9933] rounded-lg px-2.5 py-1.5 text-sm font-mono text-[#e2e8f0] outline-none" />
       </label>
-      <label className="text-[10px] tracking-widest text-[#64748b]">FOLLOW
+      <label className="text-[10px] tracking-widest text-[#8391a7]">FOLLOW
         <select value={follow} onChange={e => setFollow(e.target.value as "all" | "A")}
                 className="mt-1 block bg-card border border-[#1e2d45] focus:border-[#ff9933] rounded-lg px-2.5 py-1.5 text-sm text-[#e2e8f0] outline-none">
           <option value="all">Every signal</option><option value="A">Grade A only</option>
@@ -150,9 +151,9 @@ function ResetForm({ acct, onDone }: { acct: PaperAccount; onDone: () => void })
               className="flex items-center gap-1.5 bg-[#ff9933] hover:bg-[#ffa94d] disabled:opacity-50 text-[#0b0f1a] rounded-lg px-3 py-2 text-xs font-semibold">
         {busy && <Loader2 size={12} className="animate-spin" />} Start fresh from now
       </button>
-      <button type="button" onClick={() => setOpen(false)} className="px-2 py-2 text-xs text-[#64748b] hover:text-[#e2e8f0]">Cancel</button>
+      <button type="button" onClick={() => setOpen(false)} className="px-2 py-2 text-xs text-[#8391a7] hover:text-[#e2e8f0]">Cancel</button>
       {error && <p className="basis-full text-[11px] text-[#fca5a5]">{error}</p>}
-      <p className="basis-full text-[10px] text-[#475569]">Past signals stay in the track record; the paper account just counts from now.</p>
+      <p className="basis-full text-[10px] text-[#8391a7]">Past signals stay in the track record; the paper account just counts from now.</p>
     </form>
   );
 }
@@ -168,12 +169,13 @@ export default function PaperPage() {
       <div className="mb-5 flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-[#e2e8f0] flex items-center gap-2.5"><Wallet size={20} className="text-[#ff9933]" /> Paper trading</h1>
-          <p className="text-sm text-[#64748b] mt-1">
+          <p className="text-sm text-[#8391a7] mt-1">
             A virtual {a ? fmtRupees(start) : "₹1,00,000"} account that takes {a ? a.settings.follow_label.toLowerCase() : "every signal"} automatically,
             sized by your risk rules, on live prices.
           </p>
         </div>
-        {a && auth?.user?.role === "admin" && <ResetForm acct={a} onDone={() => refresh()} />}
+        {a ? auth?.user?.role === "admin" && <ResetForm acct={a} onDone={() => refresh()} />
+          : <div className="h-[34px] w-[132px] rounded-lg skeleton hidden [.role-admin_&]:block" aria-hidden />}
       </div>
 
       <div className="mb-5 flex items-start gap-2.5 bg-[#3987e50d] border border-[#3987e533] rounded-xl px-4 py-3 text-[12px] text-[#94a3b8] leading-relaxed">
@@ -182,9 +184,13 @@ export default function PaperPage() {
           Each position opens when its signal&apos;s entry fills (at the live ask) and closes on the signal&apos;s own exits (at the live bid), with
           all charges. Size comes from this account&apos;s balance at your {a ? `${a.rules.risk_per_trade_pct}%` : "3%"} risk per trade
           (at most {a?.rules.max_lots ?? 1} lot, like the signals); after a {a ? `${a.rules.daily_loss_stop_pct}%` : "10%"} loss in a day it
-          takes no new trades until the next day. Running since {a ? fmtDateTime(a.settings.started_at) : "…"}. Updated <LiveAge iso={a?.as_of} never="…" />.
+          takes no new trades until the next day.
         </span>
       </div>
+      {/* Changing values sit on their own fixed-height line, so the banner above never re-wraps as they load */}
+      <p className="-mt-3 mb-5 h-4 text-[11px] text-[#8391a7] truncate">
+        Running since {a ? fmtDateTime(a.settings.started_at) : "…"} · updated <LiveAge iso={a?.as_of} never="…" />
+      </p>
 
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3 mb-5">
         <Tile loading={loading} label="EQUITY" value={fmtRupees(a?.equity)} tone={pnlTone((a?.equity ?? start) - start)}
@@ -205,23 +211,23 @@ export default function PaperPage() {
         <section className="bg-surface border border-[#1e2d45] rounded-xl overflow-hidden min-w-0">
           <div className="px-4 py-3 border-b border-[#1e2d45] flex items-center justify-between">
             <span className="text-xs font-semibold text-[#e2e8f0]">Balance</span>
-            <span className="text-[10px] text-[#64748b]">₹ after each closed trade · dashed line = starting balance</span>
+            <span className="text-[10px] text-[#8391a7]">₹ after each closed trade · dashed line = starting balance</span>
           </div>
           <div className="p-3">
             {!a ? <div className="skeleton h-64 rounded-lg" /> : a.curve.length > 1 ? <PaperCurve curve={a.curve} start={start} /> :
-              <div className="h-64 grid place-items-center text-xs text-[#475569] text-center px-6">The curve starts with the first closed paper trade.<br />Signals run from 09:30 on trading days.</div>}
+              <div className="h-64 grid place-items-center text-xs text-[#8391a7] text-center px-6">The curve starts with the first closed paper trade.<br />Signals run from 09:30 on trading days.</div>}
           </div>
         </section>
         <section className="bg-surface border border-[#1e2d45] rounded-xl overflow-hidden min-w-0">
           <div className="px-4 py-3 border-b border-[#1e2d45] text-xs font-semibold text-[#e2e8f0]">Skipped entries</div>
           {!a ? <div className="p-4"><div className="skeleton h-16 rounded" /></div> : a.skipped.length === 0 ? (
-            <div className="px-4 py-8 text-center text-xs text-[#475569]">None. Every followed signal that filled was taken.</div>
+            <div className="px-4 py-8 text-center text-xs text-[#8391a7]">None. Every followed signal that filled was taken.</div>
           ) : (
             <ul className="divide-y divide-[#1e2d45] max-h-64 overflow-y-auto">
               {a.skipped.map(s => (
                 <li key={s.signal_id} className="px-4 py-2 text-[12px]">
                   <Link href={`/signals/${s.signal_id}`} className="font-mono text-[#ff9933] hover:underline">{s.signal_id}</Link>
-                  <span className="text-[#64748b]"> · {fmtDateTime(s.at)}</span>
+                  <span className="text-[#8391a7]"> · {fmtDateTime(s.at)}</span>
                   <div className="text-[#94a3b8]">{s.reason}</div>
                 </li>
               ))}
@@ -233,16 +239,16 @@ export default function PaperPage() {
       <section className="bg-surface border border-[#1e2d45] rounded-xl overflow-hidden mb-5">
         <div className="px-4 py-3 border-b border-[#1e2d45] flex items-center justify-between">
           <span className="text-xs font-semibold text-[#e2e8f0]">Open positions</span>
-          <span className="text-[10px] text-[#64748b]">marked to the live bid · updates every 5s</span>
+          <span className="text-[10px] text-[#8391a7]">marked to the live bid · updates every 5s</span>
         </div>
         <ul className="md:hidden divide-y divide-[#1e2d45]">
           {!a ? <li className="px-4 py-3"><div className="skeleton h-14 rounded" /></li> :
             a.open.length ? a.open.map(t => <OpenCard key={t.signal_id} t={t} />) :
-            <li className="px-4 py-8 text-center text-xs text-[#475569]">No open position.</li>}
+            <li className="px-4 py-8 text-center text-xs text-[#8391a7]">No open position.</li>}
         </ul>
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-[12px] tabular-nums">
-            <thead><tr className="text-[10px] tracking-widest text-[#64748b] text-left">
+            <thead><tr className="text-[10px] tracking-widest text-[#8391a7] text-left">
               <th className="px-4 py-2 font-medium">SIDE</th><th className="px-2 py-2 font-medium">CONTRACT</th>
               <th className="px-2 py-2 font-medium text-right">ENTRY</th><th className="px-2 py-2 font-medium text-right">BID NOW</th>
               <th className="px-2 py-2 font-medium text-right">STOP</th><th className="px-2 py-2 font-medium text-right">T1 / T2</th>
@@ -251,7 +257,7 @@ export default function PaperPage() {
             <tbody className="divide-y divide-[#1e2d45]">
               {!a ? <tr><td colSpan={7} className="px-4 py-3"><div className="skeleton h-4 rounded" /></td></tr> :
                 a.open.length ? a.open.map(t => <OpenRow key={t.signal_id} t={t} />) :
-                <tr><td colSpan={7} className="px-4 py-8 text-center text-xs text-[#475569]">No open position.</td></tr>}
+                <tr><td colSpan={7} className="px-4 py-8 text-center text-xs text-[#8391a7]">No open position.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -259,17 +265,17 @@ export default function PaperPage() {
 
       <section className="bg-surface border border-[#1e2d45] rounded-xl overflow-hidden">
         <div className="px-4 py-3 border-b border-[#1e2d45] flex items-center justify-between">
-          <span className="text-xs font-semibold text-[#e2e8f0]">Closed trades <span className="text-[#64748b] font-normal">({a?.trades.length ?? 0})</span></span>
-          {a && a.stats.best != null && <span className="text-[10px] text-[#64748b]">best {fmtRupees(a.stats.best, true)} · worst {fmtRupees(a.stats.worst, true)}</span>}
+          <span className="text-xs font-semibold text-[#e2e8f0]">Closed trades <span className="text-[#8391a7] font-normal">({a?.trades.length ?? 0})</span></span>
+          {a && a.stats.best != null && <span className="text-[10px] text-[#8391a7]">best {fmtRupees(a.stats.best, true)} · worst {fmtRupees(a.stats.worst, true)}</span>}
         </div>
         <ul className="lg:hidden divide-y divide-[#1e2d45]">
           {!a ? <li className="px-4 py-3"><div className="skeleton h-14 rounded" /></li> :
             a.trades.length ? a.trades.map(t => <ClosedCard key={t.signal_id} t={t} />) :
-            <li className="px-4 py-8 text-center text-xs text-[#475569]">No closed paper trade yet.</li>}
+            <li className="px-4 py-8 text-center text-xs text-[#8391a7]">No closed paper trade yet.</li>}
         </ul>
         <div className="hidden lg:block overflow-x-auto">
           <table className="w-full text-[12px] tabular-nums">
-            <thead><tr className="text-[10px] tracking-widest text-[#64748b] text-left">
+            <thead><tr className="text-[10px] tracking-widest text-[#8391a7] text-left">
               <th className="px-4 py-2 font-medium">CLOSED</th><th className="px-2 py-2 font-medium">CONTRACT</th>
               <th className="px-2 py-2 font-medium">GRADE</th><th className="px-2 py-2 font-medium text-right">LOTS</th>
               <th className="px-2 py-2 font-medium text-right">ENTRY → EXIT</th><th className="px-2 py-2 font-medium">REASON</th>
@@ -279,12 +285,12 @@ export default function PaperPage() {
             <tbody className="divide-y divide-[#1e2d45]">
               {!a ? <tr><td colSpan={9} className="px-4 py-3"><div className="skeleton h-4 rounded" /></td></tr> :
                 a.trades.length ? a.trades.map(t => <ClosedRow key={t.signal_id} t={t} />) :
-                <tr><td colSpan={9} className="px-4 py-8 text-center text-xs text-[#475569]">No closed paper trade yet.</td></tr>}
+                <tr><td colSpan={9} className="px-4 py-8 text-center text-xs text-[#8391a7]">No closed paper trade yet.</td></tr>}
             </tbody>
           </table>
         </div>
       </section>
-      <p className="text-[10px] text-[#475569] mt-3">Paper results are simulated on live quotes and don&apos;t guarantee live results.</p>
+      <p className="text-[10px] text-[#8391a7] mt-3">Paper results are simulated on live quotes and don&apos;t guarantee live results.</p>
     </main>
   );
 }

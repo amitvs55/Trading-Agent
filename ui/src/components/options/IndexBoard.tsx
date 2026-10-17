@@ -12,9 +12,9 @@ const SPOT_NAMES: Record<string, string> = { NIFTY: "NIFTY 50", BANKNIFTY: "NIFT
 function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <div className="min-w-0">
-      <div className="text-[10px] tracking-widest text-[#64748b]">{label}</div>
+      <div className="text-[10px] tracking-widest text-[#8391a7]">{label}</div>
       <div className="font-mono text-sm font-semibold text-[#e2e8f0] mt-0.5 truncate">{value}</div>
-      {sub && <div className="text-[10px] text-[#64748b] mt-0.5 truncate">{sub}</div>}
+      {sub && <div className="text-[10px] text-[#8391a7] mt-0.5 truncate">{sub}</div>}
     </div>
   );
 }
@@ -60,14 +60,14 @@ function LevelsLadder({ board }: { board: Board }) {
   const below = rows.filter(r => r.value <= price).sort((a, b) => b.value - a.value).slice(0, 6);
   return (
     <div>
-      <div className="text-[10px] tracking-widest text-[#64748b] mb-1.5 px-2">RESISTANCE ABOVE</div>
-      {above.length ? above.map(r => <LevelRow key={r.name} {...r} price={price} />) : <div className="text-[11px] text-[#475569] px-2 py-1">Open space</div>}
+      <div className="text-[10px] tracking-widest text-[#8391a7] mb-1.5 px-2">RESISTANCE ABOVE</div>
+      {above.length ? above.map(r => <LevelRow key={r.name} {...r} price={price} />) : <div className="text-[11px] text-[#8391a7] px-2 py-1">Open space</div>}
       <div className="my-1.5 flex items-center gap-2 px-2 py-1.5 rounded-md bg-[#ff993314] border border-[#ff993333]">
         <span className="text-[10px] font-bold tracking-widest text-[#ff9933]">FUT</span>
         <span className="font-mono text-sm font-bold text-[#ff9933] tabular-nums ml-auto">{fmtNum(price, 1)}</span>
       </div>
-      <div className="text-[10px] tracking-widest text-[#64748b] mb-1.5 mt-2 px-2">SUPPORT BELOW</div>
-      {below.length ? below.map(r => <LevelRow key={r.name} {...r} price={price} />) : <div className="text-[11px] text-[#475569] px-2 py-1">Open space</div>}
+      <div className="text-[10px] tracking-widest text-[#8391a7] mb-1.5 mt-2 px-2">SUPPORT BELOW</div>
+      {below.length ? below.map(r => <LevelRow key={r.name} {...r} price={price} />) : <div className="text-[11px] text-[#8391a7] px-2 py-1">Open space</div>}
     </div>
   );
 }
@@ -80,10 +80,10 @@ export const IndexBoard = memo(function IndexBoard({ board }: { board: Board }) 
     <section className="fade-in bg-surface border border-[#1e2d45] rounded-xl overflow-hidden" aria-label={`${board.index} analysis board`}>
       <div className="px-5 py-4 border-b border-[#1e2d45] flex flex-wrap items-end justify-between gap-4">
         <div>
-          <div className="text-[10px] tracking-widest text-[#64748b]">{SPOT_NAMES[board.index] ?? board.index}</div>
+          <div className="text-[10px] tracking-widest text-[#8391a7]">{SPOT_NAMES[board.index] ?? board.index}</div>
           <div className="flex items-baseline gap-3 mt-1">
             <span className="text-3xl font-bold text-[#e2e8f0] leading-none">{fmtNum(board.spot, 2)}</span>
-            <span className="text-xs text-[#64748b]">fut <span className="font-mono text-[#94a3b8]">{fmtNum(board.fut, 1)}</span> · basis <span className="font-mono text-[#94a3b8]">{board.basis >= 0 ? "+" : ""}{fmtNum(board.basis, 1)}</span></span>
+            <span className="text-xs text-[#8391a7]">fut <span className="font-mono text-[#94a3b8]">{fmtNum(board.fut, 1)}</span> · basis <span className="font-mono text-[#94a3b8]">{board.basis >= 0 ? "+" : ""}{fmtNum(board.basis, 1)}</span></span>
           </div>
         </div>
         <div className="flex flex-wrap gap-1.5">
@@ -100,7 +100,7 @@ export const IndexBoard = memo(function IndexBoard({ board }: { board: Board }) 
               <CalendarClock size={12} /> {board.expiry_day ? (board.monthly_expiry ? "Monthly expiry today" : "Weekly expiry today") : `Expiry ${fmtDate(board.nearest_expiry)}`}
             </span>
           )}
-          <span className="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-md bg-card border border-[#1e2d45] text-[#64748b]">
+          <span className="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-md bg-card border border-[#1e2d45] text-[#8391a7]">
             <LiveAge iso={board.as_of} prefix="updated " />
           </span>
         </div>
@@ -120,14 +120,14 @@ export const IndexBoard = memo(function IndexBoard({ board }: { board: Board }) 
           <div className="flex items-center gap-2 mb-3">
             <Gauge size={13} className="text-[#ff9933]" />
             <span className="text-xs font-semibold text-[#e2e8f0]">Analysis pillars</span>
-            <span className="text-[10px] text-[#64748b]">direction-neutral view · each signal is graded for its own direction</span>
+            <span className="text-[10px] text-[#8391a7]">direction-neutral view · each signal is graded for its own direction</span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-3 gap-2">
             {board.pillars.map(p => <PillarTile key={p.pillar} p={p} />)}
           </div>
         </div>
         <div className="p-4 border-t xl:border-t-0 xl:border-l border-[#1e2d45]">
-          <div className="text-xs font-semibold text-[#e2e8f0] mb-2 px-2">Key levels <span className="text-[10px] font-normal text-[#64748b]">futures points</span></div>
+          <div className="text-xs font-semibold text-[#e2e8f0] mb-2 px-2">Key levels <span className="text-[10px] font-normal text-[#8391a7]">futures points</span></div>
           <LevelsLadder board={board} />
         </div>
       </div>

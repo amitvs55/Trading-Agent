@@ -21,7 +21,7 @@ export function DebateScoreBar({ verdict }: Props) {
         <div className="flex justify-between text-xs mb-1.5">
           <div className="flex items-center gap-2">
             <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-green text-bg">BULL</span>
-            <span className="text-[#64748b]">Winner: {verdict.winner === "bull" ? "✓" : ""}</span>
+            <span className="text-[#8391a7]">Winner: {verdict.winner === "bull" ? "✓" : ""}</span>
           </div>
           <span className="font-mono font-bold text-green">{verdict.bull_score.toFixed(1)} / 10</span>
         </div>
@@ -39,7 +39,7 @@ export function DebateScoreBar({ verdict }: Props) {
         <div className="flex justify-between text-xs mb-1.5">
           <div className="flex items-center gap-2">
             <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-red text-white">BEAR</span>
-            <span className="text-[#64748b]">Winner: {verdict.winner === "bear" ? "✓" : ""}</span>
+            <span className="text-[#8391a7]">Winner: {verdict.winner === "bear" ? "✓" : ""}</span>
           </div>
           <span className="font-mono font-bold text-red">{verdict.bear_score.toFixed(1)} / 10</span>
         </div>
@@ -53,7 +53,7 @@ export function DebateScoreBar({ verdict }: Props) {
       </div>
 
       <div className="pt-2 border-t border-[#1e2d45] flex items-center gap-2">
-        <span className="text-xs text-[#64748b]">Recommendation:</span>
+        <span className="text-xs text-[#8391a7]">Recommendation:</span>
         <span className={`text-xs font-bold px-2 py-0.5 rounded border ${REC_COLOR[verdict.final_recommendation]}`}>
           {REC_LABEL[verdict.final_recommendation]}
         </span>

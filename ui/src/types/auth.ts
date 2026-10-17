@@ -47,7 +47,7 @@ export interface ConnectorField {
 }
 
 export interface Connector {
-  id: "angel" | "kite" | "telegram" | "openai";
+  id: "angel" | "kite" | "telegram" | "email" | "openai";
   name: string;
   role: string;
   description: string;
@@ -60,11 +60,13 @@ export interface Connector {
 
 export interface RecorderStatus {
   ts: string;
-  state: "running" | "waiting";
-  next_start: string | null;
+  state: "running" | "waiting" | "restarting";
+  next_start: string | null;        // or, while restarting, when the restart happens
   session_started_at: string | null;
   last_exit_code: number | null;
   last_command: string | null;
+  restarts_today?: number;
+  gave_up?: boolean;                // stopped too often today: no more automatic restarts
 }
 
 export interface TradingSettings {
@@ -72,6 +74,7 @@ export interface TradingSettings {
   risk_per_trade_pct: number;
   daily_loss_stop_pct: number;
   live_setups: string[];
+  bars_retention_days: number;
   setups: Record<string, string>;
   limits: Record<string, [number, number]>;
 }
@@ -95,4 +98,70 @@ export interface HealthResponse {
   results: Record<string, HealthResult>;
   checks: Record<string, string>;
   recorder: RecorderStatus | null;
+}
+
+// ── Operations page (api/routes/admin.py) ────────────────────────────────────
+
+export interface ControlsState {
+  paused: boolean;
+  paused_by?: string | null;
+  paused_at?: string | null;
+  reason?: string | null;
+  exit_all_at?: string | null;
+  exit_all_by?: string | null;
+  exit_all_pending: string | null;   // a request the engine hasn't carried out yet
+}
+
+export type AlertStatus = "pending" | "sent" | "failed" | "expired";
+
+export interface AlertRow {
+  id: number;
+  created_at: string;
+  text: string;
+  status: AlertStatus;
+  channel: string | null;
+  attempts: number;
+  last_error: string | null;
+  sent_at: string | null;
+}
+
+export interface AlertsResponse {
+  alerts: AlertRow[];
+  last_24h: Partial<Record<AlertStatus, number>>;
+}
+
+export interface AuditEntry {
+  id: number;
+  ts: string;
+  actor: string;
+  action: string;
+  detail: string | null;
+}
+
+export interface RecorderEvent {
+  id: number;
+  ts: string;
+  kind: string;
+  detail: string | null;
+}
+
+export interface Holiday {
+  date: string;
+  name: string | null;
+  source: "built-in" | "added";
+}
+
+export interface MarketEvent {
+  id: string | null;
+  name: string;
+  at: string;
+  impact: "high" | "medium";
+  source: "built-in" | "added";
+}
+
+export interface CalendarResponse {
+  holidays: Holiday[];
+  years: { year: number; complete: boolean; built_in: boolean; count: number }[];
+  events: MarketEvent[];
+  warning: string | null;
 }
