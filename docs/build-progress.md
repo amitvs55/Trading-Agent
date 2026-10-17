@@ -122,6 +122,8 @@ The user asked: "use that report and build what is missing, production grade". T
 - [x] R-27 (half): e-mail fallback channel.
 - [x] R-32 Broker-stop guidance.
 
+**Deployed 17 Oct 2026 (commit 1943072)** to api, recorder and ui. Checked: /health 200, /health/recorder ok (waiting for Mon 19 Oct 08:30), the new endpoints answer 401 (they need a login), every UI page returns 200 and an unknown URL gets the branded 404, a research run completed in production, and the start-up logs are clean. 322 tests passing.
+
 **Remaining when we resume (in this order):**
 1. R-09 OI units: on the first live day, check that the ATM option OI looks like shares (multiples of the lot, millions) and, if Angel reports contracts, convert (or make MIN_OI provider-dependent). Show the result in a health check.
 2. R-22 CI: `.github/workflows/ci.yml` running pytest + coverage ≥ 85%, `npm run typecheck`, `npm run lint`, `next build`, pip-audit, npm audit and the TA-Lib/repaint checks in `docs/review/scripts`. The feature branch isn't pushed to GitHub yet (ask before pushing).
