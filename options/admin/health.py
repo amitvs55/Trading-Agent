@@ -95,7 +95,10 @@ def check_market_data(ctx: HealthContext) -> Result:
     stamp = last.astimezone(IST).strftime("%d %b %H:%M")
     if _market_open(ctx):
         if age <= DATA_STALE_S:
-            return "ok", f"Live · last bar {age:.0f}s ago", {"last_bar_at": last.isoformat()}
+            units = {i: (ctx.store.load_board(i) or {}).get("oi_unit") for i in ctx.cfg.OPTIONS_INDICES}
+            note = "".join(f" · {i} OI read as {u}" + (" (converted)" if u == "contracts" else "")
+                           for i, u in units.items() if u)
+            return "ok", f"Live · last bar {age:.0f}s ago{note}", {"last_bar_at": last.isoformat(), "oi_units": units}
         return "fail", f"Market is open but the last bar is {age / 60:.0f} min old ({stamp})", {"last_bar_at": last.isoformat()}
     return "ok", f"Market closed · last data {stamp}", {"last_bar_at": last.isoformat()}
 

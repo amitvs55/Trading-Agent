@@ -60,6 +60,7 @@ class OutboxNotifier:
         self._busy = False
         self._last_send = 0.0
         self.sent = self.failed = self.expired = 0
+        self.delay_peak = 0.0                    # slowest delivery (s) since the metrics last read it
         self._recover()
         self._thread: threading.Thread | None = None
         if start:
@@ -111,6 +112,7 @@ class OutboxNotifier:
                 if result.ok:
                     self._done(item, "sent", self.channel.name, None, now)
                     self.sent += 1
+                    self.delay_peak = max(self.delay_peak, (now - item.created_at).total_seconds())
                 elif result.permanent:
                     self._give_up(item, "failed", result.error)
                 else:

@@ -26,7 +26,7 @@ from options.delivery import cards
 from options.engine import confidence, controls, grading, lifecycle, performance
 from options.engine.levels import plan
 from options.engine.risk import RiskConfig, budget_gate, size
-from options.engine.selection import pick_expiry, pick_strike
+from options.engine.selection import oi_unit, pick_expiry, pick_strike
 from options.engine.snapshot import Snapshot, SnapshotError, take
 from options.engine.state import MarketState
 from options.notify.base import Notifier
@@ -45,6 +45,7 @@ SIGNAL_VALIDITY = timedelta(minutes=15)
 POSITIONAL_CHECK = time(15, 20)          # daily-close invalidation check for positional signals
 EVAL_DELAY_S = 4                         # evaluate once the bucket's last 1m bar has been flushed
 CONTROL_POLL_S = 5.0                     # how often the pause / exit-all controls are re-read
+SLOW_EVAL_MS = 2_000                     # an evaluation slower than this is reported (once an hour)
 DEMOTE_AFTER = 30                        # plan §1: judge a LIVE setup on its last 30 trades
 
 Quote = tuple[float | None, float | None]
@@ -91,6 +92,8 @@ class SignalEngine:
         self.agent_health: dict[str, AgentTracker] = {i: AgentTracker() for i in refs}
         self.control: dict = {"paused": False}
         self._control_read_at = float("-inf")
+        self.eval_ms_peak = 0.0                  # slowest evaluation since the metrics last read it
+        self._slow_alerted_at: datetime | None = None
 
     # ── Inputs ───────────────────────────────────────────────────────────────
 
@@ -157,6 +160,18 @@ class SignalEngine:
                            + ("." if closed else " (none were open)."))
 
     def evaluate(self, now: datetime) -> None:
+        started = _clock.perf_counter()
+        try:
+            self._evaluate(now)
+        finally:
+            ms = (_clock.perf_counter() - started) * 1000
+            self.eval_ms_peak = max(self.eval_ms_peak, ms)
+            if ms > SLOW_EVAL_MS and (self._slow_alerted_at is None or now - self._slow_alerted_at > timedelta(hours=1)):
+                self._slow_alerted_at = now
+                self.notifier.send(f"🐢 <b>Signal check took {ms / 1000:.1f} s</b> (normally under 1 s). Exits still run "
+                                   "every second; if this repeats, the recorder machine is overloaded.")
+
+    def _evaluate(self, now: datetime) -> None:
         for index in self.refs:
             try:
                 snap = take(self.context(index, now))
@@ -442,6 +457,7 @@ def board(snap: Snapshot) -> dict:
         "lot_size": ctx.ref.lot_size, "strike_step": ctx.ref.strike_step,
         "levels": {k: round(v, 2) for k, v in sorted(t.levels.items(), key=lambda kv: -kv[1])},
         "oi": {k: v for k, v in snap.oi.features.items() if v is not None},
+        "oi_unit": oi_unit(snap.chain) if snap.chain else None,
         "pillars": [{"pillar": p.pillar, "bias": p.bias, "strength": round(p.strength, 2), "status": p.status,
                      "detail": p.detail} for p in snap.pillars()],
     }

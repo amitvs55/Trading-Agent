@@ -68,16 +68,31 @@ app = FastAPI(
 
 _raw = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:3001")
 _origins = [o.strip() for o in _raw.split(",") if o.strip()]
+if _ui := os.getenv("RAILWAY_SERVICE_UI_URL"):           # Railway provides the UI service's public domain
+    _origins.append(f"https://{_ui}")
 
+# Only this app's own UI may call the API from a browser (it used to trust every *.railway.app site,
+# anyone's app included). The session travels in the Authorization header, never a cookie, so no
+# credentials mode is needed either.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_origins,
-    allow_origin_regex=r"https://.*\.railway\.app",
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=sorted(set(_origins)),
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
     max_age=7200,           # browsers reuse a preflight for 2 h (Chrome's cap) instead of one per poll URL every 10 min
 )
+
+
+@app.middleware("http")
+async def security_headers(request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    if request.url.path.startswith("/api/"):
+        response.headers.setdefault("Cache-Control", "no-store")     # signals and settings are never cached
+    return response
 # JSON shrinks 5-10x; the research pipeline's event stream is excluded by Starlette (it must flush per event)
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 

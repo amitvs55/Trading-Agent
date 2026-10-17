@@ -50,6 +50,7 @@ ADMIN_ONLY = [
     ("GET", "/api/admin/alerts", None),
     ("GET", "/api/admin/audit", None),
     ("GET", "/api/admin/recorder/events", None),
+    ("GET", "/api/admin/metrics", None),
     ("GET", "/api/admin/calendar", None),
     ("POST", "/api/admin/calendar/holidays", {"date": "2027-01-26", "name": "Republic Day"}),
     ("POST", "/api/admin/calendar/events", {"name": "RBI", "at": "2027-04-07T10:00:00+05:30"}),
@@ -75,3 +76,16 @@ def test_admins_still_reach_the_admin_pages(client):
     api, admin, _ = client
     assert api.get("/api/agents", headers=admin).status_code == 200
     assert api.get("/api/admin/users", headers=admin).status_code == 200
+
+
+def test_cors_trusts_only_the_ui_and_responses_carry_security_headers(client):
+    api, admin, _ = client
+    pre = {"Access-Control-Request-Method": "GET", "Access-Control-Request-Headers": "authorization"}
+    evil = api.options("/api/options/status", headers={"Origin": "https://someone-else.up.railway.app", **pre})
+    assert "access-control-allow-origin" not in evil.headers          # *.railway.app is no longer trusted
+    ours = api.options("/api/options/status", headers={"Origin": "http://localhost:3001", **pre})
+    assert ours.headers["access-control-allow-origin"] == "http://localhost:3001"
+    assert "access-control-allow-credentials" not in ours.headers
+    r = api.get("/api/options/status", headers=admin)
+    assert r.headers["x-content-type-options"] == "nosniff" and r.headers["x-frame-options"] == "DENY"
+    assert r.headers["cache-control"] == "no-store"

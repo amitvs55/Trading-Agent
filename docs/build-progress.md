@@ -124,16 +124,17 @@ The user asked: "use that report and build what is missing, production grade". T
 
 **Deployed 17 Oct 2026 (commit 1943072)** to api, recorder and ui. Checked: /health 200, /health/recorder ok (waiting for Mon 19 Oct 08:30), the new endpoints answer 401 (they need a login), every UI page returns 200 and an unknown URL gets the branded 404, a research run completed in production, and the start-up logs are clean. 322 tests passing.
 
-**Remaining when we resume (in this order):**
-1. R-09 OI units: on the first live day, check that the ATM option OI looks like shares (multiples of the lot, millions) and, if Angel reports contracts, convert (or make MIN_OI provider-dependent). Show the result in a health check.
-2. R-22 CI: `.github/workflows/ci.yml` running pytest + coverage ≥ 85%, `npm run typecheck`, `npm run lint`, `next build`, pip-audit, npm audit and the TA-Lib/repaint checks in `docs/review/scripts`. The feature branch isn't pushed to GitHub yet (ask before pushing).
-3. R-23 (Python half): a fully pinned lockfile (e.g. `requirements.lock` from a clean venv) used by the Dockerfile. Decide whether to drop `kiteconnect` (it pulls in autobahn/twisted with CVEs) if Kite stays unused.
-4. R-24 Security headers: CSP with nonces (Next middleware/proxy) plus HSTS, X-Frame-Options and Referrer-Policy. Restrict CORS to the UI origin (`RAILWAY_SERVICE_UI_URL` or `ALLOWED_ORIGINS`) instead of `*.railway.app`. Login throttle and API rate limits in Postgres. Cookie sessions were left out: UI and API are separate sites under the public suffix up.railway.app, so it would need a same-origin proxy.
-5. R-27 Shock detector: a 1-min NIFTY return or VIX jump z-score triggers a 15-min NO-TRADE gate.
-6. R-28 Metrics: ticks/min, evaluation ms and alert latency as a time series, shown on Operations, with an alert when an evaluation takes over 2 s.
-7. R-29 Root README. R-31 "personal use only" acknowledgement when creating a viewer, plus footer terms.
-8. R-30 Playwright E2E for the core flows; reuse `docs/review/scripts/ui_screens.py` as the axe/CLS gate.
-9. Update `docs/review/PLATFORM_REVIEW.md` (scorecard, finding statuses) and correct its R-32 wording (SL-M isn't allowed on options; the code uses SL-limit/GTT).
+**Second batch (17 Oct 2026, after "continue"): the remaining list is built:**
+- [x] R-09 OI units: `selection.oi_unit()` reads shares vs contracts from the chain (multiples of the lot, size) and converts contracts before the MIN_OI check. The board stores `oi_unit`, and the market-data health check shows it during market hours.
+- [x] R-22 CI: `.github/workflows/ci.yml` runs backend pytest with coverage ≥ 85% (currently 89%), UI lint, build and typecheck, then Playwright E2E. pip-audit and npm audit report but don't block.
+- [x] R-23 (Python half): `requirements.lock` holds exact versions from the tested venv (Windows-only packages removed, uvloop added for Linux), and the Dockerfile installs from it. `requirements-dev.txt` adds pytest-cov and pip-audit. kiteconnect stays, so its old autobahn/twisted pins remain (reported by pip-audit).
+- [x] R-24: CSP (connect-src limited to the site and the API), HSTS, X-Frame-Options, nosniff, Referrer- and Permissions-Policy on the UI (production only). The API trusts only `ALLOWED_ORIGINS` plus `RAILWAY_SERVICE_UI_URL`, without credentials mode, and sends nosniff, DENY, no-referrer and no-store. The login and setup throttle lives in Postgres (`auth_failures`): 5 failures per IP+user (right-most X-Forwarded-For) and 20 per user per 15 min. Not done: cookie sessions (they would need a same-origin proxy).
+- [x] R-27 Shock detector: `options/agents/shock.py` makes the `no_market_shock` gate fire on a ≥ 5σ one-minute move in the future (same session) or VIX up ≥ 10% in 15 min, then blocks entries for 15 min.
+- [x] R-28 Metrics: `session_metrics` stores one row a minute (ticks, bars, bad ticks, slowest evaluation, slowest alert delivery, open signals) via `options/market_data/metrics.py`. An alert fires on an evaluation over 2 s (once an hour). The Operations page has a metrics panel and `/api/admin/metrics`.
+- [x] R-29 Root `README.md`. R-31: a viewer account needs a personal-use confirmation (API 422 without it, recorded in the audit log).
+- [x] R-30 Playwright E2E (`ui/e2e`, `npm run e2e`): seeds a throwaway SQLite database and runs the real API plus a production UI build. Flows: sign-in, the signal record, pause and resume, viewer limits, the 404, and an axe gate, on desktop and phone (8 tests). Locally it runs on Edge. It found and fixed: the red "paused" title contrast, the account-menu and logo label-in-name mismatches, and a non-focusable scroll area.
+- [x] Review docs updated: `docs/review/PLATFORM_REVIEW.md` §0 lists what is resolved and what is open; the SL-M wording is corrected (SL-limit or GTT).
+- Not built: a with/without-debate LLM ablation (needs paid runs), and R-25/R-26 (held back until S1–S3 show an edge).
 
 **Needs the user:** set `SECRET_KEY` on Railway api AND recorder at the same moment (outside market hours; secrets are re-encrypted automatically). Rotate the OpenAI key. Say yes or no to downloading 2 years of NIFTY/VIX history from Angel for the backtest. Optional: set up the E-mail (SMTP) connector, and point an uptime monitor at `/health/recorder`.
 

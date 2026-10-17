@@ -1,9 +1,6 @@
 """Accounts (first-run setup, login, password) and the admin Connectors API."""
 
 import os
-import threading
-import time
-from collections import defaultdict, deque
 
 from datetime import date, datetime, timedelta
 from html import escape
@@ -42,35 +39,29 @@ def _alert(cfg: OptionsSettings, text: str) -> None:
     except Exception:
         logger.exception("Admin alert failed")
 
-# ── Brute-force throttle (per process; enough for a single-admin tool) ────────
+# ── Brute-force throttle (in the database: survives restarts, shared by workers) ──
 
-MAX_FAILURES, WINDOW_S = 5, 15 * 60
-_failures: dict[str, deque] = defaultdict(deque)
-_lock = threading.Lock()
+MAX_FAILURES, WINDOW_S = 5, 15 * 60          # per address and username
+MAX_FAILURES_PER_USER = 20                    # per username from anywhere: stops guessing from many addresses
+
+
+def _client_ip(request: Request) -> str:
+    # The socket peer is Railway's proxy. The right-most X-Forwarded-For entry is the one the proxy
+    # appended; anything to its left came from the client and could be forged to dodge the limit.
+    fwd = request.headers.get("x-forwarded-for", "")
+    return fwd.split(",")[-1].strip() if fwd else (request.client.host if request.client else "?")
 
 
 def _throttle_key(kind: str, request: Request, who: str = "") -> str:
-    return f"{kind}:{request.client.host if request.client else '?'}:{who.lower()}"
+    return f"{kind}:{_client_ip(request)}:{who.lower()}"
 
 
-def _check_throttle(key: str) -> None:
-    with _lock:
-        q = _failures[key]
-        while q and time.monotonic() - q[0] > WINDOW_S:
-            q.popleft()
-        if len(q) >= MAX_FAILURES:
-            raise HTTPException(429, {"code": "too_many_attempts",
-                                      "message": "Too many failed attempts. Try again in 15 minutes."})
-
-
-def _record_failure(key: str) -> None:
-    with _lock:
-        _failures[key].append(time.monotonic())
-
-
-def _clear_failures(key: str) -> None:
-    with _lock:
-        _failures.pop(key, None)
+def _check_throttle(repo: AdminRepo, key: str, user_key: str | None = None) -> None:
+    since = now_ist() - timedelta(seconds=WINDOW_S)
+    if repo.failures_since(key, since) >= MAX_FAILURES or (
+            user_key and repo.failures_since(user_key, since) >= MAX_FAILURES_PER_USER):
+        raise HTTPException(429, {"code": "too_many_attempts",
+                                  "message": "Too many failed attempts. Try again in 15 minutes."})
 
 
 # ── Accounts ─────────────────────────────────────────────────────────────────
@@ -103,18 +94,18 @@ def auth_state(repo: AdminRepo = Depends(get_repo)) -> dict:
 @router.post("/api/auth/setup")
 def auth_setup(body: SetupBody, request: Request, repo: AdminRepo = Depends(get_repo)) -> dict:
     key = _throttle_key("setup", request)
-    _check_throttle(key)
+    _check_throttle(repo, key)
     if repo.has_admin():
         raise HTTPException(409, {"code": "already_set_up", "message": "An admin account already exists. Log in instead."})
     if not repo.check_setup_code(body.setup_code):
-        _record_failure(key)
+        repo.record_failure(key)
         raise HTTPException(403, {"code": "bad_setup_code",
                                   "message": "That setup code is wrong. It's printed in the API service's logs."})
     if problem := security.password_problem(body.password, body.username):
         raise HTTPException(422, {"code": "weak_password", "message": problem})
     user_id = repo.create_user(body.username, body.password, role="admin")
     repo.set_meta("setup_code_digest", "used")
-    _clear_failures(key)
+    repo.clear_failures(key)
     logger.info("Admin account %s created", body.username.lower())
     return _session_payload(repo, repo.get_user(user_id))
 
@@ -122,12 +113,14 @@ def auth_setup(body: SetupBody, request: Request, repo: AdminRepo = Depends(get_
 @router.post("/api/auth/login")
 def auth_login(body: LoginBody, request: Request, repo: AdminRepo = Depends(get_repo)) -> dict:
     key = _throttle_key("login", request, body.username)
-    _check_throttle(key)
+    user_key = f"login-user:{body.username.strip().lower()}"
+    _check_throttle(repo, key, user_key)
     user = repo.authenticate(body.username, body.password)
     if user is None:
-        _record_failure(key)
+        repo.record_failure(key)
+        repo.record_failure(user_key)
         raise HTTPException(401, {"code": "bad_credentials", "message": "Wrong username or password."})
-    _clear_failures(key)
+    repo.clear_failures(key)
     return _session_payload(repo, user)
 
 
@@ -171,6 +164,9 @@ class NewUserBody(BaseModel):
     username: str = Field(min_length=3, max_length=40, pattern=r"^[A-Za-z0-9_.-]+$")
     password: str = Field(min_length=1, max_length=200)
     role: str = "viewer"
+    # Review finding F-05: signals shared with others are research advice (SEBI RA registration) and the
+    # broker's data is licensed for personal use, so a viewer account needs this confirmed, on record
+    acknowledged_personal_use: bool = False
 
 
 class UserPatchBody(BaseModel):
@@ -200,6 +196,9 @@ def admin_create_user(body: NewUserBody, user: dict = Depends(require_admin), re
                       store: Store = Depends(get_store)) -> dict:
     if body.role not in ROLES:
         raise HTTPException(422, {"code": "invalid", "message": f"Role must be one of {', '.join(ROLES)}."})
+    if body.role == "viewer" and not body.acknowledged_personal_use:
+        raise HTTPException(422, {"code": "personal_use", "message": "Confirm the viewer account is for personal "
+                                  "use. Sharing trade calls with others needs SEBI Research Analyst registration."})
     if problem := security.password_problem(body.password, body.username):
         raise HTTPException(422, {"code": "weak_password", "message": problem})
     try:
@@ -207,7 +206,8 @@ def admin_create_user(body: NewUserBody, user: dict = Depends(require_admin), re
     except UserExists as e:
         raise HTTPException(409, {"code": "username_taken", "message": str(e)})
     logger.info("%s created %s user %s", user["username"], body.role, body.username.lower())
-    _audit(store, user, "user_created", f"{body.username.lower()} ({body.role})")
+    _audit(store, user, "user_created", f"{body.username.lower()} ({body.role})"
+           + (" · confirmed personal use" if body.role == "viewer" else ""))
     return repo.get_user(new_id)
 
 
@@ -461,6 +461,21 @@ def admin_alerts(limit: int = Query(50, ge=1, le=500), _: dict = Depends(require
 def admin_audit(limit: int = Query(100, ge=1, le=1000), _: dict = Depends(require_admin),
                 store: Store = Depends(get_store)) -> dict:
     return {"entries": [_iso(r, "ts") for r in store.audit_recent(limit)]}
+
+
+@router.get("/api/admin/metrics")
+def admin_metrics(hours: int = Query(8, ge=1, le=72), _: dict = Depends(require_admin),
+                  store: Store = Depends(get_store)) -> dict:
+    """Per-minute session metrics (ticks, bars, bad ticks, evaluation time, alert delay)."""
+    rows = [_iso(r, "ts") for r in store.metrics_since(now_ist() - timedelta(hours=hours))]
+
+    def peak(key):
+        vals = sorted(r[key] for r in rows if r.get(key) is not None)
+        return {"p95": vals[int(0.95 * (len(vals) - 1))], "max": vals[-1]} if vals else None
+    return {"rows": rows, "summary": {
+        "minutes": len(rows), "ticks_per_min_last": rows[-1]["ticks"] if rows else None,
+        "rejected_ticks": sum(r["rejected_ticks"] for r in rows),
+        "eval_ms": peak("eval_ms"), "alert_delay_s": peak("alert_delay_s")}}
 
 
 @router.get("/api/admin/recorder/events")

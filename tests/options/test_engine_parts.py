@@ -219,3 +219,25 @@ def test_a_premium_that_falls_through_the_stop_before_entry_is_not_bought():
     sig = make_signal()
     upd = lifecycle.on_quote(sig, sig.stop_loss - 1.0, sig.stop_loss - 0.5, sig.created_at + timedelta(minutes=1))
     assert upd.kind == "CANCELLED" and sig.state.value == "CANCELLED" and sig.fill_price is None
+
+
+def test_oi_in_contracts_is_detected_and_converted():
+    """Review finding F-11: MIN_OI is in shares; a feed reporting contracts must not fail every strike."""
+    from options.agents.option_chain import Chain, ChainRow
+    from options.engine.selection import MIN_OI, oi_unit, pick_strike
+
+    def chain(oi_of):
+        rows = {}
+        for i, k in enumerate(range(25000, 25600, 50)):
+            for right, delta in (("CE", 0.45), ("PE", -0.45)):
+                r = ChainRow(float(k), right, i, f"N{k}{right}", 65, 100, 99.9, 100.1, oi_of(i), None, None, None)
+                r.greeks["delta"] = delta
+                rows[(float(k), right)] = r
+        return Chain(None, 25300.0, 50.0, rows)
+
+    shares = chain(lambda i: 65 * (40_000 + i))                 # NSE: multiples of the lot, millions
+    contracts = chain(lambda i: 3_001 + 7 * i)                  # a feed counting contracts
+    assert oi_unit(shares) == "shares" and oi_unit(contracts) == "contracts"
+    assert 3_001 * 65 >= MIN_OI > 3_001                         # too small as shares, fine once converted
+    assert pick_strike(contracts, 1)[0] is not None
+    assert oi_unit(chain(lambda i: 2_000_000.0 * 1.004 ** i)) == "shares"   # the synthetic market

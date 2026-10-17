@@ -6,6 +6,7 @@ direction-confirming pillars; Trend or Futures flow against the trade caps it at
 
 from dataclasses import dataclass
 
+from options.agents import shock as shock_agent
 from options.agents.option_chain import ChainRow
 from options.agents.volatility import option_quality
 from options.core.schemas import Grade, PillarCheck
@@ -65,6 +66,10 @@ class Gate:
 def gates(snap, cand: Candidate, setup_regimes: frozenset[str], pillar: dict[str, PillarCheck],
           trade: TradePlan, budget_reason: str | None) -> list[Gate]:
     ctx = snap.ctx
+    try:
+        shock = shock_agent.analyse(ctx)
+    except Exception as e:                           # a broken detector must not stop trading logic
+        shock = shock_agent.ShockView(False, f"shock check unavailable ({type(e).__name__})")
     as_of = ctx.state.as_of()
     age = (ctx.now - as_of).total_seconds() if as_of else None
     now_t = ctx.now.time()
@@ -79,6 +84,7 @@ def gates(snap, cand: Candidate, setup_regimes: frozenset[str], pillar: dict[str
         Gate("session_open", session_ok, "outside the entry window"),
         Gate("no_event_window", event_ok, "high-impact event window"),
         Gate("no_fresh_news", pillar["news"].status != "fail", pillar["news"].detail),
+        Gate("no_market_shock", not shock.active, shock.detail),
         Gate("liquidity", pillar["option_quality"].status != "fail", "contract spread or decay too high"),
         Gate("premium_not_rich", pillar["volatility"].status != "fail", "option premium too expensive to buy"),
         Gate("min_rr", trade.rr1 >= MIN_RR, f"reward:risk to T1 {trade.rr1:.2f} < {MIN_RR}"),

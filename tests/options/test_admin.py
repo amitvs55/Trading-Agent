@@ -308,7 +308,6 @@ def api(repo, monkeypatch):
     app.dependency_overrides[deps.get_cfg] = lambda: connectors.effective_settings(repo, OptionsSettings(_env_file=None))
     monkeypatch.setattr(deps, "base_settings", lambda: OptionsSettings(_env_file=None))
     app.dependency_overrides[deps.get_calendar] = NseCalendar
-    admin_routes._failures.clear()
     return TestClient(app)
 
 
@@ -411,3 +410,20 @@ def test_password_change_signs_out_other_devices(api, repo):
                     json={"current_password": "correct horse battery", "new_password": "a brand new secret"}).json()["ok"]
     assert repo.resolve_session(other) is None and repo.resolve_session(mine)
     assert repo.authenticate("amit", "a brand new secret")
+
+
+def test_throttle_survives_a_restart_and_ignores_forged_addresses(api, repo):
+    repo.create_user("amit", "correct horse battery")
+    bad = {"username": "amit", "password": "wrong password!"}
+    for i in range(5):                         # a forged left-hand address doesn't buy fresh attempts
+        api.post("/api/auth/login", json=bad, headers={"X-Forwarded-For": f"10.0.0.{i}, 203.0.113.9"})
+    blocked = api.post("/api/auth/login", json=bad, headers={"X-Forwarded-For": "10.9.9.9, 203.0.113.9"})
+    assert blocked.status_code == 429
+    # the record lives in the database, so a new API process (fresh memory) still enforces it
+    from options.storage import auth_failures
+    from sqlalchemy import func, select
+    with repo.engine.connect() as conn:
+        assert conn.execute(select(func.count()).select_from(auth_failures)).scalar() >= 5
+    ok = api.post("/api/auth/login", json={"username": "amit", "password": "correct horse battery"},
+                  headers={"X-Forwarded-For": "198.51.100.7"})
+    assert ok.status_code == 200                  # another address with the right password is fine

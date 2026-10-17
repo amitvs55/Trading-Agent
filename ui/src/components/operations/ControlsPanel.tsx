@@ -60,7 +60,7 @@ export function ControlsPanel({ controls, openCount, sessionRunning, onChange }:
         paused ? "border-[#ef444444] bg-[#ef44440f]" : "border-[#22c55e33] bg-[#22c55e0b]")}>
         {paused ? <PauseCircle size={18} className="text-red flex-shrink-0 mt-0.5" /> : <PlayCircle size={18} className="text-green flex-shrink-0 mt-0.5" />}
         <div className="min-w-0">
-          <div className={cn("text-sm font-semibold", paused ? "text-red" : "text-green")}>
+          <div className={cn("text-sm font-semibold", paused ? "text-[#fca5a5]" : "text-green")}>
             {!controls ? "Loading…" : paused ? "New signals are paused" : "New signals are on"}
           </div>
           <p className="text-[12px] text-[#94a3b8] mt-0.5 leading-snug">

@@ -91,3 +91,37 @@ def test_feed_errors_are_reported_not_raised(monkeypatch):
             raise news_feed.requests.ConnectionError("down")
     items, failed = news_feed.fetch_feeds(Boom())
     assert items == [] and failed == ["RBI"]
+
+
+# ── Shock detector (R-27) ────────────────────────────────────────────────────
+
+def _with_bars(ctx, token, rows):
+    ctx.state.add_bars([{"instrument_token": token, "ts": ts, "open": px, "high": px, "low": px, "close": px,
+                         "volume_day": None, "oi": None} for ts, px in rows])
+
+
+def test_a_sudden_move_blocks_entries_for_15_minutes():
+    from options.agents import shock
+
+    ctx = build_market(trend=1)
+    assert not shock.analyse(ctx).active                          # an ordinary synthetic morning
+    last = ctx.state.last(ctx.ref.future_token)
+    t, px = last["ts"], last["close"]
+    _with_bars(ctx, ctx.ref.future_token, [(t + timedelta(minutes=1), px * 0.985)])   # −1.5% in a minute
+    ctx.now = t + timedelta(minutes=2, seconds=3)
+    v = shock.analyse(ctx)
+    assert v.active and "one minute" in v.detail and v.until == t + timedelta(minutes=17)
+    ctx.now = t + timedelta(minutes=30)
+    _with_bars(ctx, ctx.ref.future_token, [(t + timedelta(minutes=m), px * 0.985) for m in range(2, 30)])
+    assert not shock.analyse(ctx).active                          # quiet again: the block lapses
+
+
+def test_a_vix_jump_is_a_shock():
+    from options.agents import shock
+
+    ctx = build_market(trend=1)
+    t = ctx.state.last(ctx.vix_token)["ts"]
+    _with_bars(ctx, ctx.vix_token, [(t + timedelta(minutes=m), 13.0 * (1 + 0.012 * m)) for m in range(1, 11)])
+    ctx.now = t + timedelta(minutes=11)
+    v = shock.analyse(ctx)
+    assert v.active and "India VIX" in v.detail

@@ -447,3 +447,39 @@ def test_bars_have_a_time_index_and_old_data_is_purged(store):
     removed = store.purge_before(new - timedelta(days=730), new - timedelta(days=90))
     assert removed == {"bars": 1, "alerts": 1, "session_events": 1, "llm_calls": 0}
     assert store.bar_counts_between(new - timedelta(days=1), new + timedelta(days=1)) == {1: 1}
+
+
+# ── Session metrics (R-28) ───────────────────────────────────────────────────
+
+def test_session_metrics_record_each_minute_and_slow_checks_are_reported(store):
+    from types import SimpleNamespace
+
+    from options.market_data.bars import BarAggregator
+    from options.market_data.metrics import SessionMetrics
+
+    rec = SimpleNamespace(agg=BarAggregator(), bars_written=0)
+    eng = SimpleNamespace(eval_ms_peak=0.0, open=[1, 2])
+    note = SimpleNamespace(delay_peak=0.0)
+    m = SessionMetrics(store, rec, eng, note)
+    rec.agg.tick_count, rec.bars_written, rec.agg.rejected_ticks = 120, 40, 1
+    eng.eval_ms_peak, note.delay_peak = 412.0, 1.8
+    row = m.sample(ist(2026, 10, 19, 10, 1, 7))
+    assert row == {"ts": ist(2026, 10, 19, 10, 1), "ticks": 120, "bars": 40, "rejected_ticks": 1, "eval_ms": 412.0,
+                   "alert_delay_s": 1.8, "open_signals": 2}
+    assert eng.eval_ms_peak == 0 and note.delay_peak == 0          # peaks reset for the next minute
+    rec.agg.tick_count = 150
+    assert m.sample(ist(2026, 10, 19, 10, 2, 7))["ticks"] == 30
+    assert len(store.metrics_since(ist(2026, 10, 19, 10, 0))) == 2
+
+    ctx, notes = build_market(trend=1), Notes()
+    eng2 = make_engine_for(store, ctx, {}, notes)
+    import options.engine.engine as engine_mod
+    real = engine_mod.SignalEngine._evaluate
+    engine_mod.SignalEngine._evaluate = lambda self, now: _time.sleep(0.01)
+    try:
+        engine_mod.SLOW_EVAL_MS, saved = 1, engine_mod.SLOW_EVAL_MS
+        eng2.evaluate(ctx.now)
+        eng2.evaluate(ctx.now + timedelta(minutes=5))                  # within the hour: reported once
+    finally:
+        engine_mod.SignalEngine._evaluate, engine_mod.SLOW_EVAL_MS = real, saved
+    assert sum("Signal check took" in t for t in notes.texts) == 1 and eng2.eval_ms_peak >= 10

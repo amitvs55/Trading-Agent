@@ -1,0 +1,98 @@
+# Every push and pull request: the backend tests with a coverage floor, and the UI's lint, type
+# check and production build. Dependency audits report but don't block (kiteconnect pins old
+# autobahn/twisted releases; see docs/review/PLATFORM_REVIEW.md finding F-23).
+name: CI
+
+on:
+  push:
+    branches: [master, "feature/**"]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      WATCHDOG: "off"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - name: Install
+        run: pip install -r requirements-dev.txt
+      - name: Tests with coverage (at least 85%)
+        run: >
+          pytest -q --cov=options --cov=api --cov=agents --cov=utils --cov=orchestrator --cov=models --cov=config
+          --cov-report=term-missing:skip-covered --cov-fail-under=85
+      - name: Dependency audit (report only)
+        continue-on-error: true
+        run: pip-audit -r requirements.lock
+
+  ui:
+    name: UI lint, types and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: ui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run lint
+      - name: Production build (fails on type errors)
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+          NEXT_PUBLIC_API_URL: https://api.example.invalid
+      - run: npm run typecheck
+      - name: Dependency audit (high and critical)
+        continue-on-error: true
+        run: npm audit --omit=dev --audit-level=high
+
+  e2e:
+    name: Browser end-to-end
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [backend, ui]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - run: pip install -r requirements-dev.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - working-directory: ui
+        run: npm ci --no-audit --no-fund && npx playwright install --with-deps chromium
+      - name: Sign-in, signals, pause/resume, viewer limits, 404 and axe (desktop + phone)
+        working-directory: ui
+        run: npx playwright test
+        env:
+          E2E_PYTHON: python
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-traces
+          path: ui/test-results/
+          retention-days: 7

@@ -1,6 +1,6 @@
 "use client";
 import { ShieldCheck } from "lucide-react";
-import type { AlertsResponse, AuditEntry, CalendarResponse, ConnectorsResponse, ControlsState, RecorderEvent } from "@/types/auth";
+import type { AlertsResponse, AuditEntry, CalendarResponse, ConnectorsResponse, ControlsState, MetricsResponse, RecorderEvent } from "@/types/auth";
 import type { SignalsResponse } from "@/types/options";
 import { useOptionsApi } from "@/lib/optionsApi";
 import { ageSeconds } from "@/lib/optionsFormat";
@@ -9,6 +9,7 @@ import { ControlsPanel } from "@/components/operations/ControlsPanel";
 import { AlertsPanel } from "@/components/operations/AlertsPanel";
 import { CalendarPanel } from "@/components/operations/CalendarPanel";
 import { AuditPanel, RecorderEventsPanel } from "@/components/operations/LogPanels";
+import { MetricsPanel } from "@/components/operations/MetricsPanel";
 
 const OPEN = new Set(["TRIGGERED", "ACTIVE", "T1_HIT"]);
 
@@ -20,6 +21,7 @@ export default function OperationsPage() {
   const calendar = useOptionsApi<CalendarResponse>("/api/admin/calendar", 0);
   const audit = useOptionsApi<{ entries: AuditEntry[] }>("/api/admin/audit?limit=60", 30_000);
   const events = useOptionsApi<{ events: RecorderEvent[] }>("/api/admin/recorder/events?days=3", 60_000);
+  const metrics = useOptionsApi<MetricsResponse>("/api/admin/metrics?hours=8", 60_000);
 
   const openCount = (signals.data?.signals ?? []).filter(s => OPEN.has(s.state)).length;
   const rec = conn.data?.recorder;
@@ -42,6 +44,7 @@ export default function OperationsPage() {
           <ControlsPanel controls={controls.data} openCount={openCount} sessionRunning={sessionRunning}
                          onChange={c => { controls.refresh(c, { revalidate: false }); audit.refresh(); }} />
           <RecorderCard status={rec} />
+          <MetricsPanel data={metrics.data} />
           <AlertsPanel data={alerts.data} />
         </div>
         <div className="flex flex-col gap-5 min-w-0">

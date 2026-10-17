@@ -27,6 +27,7 @@ from options.core.constituents import HEAVYWEIGHTS
 from options.daemon import EXIT_CONFIG, EXIT_FAILED, EXIT_LOGIN, EXIT_OK
 from options.engine.engine import SignalEngine
 from options.engine.state import MarketState
+from options.market_data.metrics import SessionMetrics
 from options.market_data.recorder import Recorder
 from options.notify import OutboxNotifier, make_notifier, make_outbox
 from options.notify.base import Notifier
@@ -224,6 +225,7 @@ def _run(cfg: OptionsSettings, now_fn, sleep, store: Store, notifier: Notifier, 
                           constituents=constituents, vix_history=history.vix_closes, macro=macro.snapshot,
                           events=load_events(store), news=news.snapshot, quote_fn=recorder.agg.quote, now_fn=now_fn)
     recorder.on_bars, recorder.on_tick = engine.on_bars, engine.on_tick
+    recorder.on_minute = SessionMetrics(store, recorder, engine, notifier).sample
 
     recorder.start(prices)
     notifier.send("📡 <b>Recording started</b>\n" + "\n".join(format_contracts(r) for r in refs)

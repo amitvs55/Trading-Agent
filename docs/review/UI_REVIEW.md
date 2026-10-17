@@ -200,7 +200,7 @@ Measured values come from `scripts/ui_screens.out.json`.
 | 6 | Size skeletons to the real content (History table, Research agent cards, charts) so CLS ≤ 0.1 | History, Research, Detail, Agents, Paper | S | R-21 |
 | 7 | Charts: `role="img"` + `aria-label` + a "show as table" toggle | Paper, Track record | S | R-20 |
 | 8 | Show uncertainty on Track record: 95% CI band on expectancy, "n more trades needed" | Track record | M | R-16 |
-| 9 | Signal-card line: "Place SL-M at ₹X at your broker right after entry" | Signals, Detail, Telegram | S | R-32 |
+| 9 | Signal-card line: "Place an SL order (trigger ₹X, limit just below) or a GTT at your broker right after entry" (SL-M isn't allowed on NSE options) | Signals, Detail, Telegram | S | R-32 |
 | 10 | `<h1>` on Signal detail; always-underlined inline links; 24 px targets for the secret-field buttons; a visible focus style wherever `outline-none` is set | Detail, Agents, Connectors, forms | S | R-20 |
 
 **Also recommended (R-30):** run [`scripts/ui_screens.py`](scripts/ui_screens.py) in CI as a visual-regression and accessibility gate (fail on any critical or serious axe violation, or on CLS > 0.1).

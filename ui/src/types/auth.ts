@@ -145,6 +145,13 @@ export interface RecorderEvent {
   detail: string | null;
 }
 
+export interface MetricsResponse {
+  rows: { ts: string; ticks: number; bars: number; rejected_ticks: number; eval_ms: number | null;
+          alert_delay_s: number | null; open_signals: number | null }[];
+  summary: { minutes: number; ticks_per_min_last: number | null; rejected_ticks: number;
+             eval_ms: { p95: number; max: number } | null; alert_delay_s: { p95: number; max: number } | null };
+}
+
 export interface Holiday {
   date: string;
   name: string | null;

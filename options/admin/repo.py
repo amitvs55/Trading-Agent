@@ -9,7 +9,7 @@ from sqlalchemy.engine import Engine
 
 from options.admin import security
 from options.core.calendar import IST, now_ist
-from options.storage import app_meta, app_settings, health_checks, user_sessions, users
+from options.storage import app_meta, app_settings, auth_failures, health_checks, user_sessions, users
 from utils.logger import setup_logger
 
 logger = setup_logger("options.admin")
@@ -210,6 +210,23 @@ class AdminRepo:
             q = q.where(user_sessions.c.token_digest != security.token_digest(keep_token))
         with self.engine.begin() as conn:
             conn.execute(q)
+
+    # ── Brute-force throttle (shared by every API worker, kept across restarts) ──
+
+    def failures_since(self, key: str, since: datetime) -> int:
+        with self.engine.connect() as conn:
+            return int(conn.execute(select(func.count()).select_from(auth_failures)
+                                    .where(auth_failures.c.key == key, auth_failures.c.ts >= since)).scalar() or 0)
+
+    def record_failure(self, key: str, keep: timedelta = timedelta(days=1)) -> None:
+        now = self.now()
+        with self.engine.begin() as conn:
+            conn.execute(auth_failures.insert().values(key=key[:200], ts=now))
+            conn.execute(delete(auth_failures).where(auth_failures.c.ts < now - keep))
+
+    def clear_failures(self, key: str) -> None:
+        with self.engine.begin() as conn:
+            conn.execute(delete(auth_failures).where(auth_failures.c.key == key))
 
     # ── First-run setup code ─────────────────────────────────────────────────
 

@@ -229,6 +229,26 @@ research_llm_calls = Table(
     Column("is_retry", Integer, nullable=False, server_default="0"),
 )
 
+# One row per minute of a recording session: is the machine keeping up? (review F-28 / roadmap R-28)
+session_metrics = Table(
+    "session_metrics", metadata,
+    Column("ts", DateTime(timezone=True), primary_key=True),
+    Column("ticks", Integer, nullable=False),            # ticks received in the minute
+    Column("bars", Integer, nullable=False),             # bars saved in the minute
+    Column("rejected_ticks", Integer, nullable=False),
+    Column("eval_ms", Float),                            # slowest signal evaluation in the minute
+    Column("alert_delay_s", Float),                      # slowest alert delivery in the minute
+    Column("open_signals", Integer),
+)
+
+# Failed sign-in and setup attempts, so the brute-force limit survives an API restart or redeploy
+auth_failures = Table(
+    "auth_failures", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("key", String(200), nullable=False, index=True),
+    Column("ts", DateTime(timezone=True), nullable=False, index=True),
+)
+
 # Who changed what, and when: trading rules, pauses, calendars, users
 audit_log = Table(
     "audit_log", metadata,
@@ -426,6 +446,7 @@ class Store:
                                                               alerts_outbox.c.status != "pending")).rowcount
             events = conn.execute(delete(session_events).where(session_events.c.ts < logs_cutoff)).rowcount
             calls = conn.execute(delete(research_llm_calls).where(research_llm_calls.c.ts < logs_cutoff)).rowcount
+            conn.execute(delete(session_metrics).where(session_metrics.c.ts < logs_cutoff))
         return {"bars": bars or 0, "alerts": alerts or 0, "session_events": events or 0, "llm_calls": calls or 0}
 
     def session_events_since(self, since: datetime, limit: int = 100) -> list[dict]:
@@ -536,6 +557,16 @@ class Store:
     def research_has_order(self, order_id: str) -> bool:
         with self.engine.connect() as conn:
             return conn.execute(select(research_runs.c.run_id).where(research_runs.c.order_id == order_id)).first() is not None
+
+    # ── Session metrics ──────────────────────────────────────────────────────
+
+    def metrics_add(self, row: dict) -> None:
+        self._upsert(session_metrics, [row], ["ts"])
+
+    def metrics_since(self, since: datetime) -> list[dict]:
+        q = select(session_metrics).where(session_metrics.c.ts >= since).order_by(session_metrics.c.ts)
+        with self.engine.connect() as conn:
+            return [dict(r._mapping) for r in conn.execute(q)]
 
     # ── Audit log ────────────────────────────────────────────────────────────
 

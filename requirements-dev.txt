@@ -1,0 +1,4 @@
+# Development and CI only (not installed in the Docker image)
+-r requirements.lock
+pytest-cov==7.0.0
+pip-audit==2.9.0

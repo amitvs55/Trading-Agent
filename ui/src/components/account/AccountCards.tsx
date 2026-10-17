@@ -170,10 +170,12 @@ function AddUserForm({ onDone, onCancel }: { onDone: (u: User) => void; onCancel
   const [role, setRole] = useState("viewer");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [personal, setPersonal] = useState(false);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<Tone>(null);
   const shownUsername = touchedUsername ? username : suggestUsername(fullName);
   const problems = [
+    role === "viewer" && !personal && "the personal-use confirmation",
     !fullName.trim() && "a full name",
     shownUsername.length < 3 && "a username of 3+ characters",
     password.length < 10 && "a password of 10+ characters",
@@ -187,7 +189,7 @@ function AddUserForm({ onDone, onCancel }: { onDone: (u: User) => void; onCancel
     setNote(null);
     try {
       const made = await sendJson<User>("/api/admin/users", "POST",
-        { full_name: fullName.trim(), username: shownUsername, password, role });
+        { full_name: fullName.trim(), username: shownUsername, password, role, acknowledged_personal_use: personal });
       onDone(made);
     } catch (err) {
       setNote({ tone: "err", text: errText(err, "Couldn't create the account") });
@@ -208,6 +210,16 @@ function AddUserForm({ onDone, onCancel }: { onDone: (u: User) => void; onCancel
         <Pw id="new-pw" label="Password (10+ characters)" value={password} onChange={setPassword} auto="new-password" />
         <Pw id="new-pw2" label="Confirm password" value={confirm} onChange={setConfirm} auto="new-password" />
       </div>
+      {role === "viewer" && (
+        <label className="flex items-start gap-2.5 rounded-lg border border-[#f59e0b33] bg-[#f59e0b0b] px-3 py-2.5 text-[12px] text-[#e2e8f0] leading-snug cursor-pointer">
+          <input type="checkbox" checked={personal} onChange={e => setPersonal(e.target.checked)}
+                 className="mt-0.5 w-4 h-4 flex-shrink-0 accent-[#ff9933]" />
+          <span>
+            This account is for my own use or my household, not to share trade calls with clients or followers.
+            <span className="block text-[11px] text-[#94a3b8] mt-0.5">Giving buy/sell recommendations to others needs SEBI Research Analyst registration, and the broker&apos;s market data is licensed for personal use.</span>
+          </span>
+        </label>
+      )}
       <p className="text-[10px] text-[#8391a7]">Give the password to the person privately; they can change it under Your account after signing in.</p>
       <div className="flex items-center gap-2">
         <PrimaryButton busy={busy}><UserPlus size={12} /> Create account</PrimaryButton>

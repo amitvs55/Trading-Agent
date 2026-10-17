@@ -62,7 +62,8 @@ def test_users_api(api, repo):
     made = api.post("/api/admin/users", headers=h, json={"full_name": "Amit Shinde", "username": "amit",
                                                           "password": PW, "role": "admin"}).json()
     assert made["full_name"] == "Amit Shinde" and made["role"] == "admin" and "password" not in str(made)
-    assert api.post("/api/admin/users", headers=h, json={"full_name": "X", "username": "amit", "password": PW}).status_code == 409
+    assert api.post("/api/admin/users", headers=h, json={"full_name": "X", "username": "amit", "password": PW,
+                                                          "acknowledged_personal_use": True}).status_code == 409
     listed = api.get("/api/admin/users", headers=h).json()
     assert [u["username"] for u in listed["users"]] == ["admin", "amit"] and listed["roles"] == ["admin", "viewer"]
 
@@ -72,8 +73,11 @@ def test_users_api(api, repo):
 
     assert api.patch(f"/api/admin/users/{me}", headers=h, json={"disabled": True}).status_code == 422   # not yourself
     assert api.delete(f"/api/admin/users/{me}", headers=h).status_code == 422
-    viewer = api.post("/api/admin/users", headers=h, json={"full_name": "Guest", "username": "guest",
-                                                            "password": PW, "role": "viewer"}).json()
+    unconfirmed = api.post("/api/admin/users", headers=h, json={"full_name": "Guest", "username": "guest",
+                                                                 "password": PW, "role": "viewer"})
+    assert unconfirmed.status_code == 422 and unconfirmed.json()["detail"]["code"] == "personal_use"
+    viewer = api.post("/api/admin/users", headers=h, json={"full_name": "Guest", "username": "guest", "password": PW,
+                                                            "role": "viewer", "acknowledged_personal_use": True}).json()
     vt = api.post("/api/auth/login", json={"username": "guest", "password": PW}).json()["token"]
     assert api.get("/api/admin/users", headers=auth(vt)).status_code == 403                # viewers can't manage users
     assert api.patch(f"/api/admin/users/{viewer['id']}", headers=h, json={"role": "admin"}).json()["role"] == "admin"

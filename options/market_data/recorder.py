@@ -34,7 +34,8 @@ class Recorder:
                  stale_after_s: int = 60, calendar: NseCalendar | None = None,
                  now_fn: Callable[[], datetime] = now_ist, extra_tokens: set[int] | None = None,
                  on_bars: Callable[[list[dict]], None] | None = None,
-                 on_tick: Callable[[datetime], None] | None = None):
+                 on_tick: Callable[[datetime], None] | None = None,
+                 on_minute: Callable[[datetime], None] | None = None):
         self.ticker = ticker
         self.refs = refs
         self.store = store
@@ -48,6 +49,7 @@ class Recorder:
         self.extra_tokens = set(extra_tokens or ())     # heavyweights, open-signal contracts, …
         self.on_bars = on_bars                          # the signal engine's feed of closed bars
         self.on_tick = on_tick                          # called every loop iteration
+        self.on_minute = on_minute                      # called once a minute (metrics)
         self._hook_errors = 0
 
         self.agg = BarAggregator()
@@ -174,6 +176,8 @@ class Recorder:
                 self.flush(now)
                 if last_recentre is None or (now - last_recentre).total_seconds() >= 60:
                     self.recentre()
+                    if last_recentre is not None and self.on_minute:
+                        self._safe(self.on_minute, now)
                     last_recentre = now
                 self.check_stale(now)
                 if self.on_tick:

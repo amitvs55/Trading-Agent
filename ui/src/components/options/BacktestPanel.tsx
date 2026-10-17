@@ -41,7 +41,7 @@ export function BacktestPanel({ labels }: { labels: Record<string, string> }) {
         <div className="px-4 py-5 text-[12px] text-[#94a3b8] leading-relaxed">
           No backtest saved yet. It replays years of real NIFTY and India VIX minutes through the same rules the live engine uses.
           {admin && <> Run it from a terminal with DATABASE_URL pointing at this app&apos;s database:
-          <pre className="mt-2 overflow-x-auto rounded-lg bg-card border border-[#1e2d45] p-3 text-[11px] text-[#cbd5e1]">{`python -m options.backtest.proxy fetch --from 2024-10-01 --to 2026-10-16 --history sqlite:///data/history.db
+          <pre tabIndex={0} aria-label="Backtest commands" className="mt-2 overflow-x-auto rounded-lg bg-card border border-[#1e2d45] p-3 text-[11px] text-[#cbd5e1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff9933]">{`python -m options.backtest.proxy fetch --from 2024-10-01 --to 2026-10-16 --history sqlite:///data/history.db
 python -m options.backtest.proxy run --from 2024-11-01 --to 2026-10-16 --history sqlite:///data/history.db --out sqlite:///data/backtest.db --save`}</pre></>}
         </div>
       ) : (

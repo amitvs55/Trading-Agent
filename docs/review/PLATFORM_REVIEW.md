@@ -16,6 +16,62 @@
 
 ---
 
+## 0. Status after the hardening work (17 Oct 2026)
+
+This review was followed by a build pass (Phase G in `docs/build-progress.md`). It was deployed to production on 17 Oct 2026 (commit `1943072`), and a second batch followed.
+
+**Resolved:**
+- **High findings:**
+  - F-02: crash restarts.
+  - F-03: warm-up retry and alert.
+  - F-04: durable outbox, e-mail fallback and watchdog.
+- **F-01 (evidence) is addressed as far as code can address it:**
+  - Statistics with intervals and trades needed.
+  - Auto-demotion.
+  - A proxy historical backtest and an ablation tool.
+  - What's left is data: run the backtest, and gather 4–6 weeks of shadow trading.
+- **Medium findings:**
+  - F-08 and F-09: calendars editable in the UI.
+  - F-10: duplicate signals.
+  - F-11: OI unit detected and converted.
+  - F-12: indicator guards.
+  - F-13: statistics.
+  - F-14: index and retention.
+  - F-15: research history in Postgres.
+  - F-16, F-17 and F-18: LLM log, seed, temperature 0, fenced headlines, no memory-based sentiment.
+  - F-19 and F-20: research API guard rails.
+  - F-21: Next 16.4.2, npm audit 0.
+  - F-22: CI, ESLint, type errors fail the build.
+  - F-23: lockfiles. kiteconnect still pins old autobahn/twisted; pip-audit reports it.
+  - F-24 (part): CSP and security headers, CORS limited to the UI, throttle in Postgres. Cookie sessions were not done.
+  - F-28: axe shows 0 serious or critical.
+  - F-34: pause and exit-all.
+  - F-35: SL/GTT guidance.
+- **Low findings:**
+  - F-26: throttle.
+  - F-29: CLS ≤ 0.1.
+  - F-30 and F-31: 404 and error pages; RouteGuard. A loading page was left out on purpose: it would flash during navigation.
+  - F-32: dead controls.
+  - F-33: session events shown.
+  - F-36: Wilder RSI.
+  - F-37: E2E plus coverage 89%.
+  - F-38: bad-tick filter.
+  - F-40: README.
+  - F-41: rule changes audited and labelled.
+- **Also built:** the RBI news pillar, the market-shock gate and session metrics.
+- **Bugs the new tests found and fixed:**
+  - A signal could "fill" after its premium fell through the stop.
+  - The research retry crashed ("cannot access local variable 'e'").
+
+**Open:**
+- **F-05:** viewer creation now needs a personal-use confirmation; the compliance judgement stays yours.
+- **F-07:** the expiry-day rule.
+- **F-25 and F-39 (yours):** set `SECRET_KEY` on Railway api and recorder; rotate the OpenAI key.
+- **F-27:** float money. Accepted.
+- **F-42:** positional gap risk. Accepted, with GTT guidance.
+- **Production settings override the new LLM defaults:** `MODEL_NAME=gpt-4o-mini` (an alias) and `LLM_TEMPERATURE=0.3`. Set a dated snapshot and 0 on the Connectors page or in Railway for reproducible runs.
+- **R-25 and R-26:** more setups and indices wait on S1–S3 proving an edge.
+
 ## 1. Executive summary
 
 **What it is (INFERRED):** a personal **NIFTY index-options signal tool**. Every 5 minutes, deterministic Python code turns live Angel One market data into buy-only CE/PE signals. It sends them to Telegram, tracks each one to its result on live bid/ask after all charges, and mirrors them in a paper account. Next to it sits an older **13-agent LLM stock-research pipeline**. **No code path places, modifies or cancels a broker order** [CODE: `git grep` finds no order, GTT or positions call; `agents/execution.py:L1-L31` is explicitly simulated].
@@ -569,7 +625,7 @@ There are no Critical findings, because no code can place an order. Losses on ha
 | F-25 | Medium | Without `SECRET_KEY`, the Fernet key is stored in the same database as the ciphertext | `repo.py:L67-L81` | A database leak exposes the MPIN, TOTP secret and API keys | R-07 (set `SECRET_KEY`; UNVERIFIED whether production has it; the Account card shows it) |
 | F-28 | Medium | Accessibility: 1,274 contrast failures (muted tokens #64748b/#475569 on dark surfaces), unlabeled selects (critical), `aria-label` on divs, colour-only links, 2 targets under 24 px | axe-core 4.10 run (`scripts/ui_screens.out.json`) | WCAG 2.2 AA failures on all 15 screens | R-20 |
 | F-34 | Medium | No kill switch or global pause | `cards.py:L17` (label only); UC-26 | No fast stop during anomalies | R-06 |
-| F-35 | Medium | Cards don't tell you to place a broker-side stop (SL-M or GTT); exits depend on alerts | `cards.py:L31-L54` | A crash or lost alert leaves a hand-placed trade unprotected | R-32 |
+| F-35 | Medium | Cards don't tell you to place a broker-side stop (an SL-limit order or a GTT; NSE doesn't accept SL-M on options); exits depend on alerts | `cards.py:L31-L54` | A crash or lost alert leaves a hand-placed trade unprotected | R-32 |
 | F-39 | Medium | An OpenAI key was printed into a tool transcript in an earlier session (location: Railway `api` variables; value never stored here) | session history | Key misuse | R-07 (rotate) |
 | F-07 | Low | The plan says only S6 may trade on expiry day; the code allows S1–S3 but never on 0DTE contracts | `plan:L201`; `selection.py:L8` | Small gamma-risk drift from the plan | R-25 (document or decide) |
 | F-18 | Low | Raw headlines go into LLM prompts (prompt injection) | `agents/news.py:L16-L59`; `sentiment.py:L38-L49` | Manipulated research output (simulated only) | R-18 |
@@ -679,7 +735,7 @@ Each item lists its effort, impact, dependencies and acceptance criteria.
 | R-29 | README and architecture notes | — / F-40 | No entry point → a README with architecture, running locally and deploying | S | Low | — | New developer runs it locally in < 30 min |
 | R-30 | UI test suite | — / F-37 | 0 UI tests → Playwright end-to-end for the core flows, reusing `scripts/ui_screens.py` (screenshots plus axe) as visual regression | M | Medium | R-22 | CI runs E2E on each PR |
 | R-31 | Compliance guardrails | UC-19 / F-05 | Sharing risk → a "personal use" acknowledgement when creating a viewer; terms in the footer; document data-licence limits | S | Medium | — | Creating a viewer requires the acknowledgement |
-| R-32 | Broker-side stop guidance | UC-04 / F-35, F-42 | Alerts only → card says "Place SL-M at X (or GTT) right after your entry"; optional "SL placed?" reminder | S | High | — | Card text updated; test snapshot |
+| R-32 | Broker-side stop guidance | UC-04 / F-35, F-42 | Alerts only → card says "Place an SL order (trigger X, limit just below) or a GTT right after your entry" (SL-M isn't allowed on NSE options); optional "SL placed?" reminder | S | High | — | Card text updated; test snapshot |
 
 ## 10. Quick wins (high impact, effort S)
 

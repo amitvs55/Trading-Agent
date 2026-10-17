@@ -32,7 +32,7 @@ function UserMenu() {
   const name = displayName(user);
   return (
     <div className="relative flex-shrink-0" ref={ref}>
-      <button onClick={() => setOpen(o => !o)} aria-haspopup="menu" aria-expanded={open} aria-label={`Account menu for ${name}`}
+      <button onClick={() => setOpen(o => !o)} aria-haspopup="menu" aria-expanded={open} aria-label={`${initials(user)}: account menu for ${name}`}
               className="flex items-center gap-2 h-[34px] rounded-lg border border-[#1e2d45] bg-card pl-1 pr-2 hover:border-[#2d3e58] transition-colors">
         <span className="w-6 h-6 rounded-md grid place-items-center bg-[#ff993326] text-[#ff9933] text-[10px] font-bold tracking-wide">{initials(user)}</span>
         <span className="hidden 2xl:inline text-xs text-[#e2e8f0] max-w-[120px] truncate">{name}</span>
@@ -153,8 +153,8 @@ export function Navbar() {
             <TrendingUp size={15} className="text-[#ff9933]" />
           </div>
           <div className="block lg:hidden 2xl:block">
-            <span className="font-bold text-sm tracking-wide text-[#ff9933]">TradingAgents</span>
-            <span className="text-[#8391a7] text-xs ml-1.5 hidden min-[400px]:inline">India</span>
+            <span className="font-bold text-sm tracking-wide text-[#ff9933]">TradingAgents</span>{" "}
+            <span className="text-[#8391a7] text-xs ml-1 hidden min-[400px]:inline">India</span>
           </div>
         </Link>
 
