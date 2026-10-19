@@ -97,7 +97,8 @@ def analyse(ctx: AgentContext) -> TechView:
     vwap = ind.session_vwap(f5)
     today = f5[f5.index.date == ctx.state.session_date]
     vol = f5["volume"]
-    vol_ratio = float(vol.iloc[-1] / vol.iloc[-21:-1].mean()) if len(vol) > 21 and vol.iloc[-21:-1].mean() > 0 else None
+    # Only against 20 bars that all traded: a spot stand-in for missing futures history has volume 0
+    vol_ratio = float(vol.iloc[-1] / vol.iloc[-21:-1].mean()) if len(vol) > 21 and (vol.iloc[-21:-1] > 0).all() else None
     bbw = ind.bollinger_width(f15["close"]) if len(f15) >= 40 else None
 
     levels: dict[str, float] = {}

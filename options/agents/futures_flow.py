@@ -41,7 +41,7 @@ def analyse(ctx: AgentContext, window_min: int = 15) -> PillarView:
     f5 = ctx.state.frame(token, "5min")
     vol = f5["volume"] if not f5.empty else None
     vol_ratio = None
-    if vol is not None and len(vol) > 21 and vol.iloc[-21:-1].mean() > 0:
+    if vol is not None and len(vol) > 21 and (vol.iloc[-21:-1] > 0).all():       # see technical.py
         vol_ratio = float(vol.iloc[-1] / vol.iloc[-21:-1].mean())
         if bias and vol_ratio >= 1.5:
             strength = min(1.0, strength + 0.2)

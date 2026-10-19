@@ -11,6 +11,7 @@ after the close, so every day starts with a fresh process and WebSocket.
 
 import sys
 import time as _time
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from html import escape
@@ -202,13 +203,10 @@ def _run(cfg: OptionsSettings, now_fn, sleep, store: Store, notifier: Notifier, 
     vix_token = find_token(nse, VIX_SYMBOL)
     state = MarketState(today)
     history = load_history(broker, refs, vix_token, state, calendar, now_fn(), pause=sleep, store=store)
-    if history.failed:
-        notifier.send(f"⚠️ <b>Historical data incomplete</b>: {escape(', '.join(history.failed))} failed to load "
-                      f"after {HISTORY_ATTEMPTS} tries. "
-                      + ("Trend and momentum stay <i>warming up</i>, so <b>no signals today</b> until enough "
-                         "live data builds up." if history.critical_failed else
-                         "Signals still run; the affected inputs show as missing."))
-    constituents = load_constituents(broker, nse, cfg.OPTIONS_INDICES)
+    logger.info("%s", history.line)
+    if history.alert():
+        notifier.send(history.alert())
+    constituents = load_constituents(broker, nse, cfg.OPTIONS_INDICES, store=store, calendar=calendar, today=today)
     macro = MacroFetcher(now_fn=now_fn)
     macro.start()
     news = NewsFetcher(now_fn=now_fn)
@@ -283,11 +281,16 @@ HISTORY_ATTEMPTS = 3
 HISTORY_RETRY_S = (2.0, 6.0)  # Angel sometimes answers AB1021 (rate limit) when well under it
 
 
+FULL_SESSION_MINUTES = 300   # of 375: a saved session with fewer minutes counts as a gap
+
+
 def _reason(e: Exception) -> str:
-    """Angel's own error code and message are safe to log (no keys in them); for anything else only
-    the type, since some client errors carry request URLs."""
-    from options.brokers.angel import AngelError
-    return f"{type(e).__name__}: {str(e)[:200]}" if isinstance(e, AngelError) else type(e).__name__
+    from options.brokers.angel import brief_error
+    return brief_error(e)
+
+
+def _as_ist(ts) -> datetime:
+    return ts.replace(tzinfo=IST) if ts.tzinfo is None else ts.astimezone(IST)
 
 
 @dataclass
@@ -297,13 +300,38 @@ class HistoryReport:
     critical_failed: bool = False          # futures 1-min: trend, momentum and levels all come from it
     vix_closes: list[float] = field(default_factory=list)
     failed_jobs: list[tuple] = field(default_factory=list)      # to retry while the session runs
+    from_saved: list[str] = field(default_factory=list)         # loaded from our own bars, no request made
+    stand_in: dict[str, str] = field(default_factory=dict)      # refused, but filled well enough to use
 
     @property
     def line(self) -> str:
-        total = len(self.loaded) + len(self.failed)
-        if not self.failed:
-            return f"History: {total}/{total} series loaded ✅"
-        return f"History: {len(self.loaded)}/{total} loaded ⚠️ missing {', '.join(self.failed)}"
+        total = len(self.loaded) + len(self.stand_in) + len(self.failed)
+        if not self.failed and not self.stand_in:
+            return f"History: {total}/{total} series loaded ✅" + (" (some from saved data)" if self.from_saved else "")
+        parts = [f"History: {len(self.loaded)}/{total} loaded ⚠️"]
+        if self.stand_in:
+            parts.append(f"stand-in for {', '.join(self.stand_in)}")
+        if self.failed:
+            parts.append(f"missing {', '.join(self.failed)}")
+        return " · ".join(parts)
+
+    def alert(self) -> str | None:
+        """The Telegram warning when the warm-up wasn't complete; None when it was."""
+        if not self.failed and not self.stand_in:
+            return None
+        refused = [*self.stand_in, *self.failed]
+        lines = [f"⚠️ <b>Historical data incomplete</b>: Angel didn't return {escape(', '.join(refused))} "
+                 f"after {HISTORY_ATTEMPTS} tries."]
+        lines += [f"• {escape(label)}: {escape(note)}" for label, note in self.stand_in.items()]
+        if self.failed:
+            lines.append(f"Missing: {escape(', '.join(self.failed))}.")
+        if self.critical_failed:
+            lines.append("Trend and momentum stay <i>warming up</i>, so <b>no signals</b> until the history "
+                         "loads (retried every 10 minutes) or enough live data builds up.")
+        else:
+            lines.append("Signals run as normal. Angel is asked again every 10 minutes and its data replaces "
+                         "the stand-ins when it answers.")
+        return "\n".join(lines)
 
 
 def history_rows(token: int, candles: list[dict]) -> list[dict]:
@@ -326,11 +354,15 @@ def history_rows(token: int, candles: list[dict]) -> list[dict]:
 def load_history(broker, refs: list[IndexReference], vix_token: int, state: MarketState,
                  calendar: NseCalendar, now: datetime, pause: Callable[[float], None] = _time.sleep,
                  store: Store | None = None) -> HistoryReport:
-    """Warm the market state from the broker's historical data (each request retried twice).
+    """Warm the market state: our own saved 1-minute bars first, the broker for whatever they lack.
 
-    A series that still fails is reported, not fatal: without it the agents report "warming up"
-    and the engine sends no signals until enough live data has built up. With `store`, the
-    1-minute history is also saved (never over recorded bars) so replays warm up the same way.
+    1-minute series whose saved bars already cover every session are loaded without a request (a
+    restart mid-session then never depends on the broker). Otherwise the broker is asked, each
+    request retried twice; if it still refuses, the saved bars are used as they are, and futures
+    sessions that are still missing are filled from the index spot shifted by the basis (the same
+    moves; only volume and OI are unknown). Anything else that fails is reported, not fatal: the
+    agents report "warming up" and no signals are sent until enough data has built up. With
+    `store`, broker history is also saved (never over recorded bars) so replays warm up the same way.
     """
     start = now.date()
     for _ in range(HISTORY_SESSIONS):
@@ -345,7 +377,14 @@ def load_history(broker, refs: list[IndexReference], vix_token: int, state: Mark
              ("India VIX daily", vix_token, "day", False, daily_since, False)]
 
     report = HistoryReport()
+    saved_only: dict[str, tuple[int, int]] = {}         # refused series loaded from partial saved bars
     for label, token, interval, oi, frm, critical in jobs:
+        saved = _saved_minutes(store, token, frm, now) if interval == "minute" else []
+        if saved and not _gaps(saved, calendar, frm.date(), now):
+            state.add_bars(saved)
+            report.loaded.append(label)
+            report.from_saved.append(label)
+            continue
         candles = None
         for attempt in range(1, HISTORY_ATTEMPTS + 1):
             try:
@@ -355,13 +394,16 @@ def load_history(broker, refs: list[IndexReference], vix_token: int, state: Mark
                 logger.warning("History for %s failed (attempt %d): %s", label, attempt, _reason(e))
                 if attempt < HISTORY_ATTEMPTS:
                     pause(HISTORY_RETRY_S[attempt - 1])
+            finally:
+                for note in getattr(broker, "history_notes", None) or []:
+                    logger.warning("History for %s: %s", label, note)
         pause(0.4)              # Kite and Angel allow ~3 historical requests per second
-        for note in getattr(broker, "history_notes", None) or []:
-            logger.warning("History for %s: %s", label, note)
         if candles is None:
-            report.failed.append(label)
             report.failed_jobs.append((label, token, interval, oi, frm, critical))
-            report.critical_failed |= critical
+            if saved:
+                state.add_bars(saved)                   # what we have beats nothing
+                saved_only[label] = (len({r["ts"].date() for r in saved}), HISTORY_SESSIONS)
+            report.failed.append(label)
             continue
         report.loaded.append(label)
         if interval == "day":
@@ -376,7 +418,79 @@ def load_history(broker, refs: list[IndexReference], vix_token: int, state: Mark
                     store.insert_bars_if_missing(history_rows(token, done))
                 except Exception:
                     logger.exception("Saving history for %s failed", label)
+
+    # Refused futures: fill the sessions they lack from spot, then judge whether trend can run
+    for ref in refs:
+        label = f"{ref.index} futures 1-min"
+        if label not in report.failed:
+            continue
+        sessions, basis = _spot_stand_in(state, ref.future_token, ref.spot_token, now.date())
+        if _warm(state, ref.future_token):
+            report.failed.remove(label)
+            have = f"saved futures bars ({saved_only[label][0]} sessions)" if label in saved_only else ""
+            spot = (f"{ref.index} spot shifted by the basis ({basis:+.1f}) for {sessions} sessions"
+                    if sessions else "")
+            report.stand_in[label] = "using " + " plus ".join(p for p in (have, spot) if p)
+    for label, (have, want) in saved_only.items():
+        if label in report.failed and not label.endswith("futures 1-min"):
+            report.failed.remove(label)
+            report.stand_in[label] = f"using saved bars ({have} of {want} sessions)"
+    report.critical_failed = any(f"{r.index} futures 1-min" in report.failed for r in refs)
     return report
+
+
+def _saved_minutes(store: Store | None, token: int, since: datetime, now: datetime) -> list[dict]:
+    if store is None:
+        return []
+    try:
+        rows = store.bars_between(since, pd.Timestamp(now).floor("min").to_pydatetime(), {token})
+    except Exception:
+        logger.exception("Reading saved bars for %s failed", token)
+        return []
+    return [{**r, "ts": _as_ist(r["ts"])} for r in rows]
+
+
+def _gaps(rows: list[dict], calendar: NseCalendar, first_day: date, now: datetime) -> list[date]:
+    """Sessions the saved bars don't cover; today allows a few minutes lost to a restart."""
+    counts = Counter(r["ts"].date() for r in rows)
+    today, out, d = now.date(), [], first_day
+    while d < today:
+        if calendar.is_trading_day(d) and counts[d] < FULL_SESSION_MINUTES:
+            out.append(d)
+        d += timedelta(days=1)
+    opened = at_ist(today, MARKET_OPEN)
+    end = min(pd.Timestamp(now).floor("min").to_pydatetime(), at_ist(today, MARKET_CLOSE))
+    elapsed = int((end - opened).total_seconds() // 60) if end > opened else 0
+    if elapsed and counts[today] < elapsed - max(5, elapsed // 20):
+        out.append(today)
+    return out
+
+
+def _spot_stand_in(state: MarketState, fut_token: int, spot_token: int, today: date) -> tuple[int, float]:
+    """Fill the futures' missing past minutes with spot + basis; returns (sessions filled, basis).
+
+    Trend and momentum read the same moves from either series; levels are off by however much the
+    basis drifted. Volume is 0 and OI unknown, which the volume-surge checks ignore. Kept in memory
+    only, never saved, so a replay can't mistake it for the futures."""
+    spot, fut = state.frame(spot_token, "1min"), state.frame(fut_token, "1min")
+    both = pd.concat({"f": fut["close"], "s": spot["close"]}, axis=1, join="inner").dropna()
+    basis = 0.0
+    if not both.empty:
+        last_day = both[both.index.normalize() == both.index[-1].normalize()]
+        basis = round(float((last_day["f"] - last_day["s"]).median()), 2)
+    gaps = spot[(spot.index < pd.Timestamp(at_ist(today, time(0)))) & ~spot.index.isin(fut.index)]
+    if gaps.empty:
+        return 0, basis
+    state.load_history(fut_token, [
+        {"date": ts, "open": round(r.open + basis, 2), "high": round(r.high + basis, 2),
+         "low": round(r.low + basis, 2), "close": round(r.close + basis, 2), "volume": 0, "oi": None}
+        for ts, r in zip(gaps.index, gaps.itertuples())])
+    return len(set(gaps.index.date)), basis
+
+
+def _warm(state: MarketState, token: int) -> bool:
+    from options.agents.technical import TREND_MIN_BARS
+    return len(state.frame(token, "60min")) >= TREND_MIN_BARS
 
 
 class HistoryRetry:
@@ -390,6 +504,7 @@ class HistoryRetry:
         self.broker, self.report, self.state, self.store, self.notifier = broker, report, state, store, notifier
         self.today = today
         self.pending = list(report.failed_jobs)
+        self.blocked = report.critical_failed           # signals held until the futures history loads
         self._last: datetime | None = None
 
     def maybe(self, now: datetime) -> None:
@@ -418,13 +533,20 @@ class HistoryRetry:
             recovered.append(label)
         if recovered:
             still = [j[0] for j in self.pending]
+            tail = []
+            if self.blocked and not any(j[5] for j in self.pending):
+                self.blocked = False
+                tail.append("Signals can start from the next 5-minute check.")
+            elif any(label in self.report.stand_in for label in recovered):
+                tail.append("It replaces the stand-in used since the start.")
+            if still:
+                tail.append(f"Still missing: {escape(', '.join(still))}.")
             self.notifier.send(f"✅ <b>Historical data recovered</b>: {escape(', '.join(recovered))} loaded at "
-                               f"{now:%H:%M}. " + ("Signals can start from the next 5-minute check."
-                                                  if not any(j[5] for j in self.pending) else
-                                                  f"Still missing: {escape(', '.join(still))}."))
+                               f"{now:%H:%M}. " + " ".join(tail))
 
 
-def load_constituents(broker, nse_rows: list[dict], indices: list[str]) -> dict[str, list[Constituent]]:
+def load_constituents(broker, nse_rows: list[dict], indices: list[str], store: Store | None = None,
+                      calendar: NseCalendar | None = None, today: date | None = None) -> dict[str, list[Constituent]]:
     out: dict[str, list[Constituent]] = {}
     tokens = {r["tradingsymbol"]: int(r["instrument_token"]) for r in nse_rows if r.get("segment") == "NSE"}
     for index in indices:
@@ -432,10 +554,29 @@ def load_constituents(broker, nse_rows: list[dict], indices: list[str]) -> dict[
         try:
             closes = broker.previous_closes([sym for sym, _ in listed])
         except Exception as e:
-            logger.warning("Previous closes failed: %s", type(e).__name__)
+            logger.warning("Previous closes failed: %s", _reason(e))
             closes = {}
+        for note in getattr(broker, "history_notes", None) or []:
+            logger.warning("Previous closes: %s", note)
+        missing = {tokens[sym]: sym for sym, _ in listed if closes.get(sym) is None}
+        if missing and store is not None and calendar is not None and today is not None:
+            closes = {**closes, **_saved_closes(store, missing, calendar.previous_trading_day(today), today)}
         out[index] = [Constituent(sym, w, tokens[sym], closes.get(sym)) for sym, w in listed]
     return out
+
+
+def _saved_closes(store: Store, missing: dict[int, str], prev_day: date, today: date) -> dict[str, float]:
+    """Previous-session closes from our own recorded bars; only bars from that session count, so a
+    stock that wasn't recorded then stays without one rather than getting a stale close."""
+    try:
+        rows = store.bars_between(at_ist(prev_day, time(0)), at_ist(today, time(0)), set(missing))
+    except Exception:
+        logger.exception("Reading saved closes failed")
+        return {}
+    last = {r["instrument_token"]: float(r["close"]) for r in rows}        # rows come oldest first
+    if last:
+        logger.info("Previous closes for %d of %d stocks taken from saved bars", len(last), len(missing))
+    return {missing[token]: close for token, close in last.items()}
 
 
 def main() -> int:

@@ -547,3 +547,144 @@ def test_failed_history_is_retried_during_the_session_and_announced(store):
     assert not retry.pending and "Historical data recovered" in notes.texts[-1] and "Signals can start" in notes.texts[-1]
     rows = store.bars_between(ist(2026, 10, 16, 0, 0), ist(2026, 10, 20, 0, 0), {9001})
     assert [r["ts"].day for r in rows] == [16]                     # today's minutes are left to the live feed
+
+
+# ── 19 Oct 2026, 09:33: every history request refused, so warm up from our own bars ─────
+
+VIX = 264969
+
+
+def _sessions(n: int, before: date = date(2026, 10, 19)) -> list[date]:
+    days, d = [], before
+    for _ in range(n):
+        d = CAL.previous_trading_day(d)
+        days.append(d)
+    return sorted(days)
+
+
+def _save_minutes(store, token, days, base=100.0, shift=0.0, minutes=375):
+    candles = []
+    for d in days:
+        for i in range(minutes):
+            p = base + d.toordinal() % 50 + (i % 30) * 0.1 + shift
+            candles.append({"date": ist(d.year, d.month, d.day, 9, 15) + timedelta(minutes=i),
+                            "open": p, "high": p + 0.5, "low": p - 0.5, "close": p, "volume": 10})
+    store.insert_bars_if_missing(session.history_rows(token, candles))
+
+
+class RefusingBroker:
+    """Every history request fails, as Angel's did after the 09:33 restart."""
+    def __init__(self, works: bool = False):
+        self.works, self.calls = works, []
+
+    def historical(self, token, start, end, interval="minute", oi=False):
+        self.calls.append((token, interval))
+        if not self.works:
+            raise RuntimeError("DataException")
+        return [{"date": ist(2026, 10, 15, 10, 0), "open": 1, "high": 1, "low": 1, "close": 1, "volume": 5}] \
+            if interval == "minute" else [{"date": date(2026, 10, 16), "open": 1, "high": 1, "low": 1, "close": 13.0, "volume": 0}]
+
+
+def test_saved_bars_warm_up_a_restart_without_asking_the_broker(store):
+    ref = _refs()[0]
+    days = _sessions(session.HISTORY_SESSIONS)
+    for token in (ref.future_token, ref.spot_token, VIX):
+        _save_minutes(store, token, days)
+        _save_minutes(store, token, [date(2026, 10, 19)], minutes=44)        # today 09:15–09:58, recorded live
+    broker, state = RefusingBroker(works=True), MarketState(date(2026, 10, 19))
+    rep = session.load_history(broker, [ref], VIX, state, CAL, ist(2026, 10, 19, 10, 0), pause=lambda s: None, store=store)
+    assert {i for _, i in broker.calls} == {"day"}                         # no minute request at all
+    assert set(rep.from_saved) == {"NIFTY futures 1-min", "NIFTY spot 1-min", "India VIX 1-min"}
+    assert not rep.failed and not rep.stand_in and not rep.critical_failed and "✅" in rep.line
+    assert rep.alert() is None
+    assert len(state.today(ref.future_token, "1min")) == 44 and session._warm(state, ref.future_token)
+
+
+def test_refused_futures_are_filled_from_spot_and_signals_still_run(store):
+    ref = _refs()[0]
+    days = _sessions(session.HISTORY_SESSIONS)
+    _save_minutes(store, ref.spot_token, days)
+    _save_minutes(store, ref.future_token, days[-1:], shift=50.0)         # only Friday's futures were recorded
+    state, notes = MarketState(date(2026, 10, 19)), Notes()
+    rep = session.load_history(RefusingBroker(), [ref], VIX, state, CAL, ist(2026, 10, 19, 8, 45),
+                               pause=lambda s: None, store=store)
+    assert not rep.critical_failed and "NIFTY futures 1-min" not in rep.failed
+    note = rep.stand_in["NIFTY futures 1-min"]
+    assert "saved futures bars (1 sessions)" in note and "spot shifted by the basis (+50.0) for 19 sessions" in note
+    assert rep.from_saved == ["NIFTY spot 1-min"] and set(rep.failed) == {"India VIX 1-min", "India VIX daily", "NIFTY spot daily"}
+    assert "Signals run as normal" in rep.alert() and "stand-in for NIFTY futures 1-min" in rep.line
+    fut, spot = state.frame(ref.future_token, "1min"), state.frame(ref.spot_token, "1min")
+    first = spot.index[0]
+    assert fut.loc[first, "close"] == spot.loc[first, "close"] + 50.0 and fut.loc[first, "volume"] == 0
+    assert session._warm(state, ref.future_token)
+    saved_fut = store.bars_between(ist(2026, 9, 1, 0, 0), ist(2026, 10, 20, 0, 0), {ref.future_token})
+    assert {r["ts"].date() for r in saved_fut} == {days[-1]}               # the stand-in is never saved
+
+    retry = session.HistoryRetry(RefusingBroker(works=True), rep, state, store, notes, date(2026, 10, 19))
+    retry.maybe(ist(2026, 10, 19, 9, 30))
+    assert not retry.pending and "replaces the stand-in" in notes.texts[-1] and "Signals can start" not in notes.texts[-1]
+
+
+def test_futures_too_short_even_with_the_stand_in_still_hold_signals(store):
+    ref = _refs()[0]
+    _save_minutes(store, ref.spot_token, _sessions(3))
+    rep = session.load_history(RefusingBroker(), [ref], VIX, MarketState(date(2026, 10, 19)), CAL,
+                               ist(2026, 10, 19, 8, 45), pause=lambda s: None, store=store)
+    assert rep.critical_failed and "NIFTY futures 1-min" in rep.failed and "no signals" in rep.alert()
+    assert rep.stand_in == {"NIFTY spot 1-min": "using saved bars (3 of 20 sessions)"}
+
+
+def test_the_main_login_takes_over_when_the_history_key_fails():
+    from SmartApi.smartExceptions import DataException
+
+    from options.brokers.angel import AngelBroker
+
+    class Main:
+        calls = 0
+
+        def getCandleData(self, params):
+            Main.calls += 1
+            return {"status": True, "data": [[f"{params['fromdate'][:10]}T09:15:00+05:30", 1, 2, 0.5, 1.5, 100]]}
+
+    class HistoryKey:
+        calls = 0
+
+        def getCandleData(self, params):
+            HistoryKey.calls += 1
+            raise DataException("Couldn't parse the JSON response received from the server: "
+                                "b'Access denied because of exceeding access rate'")
+
+    b = AngelBroker.__new__(AngelBroker)
+    b.api, b.history_api, b._pause = Main(), HistoryKey(), lambda s: None
+    assert b.historical(99926000, ist(2026, 10, 15, 9, 15), ist(2026, 10, 16, 15, 30), "minute")
+    assert any("historical-data key failed (DataException: Couldn't parse" in n and "exceeding access rate" in n
+               for n in b.history_notes)
+    b.historical(99926000, ist(2026, 10, 15, 9, 15), ist(2026, 10, 16, 15, 30), "minute")
+    assert HistoryKey.calls == 1 and Main.calls == 2                       # the main login stays in use
+
+
+def test_error_messages_logged_are_angels_reply_never_a_requests_url():
+    import requests
+    from SmartApi.smartExceptions import DataException
+
+    from options.brokers.angel import AngelError, brief_error
+    assert brief_error(DataException("Couldn't parse … b''")) == "DataException: Couldn't parse … b''"
+    assert brief_error(AngelError("historical candles failed (AB1004): x")).startswith("AngelError: historical")
+    assert brief_error(requests.ConnectionError("https://host/path?key=secret")) == "ConnectionError"
+
+
+def test_previous_closes_come_from_saved_bars_when_the_broker_refuses(store):
+    class Broker:
+        def previous_closes(self, symbols):
+            raise RuntimeError("DataException")
+
+    nse = [{"tradingsymbol": "HDFCBANK", "instrument_token": 341249, "segment": "NSE"},
+           {"tradingsymbol": "ICICIBANK", "instrument_token": 1270529, "segment": "NSE"}]
+    store.insert_bars_if_missing(session.history_rows(341249, [
+        {"date": ist(2026, 10, 16, 15, 28), "open": 1, "high": 1, "low": 1, "close": 991.0, "volume": 1},
+        {"date": ist(2026, 10, 16, 15, 29), "open": 1, "high": 1, "low": 1, "close": 992.5, "volume": 1}]))
+    store.insert_bars_if_missing(session.history_rows(1270529, [                 # stale: a week old
+        {"date": ist(2026, 10, 9, 15, 29), "open": 1, "high": 1, "low": 1, "close": 1400.0, "volume": 1}]))
+    out = session.load_constituents(Broker(), nse, ["NIFTY"], store=store, calendar=CAL, today=date(2026, 10, 19))
+    closes = {c.symbol: c.prev_close for c in out["NIFTY"]}
+    assert closes == {"HDFCBANK": 992.5, "ICICIBANK": None}

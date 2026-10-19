@@ -50,6 +50,17 @@ class AngelError(RuntimeError):
     pass
 
 
+def brief_error(e: Exception) -> str:
+    """Type and message, safe to log: AngelError carries Angel's own code and message, and the SDK's
+    errors carry Angel's reply body (e.g. "Couldn't parse the JSON response … b'Access denied …'"),
+    never the request headers. Anything else (requests, sockets) is logged by type only, since
+    those messages can include request URLs."""
+    sdk = type(e).__module__.startswith("SmartApi")
+    if isinstance(e, AngelError) or sdk:
+        return f"{type(e).__name__}: {' '.join(str(e).split())[:200]}"
+    return type(e).__name__
+
+
 # ── Pure translation (no SDK, no network) ─────────────────────────────────────
 
 def to_internal(exchange: str, token: str | int) -> int:
@@ -300,12 +311,27 @@ class AngelBroker:
         Open interest is a bonus, not a requirement: if Angel's OI-history call fails, the candles
         are kept with OI unknown (on 19 Oct 2026 a failing OI call took the whole futures history down
         with it, and with it every signal for the day). A span Angel refuses is retried in 7-day pieces.
+
+        If the separate historical-data key fails (on 19 Oct 2026 every request through it came back as
+        a non-JSON DataException while the live feed was fine), the main login is used instead, and
+        stays in use for the rest of the session once it has worked.
         """
+        self.history_notes: list[str] = []
+        if self.history_api is not None and not getattr(self, "_history_via_main", False):
+            try:
+                return self._historical(self.history_api, token, start, end, interval, oi)
+            except Exception as e:
+                self.history_notes.append(f"historical-data key failed ({brief_error(e)}); trying the main login")
+            out = self._historical(self.api, token, start, end, interval, oi)
+            self._history_via_main = True
+            self.history_notes.append("main login worked; using it for history from now on")
+            return out
+        return self._historical(self.api, token, start, end, interval, oi)
+
+    def _historical(self, api, token: int, start: datetime, end: datetime, interval: str, oi: bool) -> list[dict]:
         exchange, angel_token = to_angel(token)
-        api = self.history_api or self.api
         span = timedelta(days=MAX_SPAN_DAYS[INTERVALS[interval]])
         candles: list[dict] = []
-        self.history_notes: list[str] = []
         frm = start
         while frm < end:
             to = min(end, frm + span)
