@@ -139,6 +139,18 @@ The user asked: "use that report and build what is missing, production grade". T
 
 **Needs the user:** set `SECRET_KEY` on Railway api AND recorder at the same moment (outside market hours; secrets are re-encrypted automatically). Rotate the OpenAI key. Say yes or no to downloading 2 years of NIFTY/VIX history from Angel for the backtest. Optional: set up the E-mail (SMTP) connector, and point an uptime monitor at `/health/recorder`.
 
+## Live incidents
+- **19 Oct 2026, history refused (commits 5b75f43, d45ed4e).** 08:30: the futures OI-history call failed and took the futures candles with it. After the 09:33 restart, every Angel history request failed with SmartAPI `DataException`. Its body: `b'Access denied because of exceeding access rate'`, i.e. Angel's history rate limit. The live feed was unaffected. No separate historical key is configured; history uses the main login. Fixes:
+  - OI history is optional, with a 7-day chunk fallback.
+  - 1-minute warm-up comes from our own `bars_1m` first, so a restart makes no minute requests.
+  - Refused futures get a spot+basis stand-in, held in memory only.
+  - The main login takes over if a separate history key fails.
+  - Previous closes fall back to the last session's saved bars. On 19 Oct there were none for the heavyweights, so breadth waits.
+  - Failed series are retried every 10 minutes.
+  - Angel's reply is now logged.
+  - Deployed 10:02 IST: "History: 4/5 loaded", missing only India VIX daily; the 10:05 check ran clean.
+  - Still open: previous closes and VIX daily keep hitting the rate limit. Move previous closes to the quote API (`getMarketData` returns the previous `close`), which is also needed for the live-ticker % change. Pace history requests ≥ 1 s apart.
+
 ## User setup still pending
 - Done 16 Oct 2026: admin account created; Angel One connected on the Connectors page (health check logs in).
 - **Telegram:** bot token saved; the Chat ID must be the user's numeric Telegram ID (from @userinfobot), not the bot's username. Then press **Send test message**.
