@@ -25,6 +25,9 @@ export interface LiveLevel {
   ts: number | null;              // exchange time of the level, epoch ms
   prev_close: number | null;
   prev_source?: string | null;
+  kind?: "option";                // an option contract followed after an Option Check
+  bid?: number | null;
+  ask?: number | null;
 }
 
 export interface MarketWindow {

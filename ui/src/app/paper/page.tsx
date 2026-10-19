@@ -3,6 +3,7 @@ import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import { Info, Loader2, RotateCcw, Wallet } from "lucide-react";
 import type { PaperAccount, PaperTrade } from "@/types/options";
+import type { CheckRow } from "@/types/check";
 import { cn } from "@/lib/utils";
 import { sendJson, useOptionsApi } from "@/lib/optionsApi";
 import { EXIT_LABELS, fmtDateTime, fmtPremium, fmtR, fmtRupees } from "@/lib/optionsFormat";
@@ -158,6 +159,40 @@ function ResetForm({ acct, onDone }: { acct: PaperAccount; onDone: () => void })
   );
 }
 
+/** Trades followed from Option Check: kept apart from the signal account above (not in its balance). */
+function CheckTrades() {
+  const { data } = useOptionsApi<{ trades: CheckRow[] }>("/api/options/checks/paper", 30_000);
+  const trades = data?.trades ?? [];
+  if (data && !trades.length) return null;
+  return (
+    <section className="bg-surface border border-[#1e2d45] rounded-xl overflow-hidden mt-5" aria-label="Followed from Option Check">
+      <div className="px-4 py-3 border-b border-[#1e2d45]">
+        <span className="text-xs font-semibold text-[#e2e8f0]">Followed from Option Check</span>
+        <span className="text-[10px] text-[#8391a7] ml-2">separate from the signal account above</span>
+      </div>
+      <ul className="divide-y divide-[#1e2d45]">
+        {!data ? <li className="px-4 py-3"><div className="skeleton h-10 rounded" /></li> : trades.map(t => {
+          const p = t.paper!;
+          return (
+            <li key={t.id} className="px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 text-[12px]">
+              <div className="min-w-0">
+                <Link href={`/check?id=${t.id}`} className="font-mono text-[#e2e8f0] hover:text-[#ff9933]">{t.symbol}</Link>
+                <div className="text-[10px] text-[#8391a7]">{p.units} qty from ₹{fmtPremium(p.entry)} · checked {fmtDateTime(t.created_at)}
+                  {t.summary?.verdict ? ` · said ${t.summary.verdict.toLowerCase()}` : ""}</div>
+              </div>
+              <div className="text-right">
+                {p.closed_at ? <><span className={cn("font-mono font-semibold", pnlTone(p.pnl))}>{fmtRupees(p.pnl, true)}</span>
+                                 <div className="text-[10px] text-[#8391a7]">closed at ₹{fmtPremium(p.exit)}</div></>
+                  : <span className="text-[11px] text-[#60a5fa]">open · live on its check page</span>}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
 export default function PaperPage() {
   const auth = useAuth();
   const { data: a, refresh } = useOptionsApi<PaperAccount>("/api/paper", 5_000);
@@ -290,6 +325,7 @@ export default function PaperPage() {
           </table>
         </div>
       </section>
+      <CheckTrades />
       <p className="text-[10px] text-[#8391a7] mt-3">Paper results are simulated on live quotes and don&apos;t guarantee live results.</p>
     </main>
   );

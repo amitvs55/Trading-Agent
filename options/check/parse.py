@@ -8,7 +8,7 @@ is missing or not listed comes back as a clear problem with the nearest real con
 
 import re
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, time
 
 from options.core.calendar import IST
 from options.reference import IndexReference, OptionInfo
@@ -128,8 +128,12 @@ def _nearest(items: list, value: float, n: int) -> list:
     return sorted(items, key=lambda x: abs(x - value))[:n]
 
 
-def resolve(query: Query, refs: dict[str, IndexReference], now: datetime) -> Resolved:
+def resolve(query: Query, refs: dict[str, IndexReference], now: datetime,
+            tradable_from: datetime | None = None) -> Resolved:
+    """`tradable_from`: when a trade could start (now in a live session, else the next open); a contract
+    that settles before then is offered as expired."""
     today = now.astimezone(IST).date()
+    cutoff = (tradable_from or now).astimezone(IST)
     index = query.index or ("NIFTY" if "NIFTY" in refs else next(iter(refs), None))
     if query.index and query.index not in refs:
         return Resolved(None, query, f"{query.index} options aren't covered yet (only {', '.join(refs) or 'none'})")
@@ -143,11 +147,10 @@ def resolve(query: Query, refs: dict[str, IndexReference], now: datetime) -> Res
         for opt in ref.options.values():
             if opt.tradingsymbol.upper() == query.symbol:
                 query.expiry, query.strike, query.right = opt.expiry, opt.strike, opt.right
-                return _check_expired(Resolved(opt, query), now)
+                return _check_expired(Resolved(opt, query), now, cutoff)
 
-    local = now.astimezone(IST)
-    expiries = sorted(e for e in ref.expiries                     # still tradable now
-                      if e > local.date() or (e == local.date() and (local.hour, local.minute) < (15, 30)))
+    expiries = sorted(e for e in ref.expiries                     # still tradable when a trade could start
+                      if datetime.combine(e, time(15, 30), IST) > cutoff)
     if query.expiry_word == "this week":
         query.expiry = expiries[0] if expiries else None
     elif query.expiry_word == "next week":
@@ -156,6 +159,10 @@ def resolve(query: Query, refs: dict[str, IndexReference], now: datetime) -> Res
         query.expiry = ref.future_expiry if ref.future_expiry in expiries else next(
             (e for e in expiries if e.month == (expiries[0].month if expiries else 0)), None)
 
+    if query.expiry is not None and query.expiry in ref.expiries and query.expiry not in expiries and query.expiry >= today             and cutoff > now.astimezone(IST):
+        return Resolved(None, query, f"It expires {query.expiry:%a %d %b} 15:30, before the next session you could trade it "
+                                     f"({cutoff:%a %d %b %H:%M})",
+                        _around(ref, expiries[0], query.strike, query.right) if expiries else [])
     if query.expiry is not None and (query.expiry < today or (query.expiry == today and query.expiry not in expiries)):
         return Resolved(None, query, f"{query.expiry:%d %b %Y} has passed; that contract has expired",
                         _around(ref, expiries[0], query.strike, query.right) if expiries else [])
@@ -182,14 +189,16 @@ def resolve(query: Query, refs: dict[str, IndexReference], now: datetime) -> Res
     opt = ref.options.get((expiry, query.strike, query.right))
     if opt is None:
         return Resolved(None, query, "That contract isn't listed", _rights(ref, expiry, query.strike, None))
-    return _check_expired(Resolved(opt, query), now)
+    return _check_expired(Resolved(opt, query), now, cutoff)
 
 
-def _check_expired(res: Resolved, now: datetime) -> Resolved:
+def _check_expired(res: Resolved, now: datetime, cutoff: datetime | None = None) -> Resolved:
     opt = res.option
     local = now.astimezone(IST)
     if opt and opt.expiry == local.date() and (local.hour, local.minute) >= (15, 30):
         res.problem = f"{opt.tradingsymbol} expired today at 15:30"
+    elif opt and cutoff is not None and datetime.combine(opt.expiry, time(15, 30), IST) <= cutoff:
+        res.problem = f"{opt.tradingsymbol} expires before the next session you could trade it ({cutoff:%a %d %b %H:%M})"
     return res
 
 

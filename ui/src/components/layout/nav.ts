@@ -1,4 +1,4 @@
-import { BarChart3, Bot, Coins, FlaskConical, History, PlugZap, Radio, ShieldCheck, UserRound, Wallet, type LucideIcon } from "lucide-react";
+import { BarChart3, Bot, Coins, Crosshair, FlaskConical, History, PlugZap, Radio, ShieldCheck, UserRound, Wallet, type LucideIcon } from "lucide-react";
 
 export type Role = "admin" | "viewer";
 
@@ -16,9 +16,10 @@ export interface NavItem {
 // (the API enforces the same split: see api/main.py and require_admin).
 export const NAV: NavItem[] = [
   { href: "/signals",     label: "Signals",     icon: Radio,        roles: ["admin", "viewer"], primary: true, tier: 1 },
+  { href: "/check",       label: "Check",       icon: Crosshair,    roles: ["admin", "viewer"], primary: true, tier: 1 },
   { href: "/paper",       label: "Paper",       icon: Wallet,       roles: ["admin", "viewer"], primary: true, tier: 1 },
   { href: "/performance", label: "Performance", icon: BarChart3,    roles: ["admin", "viewer"], primary: true, tier: 1 },
-  { href: "/agents",      label: "Agents",      icon: Bot,          roles: ["admin"],           primary: true, tier: 1 },
+  { href: "/agents",      label: "Agents",      icon: Bot,          roles: ["admin"],           tier: 1 },   // phones: in More
   { href: "/",            label: "Research",    icon: FlaskConical, roles: ["admin"], tier: 2 },
   { href: "/history",     label: "History",     icon: History,      roles: ["admin"], tier: 3 },
   { href: "/usage",       label: "Usage",       icon: Coins,        roles: ["admin"], tier: 3 },

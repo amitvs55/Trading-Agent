@@ -66,13 +66,21 @@ def _refs(store: Store, cfg: OptionsSettings, now: datetime):
     return refs, vix, day
 
 
+def _tradable_from(cal: NseCalendar, now: datetime, day: date) -> datetime:
+    """When a trade could start: now in a live session with today's data, else the next open."""
+    if day == now.date() and cal.is_market_open(now):
+        return now
+    from options.check.report import horizon_window
+    return horizon_window(now, "intraday", date.max, cal, market_open=False)[0]
+
+
 @router.get("/api/options/check/resolve", dependencies=[Depends(current_user)])
 def resolve_contract(q: str = Query(..., min_length=1, max_length=120), store: Store = Depends(get_store),
-                     cfg: OptionsSettings = Depends(get_cfg)) -> dict:
+                     cfg: OptionsSettings = Depends(get_cfg), cal: NseCalendar = Depends(get_calendar)) -> dict:
     """What a typed query means: the exact contract, or the problem and the nearest real ones."""
     now = now_ist()
-    refs, _, _ = _refs(store, cfg, now)
-    res = resolve(parse_query(q, now.date()), refs, now)
+    refs, _, day = _refs(store, cfg, now)
+    res = resolve(parse_query(q, now.date()), refs, now, _tradable_from(cal, now, day))
     return {"ok": res.option is not None and res.problem is None, "problem": res.problem,
             "contract": _opt_json(res.option) if res.option else None,
             "suggestions": [_opt_json(o) for o in res.suggestions[:6]]}
@@ -159,7 +167,7 @@ async def run_check(body: CheckIn, user: dict = Depends(current_user), store: St
                     cfg: OptionsSettings = Depends(get_cfg), cal: NseCalendar = Depends(get_calendar)) -> dict:
     now = now_ist()
     refs, vix, day = await run_in_threadpool(_refs, store, cfg, now)
-    res = resolve(parse_query(body.query, now.date()), refs, now)
+    res = resolve(parse_query(body.query, now.date()), refs, now, _tradable_from(cal, now, day))
     if res.option is None or res.problem:
         raise HTTPException(422, {"code": "contract", "message": res.problem or "Couldn't read that contract",
                                   "suggestions": [_opt_json(o) for o in res.suggestions[:6]]})

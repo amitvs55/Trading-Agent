@@ -9,18 +9,28 @@ Never point this at a real database: it refuses anything but a local SQLite file
 """
 
 import sys
+from datetime import date, timedelta
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 from options.admin.repo import AdminRepo  # noqa: E402
-from options.backtest.synthetic import build_market  # noqa: E402
+from options.backtest.synthetic import CAL, build_market, save_market  # noqa: E402
 from options.config import OptionsSettings  # noqa: E402
 from options.engine.engine import SignalEngine  # noqa: E402
 from options.notify.base import LogNotifier  # noqa: E402
 from options.setups.base import Candidate  # noqa: E402
 from options.storage import Store, make_engine  # noqa: E402
+
+
+def far_expiry(today: date) -> date:
+    """The last trading Tuesday of the month about two months ahead (a monthly NIFTY expiry)."""
+    d = today + timedelta(days=60)
+    last = date(d.year + (d.month == 12), d.month % 12 + 1, 1) - timedelta(days=1)
+    while last.weekday() != 1 or not CAL.is_trading_day(last):
+        last -= timedelta(days=1)
+    return last
 
 
 class AlwaysBull:
@@ -48,6 +58,9 @@ def main(db_path: str, admin_pw: str, viewer_pw: str) -> None:
                  events=[], now_fn=lambda: ctx.now, setups=[AlwaysBull()]).evaluate(ctx.now)
     from live_tick import publish                     # the live ticker's first levels
     publish(str(path), 23096.95, 75512.10)
+    # Option Check reads saved bars: the synthetic session, plus an expiry ~2 months from the real date,
+    # so the check page always has a live contract to test whatever day the tests run
+    save_market(store, ctx, (far_expiry(date.today()),))
     print(f"seeded {path}")
 
 

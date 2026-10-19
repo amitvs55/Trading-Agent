@@ -297,6 +297,9 @@ def test_an_evening_check_runs_on_saved_data_then_what_if_paper_and_history(api)
     assert rep_["priced"] and rep_["facts"]["source"].startswith("saved data (as of Fri 16 Oct")
     assert not rep_["facts"]["market_open"] and rep_["horizon"]["starts_at_open"]
     assert rep_["horizon"]["start"].startswith("2026-10-19T09:15")             # the next open after the check
+    pos = rep_["position"]
+    assert pos["entry"] < rep_["facts"]["contract"]["ask"] and "time value lost" in pos["entry_note"]
+    assert rep_["plan"]["entry_high"] == pos["entry"] and rep_["plan"]["stop"] < pos["entry"]
     assert rep_["verdict"]["call"] in ("Worth taking", "Marginal", "Avoid")
     check_id = body["id"]
 
@@ -321,3 +324,23 @@ def test_a_typo_is_refused_with_suggestions_and_others_checks_are_private(api, s
     saved.check_add({"id": "someone", "created_at": ist(2026, 10, 16, 12, 0), "username": "other", "query": "x",
                      "status": "done", "outcome_done": 0, "paper": 0})
     assert client.get("/api/options/check/someone").status_code == 404
+
+
+def test_a_contract_that_expires_before_the_next_tradable_session_is_not_offered(ctx):
+    refs, now = {"NIFTY": ctx.ref}, ist(2026, 10, 19, 14, 0)          # saved data from Friday: trading starts Wed
+    next_open = ist(2026, 10, 21, 9, 15)
+    late = resolve(parse_query("Nifty 19th Oct 25000 ce", date(2026, 10, 19)), refs, now, next_open)
+    assert late.option is None and "before the next session you could trade it" in late.problem
+    assert late.suggestions and late.suggestions[0].expiry == MONTHLY
+    assert resolve(parse_query("25000 ce", date(2026, 10, 19)), refs, now, next_open).option.expiry == MONTHLY
+    assert resolve(parse_query("25000 ce", date(2026, 10, 19)), refs, now, now).option.expiry == WEEKLY   # live session
+
+
+def test_a_trade_the_engine_would_refuse_is_never_worth_taking(ctx, snap):
+    f = market_facts(snap, _atm(ctx, "CE"), "intraday", ctx.now)
+    strong = {**f, "score": 90, "pillars": [{**p, "status": "pass"} for p in f["pillars"]],
+              "gates": [{"name": "min_rr", "ok": False, "reason": "reward:risk to T1 0.36 < 1.3"}]}
+    v = rep.build(strong, rep.Params(amount=25_000), None, CAL)["verdict"]
+    assert v["call"] == "Marginal" and any("wouldn't signal this" in a for a in v["against"])
+    shock = {**strong, "gates": [{"name": "no_market_shock", "ok": False, "reason": "5σ move"}]}
+    assert rep.build(shock, rep.Params(amount=25_000), None, CAL)["verdict"]["call"] == "Avoid"

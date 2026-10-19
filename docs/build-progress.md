@@ -180,6 +180,40 @@ Requirement: smooth, no lag, no time mismatch.
 
 **Tests:** `tests/options/test_live.py`, plus E2E `ui/e2e/live.spec.ts`, which checks updates in place with zero layout shift and runs axe.
 
+## Option Check page (19 Oct 2026)
+Type a contract ("Nifty 27th Oct 25000 ce") and an amount, and get a verdict, what the money can become, and the evidence. Available to admins and viewers (no AI calls).
+
+**Back end:** `options/check/`.
+- `parse.py` reads any common form and resolves the listed contract. Wrong or missing parts get the problem plus real suggestions. Only contracts still tradable when a trade could start are offered: now in a live session, else the next open.
+- `facts.py` checks a hand-picked contract like a signal: a manual candidate, every pillar for its direction, quote, IV, Greeks, plan, levels and gates.
+  - During market hours `worker.py` answers inside the recorder (NOTIFY `option_check`, main thread, live quote, contract subscribed).
+  - Otherwise `offline.py` rebuilds the snapshot from saved bars, cached.
+- `report.py` covers the position, charges, breakeven and maximum loss, then two views:
+  - market view: lognormal at ATM IV, antithetic paths, a closed-form control variate so the hold mean is exact
+  - history view (`history.py`): real past session paths, plus "similar sessions" (same prior-hour direction, VIX ±20%) when there are at least 30
+  - for each view: hold vs follow-the-plan exactly as `lifecycle.py` manages signals; also scenarios, a payoff curve, the verdict and evidence
+- **Verdict rules:**
+  - Avoid: any of data_fresh, no_market_shock, no_fresh_news or liquidity fails; trend and futures flow both against; score < 45; or both views lose > 10%.
+  - Marginal at best: any other gate fails, e.g. reward:risk < 1.3.
+  - Worth taking: score ≥ 60, trend not against, and history EV ≥ 0.
+- **After hours,** the entry is the estimated ask at the next open: the last ask less the time value lost by then.
+- `outcomes.py` measures every check afterwards, at 30 min and at exit or expiry settlement, which builds the checker's record (per verdict, plus calibration). Checks can be followed as paper trades: live P&L, close at the bid, settled at expiry.
+- **API:** `api/routes/check.py` with resolve, check, get, what-if, list, and paper follow and close. A warmer thread loads the contracts and 2-year history once a day.
+- **Evening jobs:** `options/offhours.py` uses one Angel login for the ticker's closing levels and `history_backfill.py`. The backfill tops up 2 years of NIFTY and VIX minutes once a day, 1 s between requests. The supervisor runs it at start-up off-hours and daily at 16:30.
+
+**UI:** `/check`. A contract box confirms as you type, with suggestion chips. Then come:
+- the verdict card with the reasons for and against
+- position tiles
+- the two views' odds and the plan's outcome mix
+- what-if controls for amount, entry, IV shift, slippage and horizon
+- the payoff chart and scenario table
+- the 12 checks, gates, numbers and assumptions
+- recent checks with their real results, and the checker's record
+
+Check is in the nav, tier 1, with a phone tab; Agents moves into the phone "More" sheet. The Paper page lists trades followed from checks, separate from the signal account.
+
+**Tests:** `tests/options/test_check.py` (28), and E2E `check.spec.ts` on desktop and phone (verdict, what-if with no layout shift, paper, axe). The seed saves the synthetic market with an expiry ~2 months from the run date. `/check` is in the layout guard.
+
 ## User setup still pending
 - Done 16 Oct 2026: admin account created; Angel One connected on the Connectors page (health check logs in).
 - **Telegram:** bot token saved; the Chat ID must be the user's numeric Telegram ID (from @userinfobot), not the bot's username. Then press **Send test message**.

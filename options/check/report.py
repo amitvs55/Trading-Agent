@@ -17,6 +17,7 @@ exactly as live signals are managed (stop, T1: book half or lock half the gain, 
 
 import hashlib
 import math
+import re
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 
@@ -26,7 +27,7 @@ from options.check.history import EXIT_INTRADAY, MIN_SESSIONS, MIN_SIMILAR, SESS
 from options.core.calendar import IST, MARKET_OPEN, NseCalendar, at_ist
 from options.engine.costs import charges
 from options.quant import vec
-from options.quant.black76 import EXPIRY_TIME, year_fraction
+from options.quant.black76 import EXPIRY_TIME, price as b76_price, year_fraction
 
 N_PATHS = 4000
 STEP_MIN = 5
@@ -181,7 +182,6 @@ def _exact_exit_value(f0: float, k: float, right: str, r: float, sigma_u: float,
     tau = 0.0 if settles else year_fraction(end, expiry)
     total_var = sigma_u ** 2 * dt + iv ** 2 * tau
     t_all = dt + tau
-    from options.quant.black76 import price as b76_price
     undiscounted = b76_price(f0, k, t_all, 0.0, math.sqrt(total_var / t_all), right)
     return undiscounted * math.exp(-r * tau)
 
@@ -241,6 +241,26 @@ def build(facts: dict, params: Params, history: HistoryModel | None, calendar: N
         return {**base, "priced": False, "verdict": _verdict_unpriced(facts),
                 "evidence": evidence(facts, None, params, None)}
 
+    start, end, end_label = horizon_window(now, params.horizon, expiry, calendar, facts.get("market_open"))
+    if start >= at_ist(expiry, EXPIRY_TIME):
+        return {**base, "priced": False, "evidence": evidence(facts, None, params, None),
+                "verdict": {"call": "Can't price", "tone": "neutral", "score": facts.get("score"), "for": [],
+                            "summary": f"It expires {expiry:%a %d %b} 15:30, before the next session it could be "
+                                       f"bought ({start:%a %d %b %H:%M}).", "against": ["No session left to trade it"]}}
+
+    # A trade that can only start at the next open pays that open's price, not today's last ask: the
+    # same ask less the time value lost by then (NIFTY assumed to open where the data left it)
+    entry_note = None
+    data_time = datetime.fromisoformat(facts["as_of"])
+    if not params.entry and start > data_time + timedelta(minutes=1):
+        f_data = facts["forward"]
+        decay = (b76_price(f_data, k, year_fraction(data_time, expiry), facts["r"], iv0, right)
+                 - b76_price(f_data, k, year_fraction(start, expiry), facts["r"], iv0, right))
+        if decay > 0:
+            entry_note = (f"Estimated ask at the {start:%a %d %b %H:%M} open: today's last ask ₹{quoted:,.2f} less "
+                          f"₹{decay:,.2f} of time value lost by then, if NIFTY opens where it closed")
+            quoted = max(quoted - decay, 0.05)
+
     slip = params.slippage_pct / 100
     entry = round(quoted * (1 + slip), 2)
     spread_half = (c["spread_pct"] or 0) / 200
@@ -257,13 +277,13 @@ def build(facts: dict, params: Params, history: HistoryModel | None, calendar: N
     be_unit = entry + _round_trip(entry, entry, units) / units
     breakeven = k + be_unit if right == "CE" else k - be_unit
     plan = facts.get("plan")
-    if plan and params.entry:                                 # the user's own price moves the plan with it
+    if plan and abs(entry - plan["entry_high"]) >= 0.05:      # your price (or the next open's) moves the plan with it
         shift = entry - plan["entry_high"]
-        plan = {**plan, "stop": max(plan["stop"] + shift, 0.05), "t1": plan["t1"] + shift, "t2": plan["t2"] + shift}
+        plan = {**plan, "entry_high": entry, "stop": max(plan["stop"] + shift, 0.05), "t1": plan["t1"] + shift,
+                "t2": plan["t2"] + shift}
     stop_risk = (entry - plan["stop"]) * units + _round_trip(entry, plan["stop"], units) if plan else None
     budget = params.capital * params.risk_pct / 100
 
-    start, end, end_label = horizon_window(now, params.horizon, expiry, calendar, facts.get("market_open"))
     settles = end >= at_ist(expiry, EXPIRY_TIME)
     times, s_min, ahead, e_min = _schedule(start, end, calendar)
     f0, s0, r = facts["forward"], facts["spot"] or facts["forward"], facts["r"]
@@ -306,7 +326,7 @@ def build(facts: dict, params: Params, history: HistoryModel | None, calendar: N
 
     report = {
         **base, "priced": True,
-        "position": {"entry": entry, "lots": lots, "shown_lots": shown_lots, "units": units, "lot_cost": lot_cost,
+        "position": {"entry": entry, "entry_note": entry_note, "lots": lots, "shown_lots": shown_lots, "units": units, "lot_cost": lot_cost,
                      "capital_used": used, "leftover": max(params.amount - used, 0) if lots else 0,
                      "min_amount": lot_cost + buy_costs if lots == 0 else None,
                      "buy_charges": buy_costs, "round_trip_charges": cost_mid, "max_loss": max_loss,
@@ -335,20 +355,27 @@ def scenarios(facts, entry, haircut, iv, units, times, expiry, sigma_u, settles)
     rows: dict[float, str] = {round(s0, 0): "now"}
     for mult, name in ((-2, "−2σ"), (-1, "−1σ"), (1, "+1σ"), (2, "+2σ")):
         rows.setdefault(round(s0 + mult * sd, 0), name)
-    for name, lvl in (facts.get("levels") or {}).items():
-        spot_lvl = lvl - basis                                  # levels are in futures points
-        if abs(spot_lvl - s0) <= 2.5 * sd:
-            rows.setdefault(round(spot_lvl, 0), name)
+    be = (c["strike"] + entry) if c["right"] == "CE" else (c["strike"] - entry)
+    if abs(be - s0) <= 3 * sd:
+        rows.setdefault(round(be, 0), "breakeven (premium)")
     for name in ("put", "call"):
         w = (facts.get("oi_walls") or {}).get(name)
         if w and abs(w - s0) <= 2.5 * sd:
             rows.setdefault(round(float(w), 0), f"{name} wall")
-    be = (c["strike"] + entry) if c["right"] == "CE" else (c["strike"] - entry)
-    if abs(be - s0) <= 3 * sd:
-        rows.setdefault(round(be, 0), "breakeven (premium)")
+    # the two nearest distinct technical levels on each side (levels are in futures points)
+    levels = sorted(((lvl - basis, name) for name, lvl in (facts.get("levels") or {}).items()
+                     if abs(lvl - basis - s0) <= 2.5 * sd), key=lambda x: abs(x[0] - s0))
+    taken = {"above": 0, "below": 0}
+    for spot_lvl, name in levels:
+        side_key = "above" if spot_lvl > s0 else "below"
+        if taken[side_key] >= 2 or any(abs(spot_lvl - x) < 0.25 * sd for x in rows):
+            continue
+        base_name = re.sub(r"[\s\d,.]+$", "", name) or name           # "swing high 24,706" → "swing high"
+        rows[round(spot_lvl, 0)] = f"{base_name} (fut {spot_lvl + basis:,.0f})"
+        taken[side_key] += 1
     moments = []
     t0 = times[0]
-    for label, when in (("in 30 min", t0 + timedelta(minutes=30)), ("at the exit", times[-1])):
+    for label, when in (("30 min in", t0 + timedelta(minutes=30)), ("at the exit", times[-1])):
         if when <= times[-1] and (not moments or when > moments[-1][1]):
             moments.append((label, when))
     out_rows = []
@@ -423,9 +450,14 @@ def verdict(facts: dict, rep: dict) -> dict:
             againsts.append((PRIORITY[name], f"{label} against: {p['detail']}"))
     if facts["candidate"]["setups_fired"]:
         fors.append((9, facts["candidate"]["note"]))
+    caps = []                                   # failed gates the engine would refuse a signal on
     for name, g in gates.items():
-        if not g["ok"] and (name in BLOCKING_GATES or (name == "session_open" and facts["market_open"])):
-            (blocks if name in BLOCKING_GATES else againsts).append((10, g["reason"]))
+        if g["ok"] or (name == "session_open" and not facts["market_open"]):
+            continue
+        if name in BLOCKING_GATES:
+            blocks.append((10, g["reason"]))
+        else:
+            caps.append((9, f"The engine wouldn't signal this: {g['reason']}"))
     if c.get("spread_pct") is not None and c["spread_pct"] <= 1.0:
         fors.append((4, f"Tight spread ({c['spread_pct']:.1f}%)"))
     greeks = c.get("greeks") or {}
@@ -445,8 +477,8 @@ def verdict(facts: dict, rep: dict) -> dict:
         againsts.append((5, f"Risk ₹{(pos['stop_risk'] or pos['max_loss']):,.0f} is over your "
                             f"{rep['params']['risk_pct']:g}% rule (₹{pos['budget']:,.0f})"))
     rr = (rep.get("plan") or {}).get("rr1")
-    if rr is not None:
-        (fors if rr >= 1.3 else againsts).append((5, f"Reward:risk to T1 {rr:.2f}"))
+    if rr is not None and rr >= 1.3:                  # below 1.3 the min_rr gate already says so
+        fors.append((5, f"Reward:risk to T1 {rr:.2f}"))
 
     trend_fail = pill.get("trend", {}).get("status") == "fail"
     flow_fail = pill.get("futures_flow", {}).get("status") == "fail"
@@ -455,7 +487,7 @@ def verdict(facts: dict, rep: dict) -> dict:
                   and (m_ev.get("expected") or 0) < -0.10 * pos["capital_used"])
     if blocks or (trend_fail and flow_fail) or score < 45 or weak_money:
         call, tone = "Avoid", "bad"
-    elif score >= 60 and not trend_fail and (h_expected is None or h_expected >= 0):
+    elif score >= 60 and not trend_fail and not caps and (h_expected is None or h_expected >= 0):
         call, tone = "Worth taking", "good"
     else:
         call, tone = "Marginal", "warn"
@@ -470,7 +502,7 @@ def verdict(facts: dict, rep: dict) -> dict:
             "basis": f"{view_name} ({key})" if h_ev else f"market view ({key})",
             "blocks": [b for _, b in blocks],
             "for": [t for _, t in sorted(fors, key=lambda x: -x[0])[:3]],
-            "against": [t for _, t in sorted(blocks + againsts, key=lambda x: -x[0])[:3]]}
+            "against": [t for _, t in sorted(blocks + caps + againsts, key=lambda x: -x[0])[:3]]}
 
 
 PRIORITY = {"trend": 10, "futures_flow": 9, "option_chain": 8, "momentum": 6, "breadth": 5, "levels": 7}
