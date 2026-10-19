@@ -225,7 +225,9 @@ def _run(cfg: OptionsSettings, now_fn, sleep, store: Store, notifier: Notifier, 
                           constituents=constituents, vix_history=history.vix_closes, macro=macro.snapshot,
                           events=load_events(store), news=news.snapshot, quote_fn=recorder.agg.quote, now_fn=now_fn)
     recorder.on_bars, recorder.on_tick = engine.on_bars, engine.on_tick
-    recorder.on_minute = SessionMetrics(store, recorder, engine, notifier).sample
+    metrics = SessionMetrics(store, recorder, engine, notifier)
+    retry = HistoryRetry(broker, history, state, store, notifier, today)
+    recorder.on_minute = lambda now: (metrics.sample(now), retry.maybe(now))
 
     recorder.start(prices)
     notifier.send("📡 <b>Recording started</b>\n" + "\n".join(format_contracts(r) for r in refs)
@@ -281,12 +283,20 @@ HISTORY_ATTEMPTS = 3
 HISTORY_RETRY_S = (2.0, 6.0)  # Angel sometimes answers AB1021 (rate limit) when well under it
 
 
+def _reason(e: Exception) -> str:
+    """Angel's own error code and message are safe to log (no keys in them); for anything else only
+    the type, since some client errors carry request URLs."""
+    from options.brokers.angel import AngelError
+    return f"{type(e).__name__}: {str(e)[:200]}" if isinstance(e, AngelError) else type(e).__name__
+
+
 @dataclass
 class HistoryReport:
     loaded: list[str] = field(default_factory=list)
     failed: list[str] = field(default_factory=list)
     critical_failed: bool = False          # futures 1-min: trend, momentum and levels all come from it
     vix_closes: list[float] = field(default_factory=list)
+    failed_jobs: list[tuple] = field(default_factory=list)      # to retry while the session runs
 
     @property
     def line(self) -> str:
@@ -342,12 +352,15 @@ def load_history(broker, refs: list[IndexReference], vix_token: int, state: Mark
                 candles = broker.historical(token, frm, now, interval, oi=oi)
                 break
             except Exception as e:
-                logger.warning("History for %s failed (attempt %d): %s", label, attempt, type(e).__name__)
+                logger.warning("History for %s failed (attempt %d): %s", label, attempt, _reason(e))
                 if attempt < HISTORY_ATTEMPTS:
                     pause(HISTORY_RETRY_S[attempt - 1])
         pause(0.4)              # Kite and Angel allow ~3 historical requests per second
+        for note in getattr(broker, "history_notes", None) or []:
+            logger.warning("History for %s: %s", label, note)
         if candles is None:
             report.failed.append(label)
+            report.failed_jobs.append((label, token, interval, oi, frm, critical))
             report.critical_failed |= critical
             continue
         report.loaded.append(label)
@@ -364,6 +377,51 @@ def load_history(broker, refs: list[IndexReference], vix_token: int, state: Mark
                 except Exception:
                     logger.exception("Saving history for %s failed", label)
     return report
+
+
+class HistoryRetry:
+    """Series that failed to load before the open are retried every RETRY_EVERY while the session runs,
+    so one bad answer from the provider at 08:30 doesn't cost the whole day's signals."""
+
+    RETRY_EVERY = timedelta(minutes=10)
+
+    def __init__(self, broker, report: HistoryReport, state: MarketState, store: Store, notifier: Notifier,
+                 today: date):
+        self.broker, self.report, self.state, self.store, self.notifier = broker, report, state, store, notifier
+        self.today = today
+        self.pending = list(report.failed_jobs)
+        self._last: datetime | None = None
+
+    def maybe(self, now: datetime) -> None:
+        if not self.pending or (self._last and now - self._last < self.RETRY_EVERY):
+            return
+        self._last = now
+        before_today = at_ist(self.today, time(0))     # today's minutes are already recorded live
+        recovered = []
+        for job in list(self.pending):
+            label, token, interval, oi, frm, critical = job
+            try:
+                candles = self.broker.historical(token, frm, now, interval, oi=oi)
+            except Exception as e:
+                logger.warning("History retry for %s failed: %s", label, _reason(e))
+                continue
+            if interval == "day":
+                self.state.load_daily(token, candles)
+            else:
+                done = [c for c in candles if pd.Timestamp(c["date"]) < pd.Timestamp(before_today)]
+                self.state.load_history(token, done)
+                try:
+                    self.store.insert_bars_if_missing(history_rows(token, done))
+                except Exception:
+                    logger.exception("Saving history for %s failed", label)
+            self.pending.remove(job)
+            recovered.append(label)
+        if recovered:
+            still = [j[0] for j in self.pending]
+            self.notifier.send(f"✅ <b>Historical data recovered</b>: {escape(', '.join(recovered))} loaded at "
+                               f"{now:%H:%M}. " + ("Signals can start from the next 5-minute check."
+                                                  if not any(j[5] for j in self.pending) else
+                                                  f"Still missing: {escape(', '.join(still))}."))
 
 
 def load_constituents(broker, nse_rows: list[dict], indices: list[str]) -> dict[str, list[Constituent]]:

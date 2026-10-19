@@ -4,7 +4,7 @@ admin controls, auto-demotion, broker stop guidance, editable calendars and rete
 import smtplib
 import threading
 import time as _time
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 import pytest
 from sqlalchemy import inspect
@@ -483,3 +483,67 @@ def test_session_metrics_record_each_minute_and_slow_checks_are_reported(store):
     finally:
         engine_mod.SignalEngine._evaluate, engine_mod.SLOW_EVAL_MS = real, saved
     assert sum("Signal check took" in t for t in notes.texts) == 1 and eng2.eval_ms_peak >= 10
+
+
+# ── 19 Oct 2026: futures history failed at 08:30 and cost the day's signals ─────────
+
+def test_a_failing_oi_history_call_no_longer_drops_the_futures_candles():
+    from options.brokers.angel import AngelBroker
+
+    class Api:
+        def getCandleData(self, params):
+            return {"status": True, "data": [[f"{params['fromdate'][:10]}T09:15:00+05:30", 1, 2, 0.5, 1.5, 100]]}
+
+        def getOIData(self, params):
+            return {"status": False, "errorcode": "AB2001", "message": "Internal Error"}
+
+    b = AngelBroker.__new__(AngelBroker)
+    b.api, b.history_api, b._pause = Api(), None, lambda s: None
+    candles = b.historical(2_000_000_000 + 57130, ist(2026, 10, 1, 9, 15), ist(2026, 10, 16, 15, 30), "minute", oi=True)
+    assert candles and all(c["oi"] is None for c in candles)        # kept, OI unknown (not 0)
+    assert any("no OI history" in n and "AB2001" in n for n in b.history_notes)
+
+
+def test_a_refused_long_span_is_retried_in_smaller_pieces():
+    from options.brokers.angel import AngelBroker
+
+    class Api:
+        calls = []
+
+        def getCandleData(self, params):
+            Api.calls.append(params["fromdate"])
+            frm, to = datetime.strptime(params["fromdate"], "%Y-%m-%d %H:%M"), datetime.strptime(params["todate"], "%Y-%m-%d %H:%M")
+            if to - frm > timedelta(days=7):
+                return {"status": False, "errorcode": "AB1004", "message": "Something Went Wrong"}
+            return {"status": True, "data": [[f"{params['fromdate'][:10]}T10:00:00+05:30", 1, 1, 1, 1, 1]]}
+
+    b = AngelBroker.__new__(AngelBroker)
+    b.api, b.history_api, b._pause = Api(), None, lambda s: None
+    candles = b.historical(99926000, ist(2026, 9, 20, 9, 15), ist(2026, 10, 16, 15, 30), "minute")
+    assert len(candles) == 4 and len(Api.calls) == 5               # one refusal, then four 7-day pieces
+
+
+def test_failed_history_is_retried_during_the_session_and_announced(store):
+    class Broker:
+        def __init__(self):
+            self.fail = True
+
+        def historical(self, token, start, end, interval="minute", oi=False):
+            if self.fail:
+                raise RuntimeError("still down")
+            return [{"date": ist(2026, 10, 16, 9, 15), "open": 1, "high": 1, "low": 1, "close": 1, "volume": 5},
+                    {"date": ist(2026, 10, 19, 9, 15), "open": 2, "high": 2, "low": 2, "close": 2, "volume": 5}]
+
+    rep = session.HistoryReport(failed=["NIFTY futures 1-min"], critical_failed=True,
+                                failed_jobs=[("NIFTY futures 1-min", 9001, "minute", True, ist(2026, 9, 18, 9, 15), True)])
+    state, notes, broker = MarketState(date(2026, 10, 19)), Notes(), Broker()
+    retry = session.HistoryRetry(broker, rep, state, store, notes, date(2026, 10, 19))
+    retry.maybe(ist(2026, 10, 19, 9, 31))
+    assert retry.pending and notes.texts == []
+    broker.fail = False
+    retry.maybe(ist(2026, 10, 19, 9, 35))                          # within 10 minutes: not yet
+    assert retry.pending
+    retry.maybe(ist(2026, 10, 19, 9, 41))
+    assert not retry.pending and "Historical data recovered" in notes.texts[-1] and "Signals can start" in notes.texts[-1]
+    rows = store.bars_between(ist(2026, 10, 16, 0, 0), ist(2026, 10, 20, 0, 0), {9001})
+    assert [r["ts"].day for r in rows] == [16]                     # today's minutes are left to the live feed

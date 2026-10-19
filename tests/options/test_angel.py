@@ -126,7 +126,7 @@ def test_candles_and_open_interest():
     assert candles[0] == {"date": datetime(2026, 10, 15, 9, 15, tzinfo=IST), "open": 25200.0,
                           "high": 25210.5, "low": 25190.0, "close": 25205.0, "volume": 0}
     merged = merge_oi(candles, [{"time": "2026-10-15T09:16:00+05:30", "oi": 15000000}])
-    assert [c["oi"] for c in merged] == [0, 15000000]
+    assert [c["oi"] for c in merged] == [None, 15000000]          # unknown, not zero
 
 
 def test_subscription_modes_by_kind():

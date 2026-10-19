@@ -113,13 +113,14 @@ def candles_to_kite(data: list | None) -> list[dict]:
 
 
 def merge_oi(candles: list[dict], oi_rows: list | None) -> list[dict]:
-    """Attach open interest by candle time; rows come as {time, oi} (or [time, oi])."""
+    """Attach open interest by candle time; rows come as {time, oi} (or [time, oi]). A minute with no
+    OI row gets None (unknown), never 0, which the flow agent would read as all positions closed."""
     by_time: dict[datetime, int] = {}
     for row in oi_rows or []:
         ts, oi = (row.get("time"), row.get("oi")) if isinstance(row, dict) else (row[0], row[1])
         if ts is not None and oi is not None:
             by_time[_timestamp(ts)] = int(oi)
-    return [{**c, "oi": by_time.get(c["date"], 0)} for c in candles]
+    return [{**c, "oi": by_time.get(c["date"])} for c in candles]
 
 
 def _levels(side: list[dict] | None) -> list[dict]:
@@ -294,27 +295,53 @@ class AngelBroker:
 
     def historical(self, token: int, start: datetime, end: datetime, interval: str = "minute",
                    oi: bool = False) -> list[dict]:
-        """Kite-shaped candles; long ranges are split into the spans Angel allows per request."""
+        """Kite-shaped candles; long ranges are split into the spans Angel allows per request.
+
+        Open interest is a bonus, not a requirement: if Angel's OI-history call fails, the candles
+        are kept with OI unknown (on 19 Oct 2026 a failing OI call took the whole futures history down
+        with it, and with it every signal for the day). A span Angel refuses is retried in 7-day pieces.
+        """
         exchange, angel_token = to_angel(token)
         api = self.history_api or self.api
         span = timedelta(days=MAX_SPAN_DAYS[INTERVALS[interval]])
         candles: list[dict] = []
+        self.history_notes: list[str] = []
         frm = start
         while frm < end:
             to = min(end, frm + span)
-            params = {"exchange": exchange, "symboltoken": angel_token, "interval": INTERVALS[interval],
-                      "fromdate": frm.astimezone(IST).strftime("%Y-%m-%d %H:%M"),
-                      "todate": to.astimezone(IST).strftime("%Y-%m-%d %H:%M")}
-            part = candles_to_kite(self._checked(api.getCandleData(dict(params)), "historical candles"))
-            if oi and exchange == "NFO":
-                oi_rows = self._checked(api.getOIData(dict(params)), "historical OI")
-                part = merge_oi(part, oi_rows)
-            candles += part
+            candles += self._history_span(api, exchange, angel_token, interval, frm, to, oi)
             frm = to
             if frm < end:
                 self._pause(0.35)                      # Angel allows ~3 historical requests a second
         seen: set[datetime] = set()
         return [c for c in candles if not (c["date"] in seen or seen.add(c["date"]))]
+
+    def _history_span(self, api, exchange: str, angel_token: str, interval: str, frm: datetime, to: datetime,
+                      oi: bool, piece: timedelta = timedelta(days=7)) -> list[dict]:
+        params = {"exchange": exchange, "symboltoken": angel_token, "interval": INTERVALS[interval],
+                  "fromdate": frm.astimezone(IST).strftime("%Y-%m-%d %H:%M"),
+                  "todate": to.astimezone(IST).strftime("%Y-%m-%d %H:%M")}
+        try:
+            part = candles_to_kite(self._checked(api.getCandleData(dict(params)), "historical candles"))
+        except AngelError as e:
+            if to - frm <= piece:
+                raise
+            self.history_notes.append(f"candles in pieces after: {e}")
+            out, a = [], frm
+            while a < to:                              # smaller requests; a piece that still fails raises
+                b = min(to, a + piece)
+                self._pause(0.35)
+                out += self._history_span(api, exchange, angel_token, interval, a, b, oi, piece)
+                a = b
+            return out
+        if oi and exchange == "NFO":
+            self._pause(0.35)
+            try:
+                part = merge_oi(part, self._checked(api.getOIData(dict(params)), "historical OI"))
+            except AngelError as e:
+                self.history_notes.append(f"no OI history: {e}")
+                part = [{**c, "oi": None} for c in part]
+        return part
 
     # Streaming ────────────────────────────────────────────────────────────────
 
