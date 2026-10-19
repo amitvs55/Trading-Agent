@@ -688,3 +688,42 @@ def test_previous_closes_come_from_saved_bars_when_the_broker_refuses(store):
     out = session.load_constituents(Broker(), nse, ["NIFTY"], store=store, calendar=CAL, today=date(2026, 10, 19))
     closes = {c.symbol: c.prev_close for c in out["NIFTY"]}
     assert closes == {"HDFCBANK": 992.5, "ICICIBANK": None}
+
+
+def test_history_requests_are_at_least_a_second_apart_on_every_path():
+    from SmartApi.smartExceptions import DataException
+
+    from options.brokers.angel import HISTORY_GAP_S, AngelBroker
+
+    t, waits = {"now": 100.0}, []
+
+    class Api:
+        refuse = 0
+
+        def getCandleData(self, params):
+            t["now"] += 0.1                                         # the request itself takes 100 ms
+            if Api.refuse:
+                Api.refuse -= 1
+                raise DataException("Couldn't parse the JSON response received from the server: "
+                                    "b'Access denied because of exceeding access rate'")
+            return {"status": True, "data": [[f"{params['fromdate'][:10]}T09:15:00+05:30", 1, 2, 0.5, 1.5, 100]]}
+
+        def getOIData(self, params):
+            t["now"] += 0.1
+            return {"status": True, "data": []}
+
+    def pause(s):
+        waits.append(round(s, 3))
+        t["now"] += s
+
+    b = AngelBroker.__new__(AngelBroker)
+    b.api, b.history_api, b._pause, b._clock = Api(), None, pause, lambda: t["now"]
+    b.historical(2_000_000_000 + 57130, ist(2026, 9, 1, 9, 15), ist(2026, 10, 16, 15, 30), "minute", oi=True)
+    assert waits == [HISTORY_GAP_S] * 3                             # 2 spans × (candles + OI): 3 gaps of 1 s
+
+    Api.refuse = 1                                                  # a refused request still counts
+    with pytest.raises(DataException):
+        b.historical(99926000, ist(2026, 10, 15, 9, 15), ist(2026, 10, 16, 15, 30), "minute")
+    t["now"] += 0.4                                                 # the caller moves on 0.4 s later
+    b.historical(99926000, ist(2026, 10, 15, 9, 15), ist(2026, 10, 16, 15, 30), "minute")
+    assert waits[-2:] == [HISTORY_GAP_S, 0.6]

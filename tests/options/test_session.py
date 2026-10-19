@@ -130,3 +130,18 @@ def test_auto_login_gives_up_at_the_deadline(store):
     code, notifier = run(store, Clock(ist(2026, 10, 16, 14, 50)), broker)
     assert code == session.EXIT_LOGIN and broker.logins == 5        # 14:50, 14:50:30, 14:51:30, 14:53:30, 14:58:30; next would pass 15:00
     assert "Angel One login failed" in notifier.texts()[-1] and "AB1050" in notifier.texts()[-1]
+
+
+def test_previous_closes_are_fetched_after_recording_has_started(store):
+    """With history requests a second apart, ten stocks take ten seconds: never before the recording."""
+    store.save_access_token(TODAY, "good", "AB1234", ist(2026, 10, 16, 8, 35))
+
+    class Broker(FakeBroker):
+        seen_ticker_started = None
+
+        def previous_closes(self, symbols):
+            Broker.seen_ticker_started = self.ticker_obj.callbacks is not None
+            return {s: 100.0 for s in symbols}
+
+    code, _ = run(store, Clock(ist(2026, 10, 16, 15, 30, 50)), Broker())
+    assert code == 0 and Broker.seen_ticker_started is True

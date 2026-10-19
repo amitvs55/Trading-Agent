@@ -207,7 +207,7 @@ def _run(cfg: OptionsSettings, now_fn, sleep, store: Store, notifier: Notifier, 
     logger.info("%s", history.line)
     if history.alert():
         notifier.send(history.alert())
-    constituents = load_constituents(broker, nse, cfg.OPTIONS_INDICES, store=store, calendar=calendar, today=today)
+    constituents = load_constituents(broker, nse, cfg.OPTIONS_INDICES, closes=False)   # closes once recording runs
     macro = MacroFetcher(now_fn=now_fn)
     macro.start()
     news = NewsFetcher(now_fn=now_fn)
@@ -231,8 +231,9 @@ def _run(cfg: OptionsSettings, now_fn, sleep, store: Store, notifier: Notifier, 
     recorder.on_minute = lambda now: (metrics.sample(now), retry.maybe(now), closes.maybe(now))
 
     recorder.start(prices)
+    fill_previous_closes(broker, constituents, store=store, calendar=calendar, today=today)
     try:
-        closes.maybe(now_fn())                  # a restart mid-session gets them at once
+        closes.maybe(now_fn())                  # a restart mid-session gets the rest from quotes at once
     except Exception:
         logger.exception("Previous closes from quotes failed")
     notifier.send("📡 <b>Recording started</b>\n" + "\n".join(format_contracts(r) for r in refs)
@@ -447,7 +448,7 @@ def load_history(broker, refs: list[IndexReference], vix_token: int, state: Mark
             finally:
                 for note in getattr(broker, "history_notes", None) or []:
                     logger.warning("History for %s: %s", label, note)
-        pause(0.4)              # Kite and Angel allow ~3 historical requests per second
+        pause(0.4)              # Kite allows ~3 history requests a second (Angel's adapter spaces its own ≥ 1 s)
         if candles is None:
             report.failed_jobs.append((label, token, interval, oi, frm, critical))
             if saved:
@@ -596,23 +597,40 @@ class HistoryRetry:
 
 
 def load_constituents(broker, nse_rows: list[dict], indices: list[str], store: Store | None = None,
-                      calendar: NseCalendar | None = None, today: date | None = None) -> dict[str, list[Constituent]]:
-    out: dict[str, list[Constituent]] = {}
+                      calendar: NseCalendar | None = None, today: date | None = None,
+                      closes: bool = True) -> dict[str, list[Constituent]]:
+    """The breadth heavyweights; with `closes`, their previous closes too (see fill_previous_closes)."""
     tokens = {r["tradingsymbol"]: int(r["instrument_token"]) for r in nse_rows if r.get("segment") == "NSE"}
-    for index in indices:
-        listed = [(sym, w) for sym, w in HEAVYWEIGHTS.get(index, []) if sym in tokens]
+    out = {index: [Constituent(sym, w, tokens[sym]) for sym, w in HEAVYWEIGHTS.get(index, []) if sym in tokens]
+           for index in indices}
+    if closes:
+        fill_previous_closes(broker, out, store=store, calendar=calendar, today=today)
+    return out
+
+
+def fill_previous_closes(broker, constituents: dict[str, list[Constituent]], store: Store | None = None,
+                         calendar: NseCalendar | None = None, today: date | None = None) -> None:
+    """Daily candles from the broker, else the previous session's saved bars. The session calls this
+    after the recorder has started: with history requests a second apart, ten stocks take ten seconds,
+    which must not delay the recording after a restart. Whatever is still missing at the open is
+    priced from quotes by CloseKeeper."""
+    for cs in constituents.values():
+        want = [c for c in cs if c.prev_close is None]
+        if not want:
+            continue
         try:
-            closes = broker.previous_closes([sym for sym, _ in listed])
+            closes = broker.previous_closes([c.symbol for c in want])
         except Exception as e:
             logger.warning("Previous closes failed: %s", _reason(e))
             closes = {}
         for note in getattr(broker, "history_notes", None) or []:
             logger.warning("Previous closes: %s", note)
-        missing = {tokens[sym]: sym for sym, _ in listed if closes.get(sym) is None}
+        missing = {c.token: c.symbol for c in want if closes.get(c.symbol) is None}
         if missing and store is not None and calendar is not None and today is not None:
             closes = {**closes, **_saved_closes(store, missing, calendar.previous_trading_day(today), today)}
-        out[index] = [Constituent(sym, w, tokens[sym], closes.get(sym)) for sym, w in listed]
-    return out
+        for c in want:
+            if closes.get(c.symbol):
+                c.prev_close = closes[c.symbol]
 
 
 def _saved_closes(store: Store, missing: dict[int, str], prev_day: date, today: date) -> dict[str, float]:

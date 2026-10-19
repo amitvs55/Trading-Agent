@@ -41,6 +41,10 @@ BSE_INDEX_SYMBOLS = {"99919000": "SENSEX"}            # display only: the dashbo
 INTERVALS = {"minute": "ONE_MINUTE", "3minute": "THREE_MINUTE", "5minute": "FIVE_MINUTE",
              "15minute": "FIFTEEN_MINUTE", "30minute": "THIRTY_MINUTE", "60minute": "ONE_HOUR",
              "day": "ONE_DAY"}
+# At least this long between two history requests (candles or OI), on every path. Angel documents
+# 3 a second, but on 19 Oct 2026 it answered "Access denied because of exceeding access rate" to
+# requests 0.35–0.4 s apart and kept refusing for over an hour.
+HISTORY_GAP_S = 1.0
 # The longest span one historical request may cover, per interval (Angel's documented limits)
 MAX_SPAN_DAYS = {"ONE_MINUTE": 30, "THREE_MINUTE": 60, "FIVE_MINUTE": 100, "FIFTEEN_MINUTE": 200,
                  "THIRTY_MINUTE": 200, "ONE_HOUR": 400, "ONE_DAY": 2000}
@@ -347,7 +351,6 @@ class AngelBroker:
             before = [c for c in candles if c["date"].date() < today]
             if before:
                 out[sym] = before[-1]["close"]
-            self._pause(0.35)
         return out
 
     def historical(self, token: int, start: datetime, end: datetime, interval: str = "minute",
@@ -383,8 +386,6 @@ class AngelBroker:
             to = min(end, frm + span)
             candles += self._history_span(api, exchange, angel_token, interval, frm, to, oi)
             frm = to
-            if frm < end:
-                self._pause(0.35)                      # Angel allows ~3 historical requests a second
         seen: set[datetime] = set()
         return [c for c in candles if not (c["date"] in seen or seen.add(c["date"]))]
 
@@ -394,7 +395,7 @@ class AngelBroker:
                   "fromdate": frm.astimezone(IST).strftime("%Y-%m-%d %H:%M"),
                   "todate": to.astimezone(IST).strftime("%Y-%m-%d %H:%M")}
         try:
-            part = candles_to_kite(self._checked(api.getCandleData(dict(params)), "historical candles"))
+            part = candles_to_kite(self._history_request(lambda: api.getCandleData(dict(params)), "historical candles"))
         except AngelError as e:
             if to - frm <= piece:
                 raise
@@ -402,18 +403,30 @@ class AngelBroker:
             out, a = [], frm
             while a < to:                              # smaller requests; a piece that still fails raises
                 b = min(to, a + piece)
-                self._pause(0.35)
                 out += self._history_span(api, exchange, angel_token, interval, a, b, oi, piece)
                 a = b
             return out
         if oi and exchange == "NFO":
-            self._pause(0.35)
             try:
-                part = merge_oi(part, self._checked(api.getOIData(dict(params)), "historical OI"))
+                part = merge_oi(part, self._history_request(lambda: api.getOIData(dict(params)), "historical OI"))
             except AngelError as e:
                 self.history_notes.append(f"no OI history: {e}")
                 part = [{**c, "oi": None} for c in part]
         return part
+
+    def _history_request(self, call: Callable[[], dict | None], what: str):
+        """One history request, at least HISTORY_GAP_S after the previous one ended (whichever login,
+        thread or caller made it): the only place history requests are sent from."""
+        lock = self.__dict__.setdefault("_history_lock", threading.Lock())
+        clock = getattr(self, "_clock", _time.monotonic)
+        with lock:
+            last = getattr(self, "_last_history_at", None)
+            if last is not None and (wait := HISTORY_GAP_S - (clock() - last)) > 0:
+                self._pause(wait)
+            try:
+                return self._checked(call(), what)
+            finally:
+                self._last_history_at = clock()
 
     # Streaming ────────────────────────────────────────────────────────────────
 
