@@ -180,6 +180,13 @@ Requirement: smooth, no lag, no time mismatch.
 
 **Tests:** `tests/options/test_live.py`, plus E2E `ui/e2e/live.spec.ts`, which checks updates in place with zero layout shift and runs axe.
 
+- **Deployed 19 Oct 2026 (fae8a51), after the close, from a frozen worktree.**
+  - Recorder: started; waiting for Wed 21 Oct 08:30.
+  - Evening job: saved the 19 Oct closes (NIFTY 50 22,888.95, SENSEX 73,852.90).
+  - API: /health 200; live routes answer 401 without sign-in.
+  - UI: /signals 200; CSP connect-src still the API only.
+  - CI: the first run failed on a one-off Google Fonts fetch. The re-run showed a time-dependent test bug: it looked for a "Live" status after the close. That's fixed in 842582e (test only).
+
 ## Option Check page (19 Oct 2026)
 Type a contract ("Nifty 27th Oct 25000 ce") and an amount, and get a verdict, what the money can become, and the evidence. Available to admins and viewers (no AI calls).
 
@@ -213,6 +220,10 @@ Type a contract ("Nifty 27th Oct 25000 ce") and an amount, and get a verdict, wh
 Check is in the nav, tier 1, with a phone tab; Agents moves into the phone "More" sheet. The Paper page lists trades followed from checks, separate from the signal account.
 
 **Tests:** `tests/options/test_check.py` (28), and E2E `check.spec.ts` on desktop and phone (verdict, what-if with no layout shift, paper, axe). The seed saves the synthetic market with an expiry ~2 months from the run date. `/check` is in the layout guard.
+
+- **Deployed 19 Oct 2026 (fae8a51):**
+  - /check 200; check routes answer 401 without sign-in.
+  - First backfill: 53,500 NIFTY and 14,605 VIX minutes saved. Each series stopped after 3 Angel DataException refusals; the rest is topped up on later evenings (covered spans are skipped).
 
 ## User setup still pending
 - Done 16 Oct 2026: admin account created; Angel One connected on the Connectors page (health check logs in).
