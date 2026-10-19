@@ -55,8 +55,9 @@ test("live NIFTY 50 and SENSEX update in place without moving anything", async (
   expect(tookMs).toBeLessThan(1500);
   console.log(`[${test.info().project.name}] new level on screen ${tookMs} ms after it was saved`);
 
-  // It came over the pushed stream, not the once-a-second fallback
-  const status = page.locator('[title^="Live"]').filter({ visible: true }).first();
+  // It came over the pushed stream, not the once-a-second fallback (the status is the strip's one titled
+  // element; its words depend on the hour: "Live · …" in market hours, "Closed · 15:30" after)
+  const status = ticker.locator("[title]").first();
   await expect(status).toBeVisible();
   expect(await status.getAttribute("title")).not.toMatch(/unavailable/);
 
