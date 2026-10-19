@@ -48,7 +48,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             <Navbar />
             {/* On phones the fixed bottom bar covers the last 56 px (+ home indicator): leave room for it */}
             <div className="pb-[calc(64px+env(safe-area-inset-bottom))] lg:pb-0">
-            <div className="min-h-[calc(100svh-3.5rem)]"><RouteGuard>{children}</RouteGuard></div>
+            {/* Navbar height: 3.5rem bar, plus the index strip below 2xl (2.5rem on phones, 2rem from sm) */}
+            <div className="min-h-[calc(100svh-6rem)] sm:min-h-[calc(100svh-5.5rem)] 2xl:min-h-[calc(100svh-3.5rem)]"><RouteGuard>{children}</RouteGuard></div>
             <footer className="border-t border-[#1e2d45] mt-10 py-4 px-4 sm:px-6">
               <div className="india-stripe mb-3" />
               <div className="max-w-screen-2xl mx-auto flex flex-wrap items-center justify-between gap-2 text-xs text-[#8391a7]">

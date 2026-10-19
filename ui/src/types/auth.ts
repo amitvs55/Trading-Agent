@@ -147,9 +147,10 @@ export interface RecorderEvent {
 
 export interface MetricsResponse {
   rows: { ts: string; ticks: number; bars: number; rejected_ticks: number; eval_ms: number | null;
-          alert_delay_s: number | null; open_signals: number | null }[];
+          alert_delay_s: number | null; open_signals: number | null; live_lag_ms?: number | null }[];
   summary: { minutes: number; ticks_per_min_last: number | null; rejected_ticks: number;
-             eval_ms: { p95: number; max: number } | null; alert_delay_s: { p95: number; max: number } | null };
+             eval_ms: { p95: number; max: number } | null; alert_delay_s: { p95: number; max: number } | null;
+             live_lag_ms?: { p95: number; max: number } | null };
 }
 
 export interface Holiday {

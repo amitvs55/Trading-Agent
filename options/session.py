@@ -28,6 +28,7 @@ from options.core.constituents import HEAVYWEIGHTS
 from options.daemon import EXIT_CONFIG, EXIT_FAILED, EXIT_LOGIN, EXIT_OK
 from options.engine.engine import SignalEngine
 from options.engine.state import MarketState
+from options.market_data.live import CloseKeeper, LiveIndexFeed
 from options.market_data.metrics import SessionMetrics
 from options.market_data.recorder import Recorder
 from options.notify import OutboxNotifier, make_notifier, make_outbox
@@ -215,19 +216,25 @@ def _run(cfg: OptionsSettings, now_fn, sleep, store: Store, notifier: Notifier, 
     engine_tokens = {c.token for cs in constituents.values() for c in cs}
     open_signals = store.open_signals()
     engine_tokens |= {s.contract.token for s in open_signals}
+    live = make_live_feed(broker, refs, store, today, now_fn, calendar)
     recorder = Recorder(broker.ticker(), refs, store, notifier, vix_token=vix_token,
                         window=cfg.OPTIONS_STRIKE_WINDOW, n_expiries=cfg.OPTIONS_EXPIRIES_TRACKED,
                         stale_after_s=cfg.OPTIONS_STALE_AFTER_S, calendar=calendar, now_fn=now_fn,
-                        extra_tokens=engine_tokens)
+                        extra_tokens=engine_tokens, live=live)
     engine = SignalEngine({r.index: r for r in refs}, state, store, notifier, cfg, calendar, vix_token=vix_token,
                           constituents=constituents, vix_history=history.vix_closes, macro=macro.snapshot,
                           events=load_events(store), news=news.snapshot, quote_fn=recorder.agg.quote, now_fn=now_fn)
     recorder.on_bars, recorder.on_tick = engine.on_bars, engine.on_tick
     metrics = SessionMetrics(store, recorder, engine, notifier)
     retry = HistoryRetry(broker, history, state, store, notifier, today)
-    recorder.on_minute = lambda now: (metrics.sample(now), retry.maybe(now))
+    closes = CloseKeeper(broker, live, constituents, calendar)
+    recorder.on_minute = lambda now: (metrics.sample(now), retry.maybe(now), closes.maybe(now))
 
     recorder.start(prices)
+    try:
+        closes.maybe(now_fn())                  # a restart mid-session gets them at once
+    except Exception:
+        logger.exception("Previous closes from quotes failed")
     notifier.send("📡 <b>Recording started</b>\n" + "\n".join(format_contracts(r) for r in refs)
                   + f"\nTracking {len(recorder.subscribed)} instruments"
                   + (f" · {len(open_signals)} open signal(s) carried over" if open_signals else ""))
@@ -255,7 +262,50 @@ def _run(cfg: OptionsSettings, now_fn, sleep, store: Store, notifier: Notifier, 
         logger.exception("End-of-day report failed")
     notifier.send(format_summary(today, summary))
     purge_old_data(store, cfg, now_fn())
+    if live is not None:
+        close_out_live(broker, live, today, now_fn, sleep)
     return EXIT_OK
+
+
+LIVE_CLOSE_AT = time(15, 36)     # NSE and BSE have published the closing index values by then
+
+
+def make_live_feed(broker, refs: list[IndexReference], store: Store, today: date, now_fn,
+                   calendar: NseCalendar) -> LiveIndexFeed | None:
+    """NIFTY 50 and SENSEX for the dashboard's ticker, plus the NIFTY future so the Signals card can
+    show spot, future and basis from the same moment. Never stops the session if it can't be set up."""
+    try:
+        tokens = dict(broker.live_index_tokens()) if hasattr(broker, "live_index_tokens") else {}
+    except Exception as e:
+        logger.warning("Live index tokens failed: %s", _reason(e))
+        tokens = {}
+    nifty = next((r for r in refs if r.index == "NIFTY"), None)
+    if nifty is not None:
+        tokens.setdefault("NIFTY 50", nifty.spot_token)
+        tokens["NIFTY FUT"] = nifty.future_token
+    if not tokens:
+        return None
+    try:
+        live = LiveIndexFeed(store, tokens, today, now_fn=now_fn)
+        live.resume()
+        live.load_saved_closes(calendar)
+        return live
+    except Exception:
+        logger.exception("Live index feed didn't start")
+        return None
+
+
+def close_out_live(broker, live: LiveIndexFeed, today: date, now_fn, sleep) -> None:
+    """The official closing levels, so the evening ticker shows exactly what the exchanges published."""
+    if not hasattr(broker, "quotes"):
+        return
+    wait = (at_ist(today, LIVE_CLOSE_AT) - now_fn()).total_seconds()
+    if 0 < wait <= 15 * 60:
+        sleep(wait)
+    try:
+        live.close_out(broker.quotes(live.tokens), now_fn())
+    except Exception as e:
+        logger.warning("Closing index levels failed: %s", _reason(e))
 
 
 def purge_old_data(store: Store, cfg: OptionsSettings, now: datetime) -> None:

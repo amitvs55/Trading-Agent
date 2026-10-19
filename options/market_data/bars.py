@@ -80,10 +80,11 @@ class BarAggregator:
         self.tick_count = 0
         self.late_ticks = 0
 
-    def add(self, tick: dict, received_at: datetime) -> None:
+    def add(self, tick: dict, received_at: datetime) -> bool:
+        """Fold a tick into its minute bar; False if it was dropped (empty, or a likely bad print)."""
         token, price = tick.get("instrument_token"), tick.get("last_price")
         if token is None or not price or price <= 0:
-            return
+            return False
         minute = minute_start(tick_time(tick, received_at))
         bid, ask = _top(tick.get("depth"), "buy"), _top(tick.get("depth"), "sell")
 
@@ -92,14 +93,14 @@ class BarAggregator:
             self.last_tick_at = received_at
             if not self._plausible(token, price):
                 self.rejected_ticks += 1
-                return
+                return False
             self.last_price[token] = price
             if bid.get("price") or ask.get("price"):
                 self.last_quote[token] = (float(bid["price"]) if bid.get("price") else None,
                                           float(ask["price"]) if ask.get("price") else None)
             if self._flushed_until is not None and minute < self._flushed_until:
                 self.late_ticks += 1
-                return
+                return True
 
             bar = self._bars.get((token, minute))
             if bar is None:
@@ -117,6 +118,7 @@ class BarAggregator:
                 bar.bid, bar.bid_qty = float(bid["price"]), int(bid.get("quantity") or 0)
             if ask.get("price"):
                 bar.ask, bar.ask_qty = float(ask["price"]), int(ask.get("quantity") or 0)
+        return True
 
     def _plausible(self, token: int, price: float) -> bool:
         """Called under the lock. False for a tick that looks like a bad print."""

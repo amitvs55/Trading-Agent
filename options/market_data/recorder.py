@@ -35,7 +35,7 @@ class Recorder:
                  now_fn: Callable[[], datetime] = now_ist, extra_tokens: set[int] | None = None,
                  on_bars: Callable[[list[dict]], None] | None = None,
                  on_tick: Callable[[datetime], None] | None = None,
-                 on_minute: Callable[[datetime], None] | None = None):
+                 on_minute: Callable[[datetime], None] | None = None, live=None):
         self.ticker = ticker
         self.refs = refs
         self.store = store
@@ -50,6 +50,7 @@ class Recorder:
         self.on_bars = on_bars                          # the signal engine's feed of closed bars
         self.on_tick = on_tick                          # called every loop iteration
         self.on_minute = on_minute                      # called once a minute (metrics)
+        self.live = live                                # LiveIndexFeed: index levels for the dashboard
         self._hook_errors = 0
 
         self.agg = BarAggregator()
@@ -70,8 +71,10 @@ class Recorder:
 
     def _on_ticks(self, ticks: list[dict]) -> None:
         now = self.now_fn()
+        live = self.live
         for tick in ticks:
-            self.agg.add(tick, now)
+            if self.agg.add(tick, now) and live is not None:
+                live.on_tick(tick, now)                 # only ticks that passed the bad-print guard
 
     def _on_event(self, kind: str, detail: str) -> None:
         with self._events_lock:
@@ -98,6 +101,10 @@ class Recorder:
         if self.vix_token:
             self.agg.jump_limits[self.vix_token] = VIX_JUMP
         self.subscribed |= self.extra_tokens
+        if self.live is not None:
+            self.subscribed |= set(self.live.by_token)
+            self.agg.jump_limits.update({t: INDEX_JUMP for t in self.live.by_token})
+            self.live.start()
         self.subscribed |= self.window_tokens(prices)
         logger.info("Subscribing %d instruments", len(self.subscribed))
         self.ticker.start(on_ticks=self._on_ticks, on_connect=self._on_connect, on_event=self._on_event)
@@ -186,6 +193,8 @@ class Recorder:
         finally:
             self.flush(self.now_fn(), final=True)
             self.ticker.stop()
+            if self.live is not None:
+                self.live.stop()
 
     def summary(self) -> dict:
         return {

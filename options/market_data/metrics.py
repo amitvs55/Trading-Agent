@@ -2,7 +2,8 @@
 
 The recorder calls `sample()` once a minute. It stores how many ticks arrived and bars were
 saved, how many bad ticks were dropped, the slowest signal evaluation and the slowest alert
-delivery in that minute, and the open signals. The Operations page shows the latest values;
+delivery in that minute, the open signals, and how far the dashboard's live index levels
+trail the exchange (95th percentile, exchange tick → pushed). The Operations page shows the latest values;
 a stalled feed shows up as zero ticks, an overloaded machine as slow evaluations.
 """
 
@@ -26,7 +27,8 @@ class SessionMetrics:
             self.notifier.delay_peak = 0.0
         row = {"ts": now.replace(second=0, microsecond=0), "ticks": ticks - self._last[0], "bars": bars - self._last[1],
                "rejected_ticks": rejected - self._last[2], "eval_ms": round(eval_ms, 1) if eval_ms else None,
-               "alert_delay_s": round(delay, 2) if delay else None, "open_signals": len(self.engine.open)}
+               "alert_delay_s": round(delay, 2) if delay else None, "open_signals": len(self.engine.open),
+               "live_lag_ms": live.take_lag_ms() if (live := getattr(self.recorder, "live", None)) else None}
         self._last = (ticks, bars, rejected)
         try:
             self.store.metrics_add(row)

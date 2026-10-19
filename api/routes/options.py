@@ -9,10 +9,11 @@ import time as clock
 from datetime import datetime, time, timedelta
 from html import escape
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 
 from api.deps import current_user, get_calendar, get_cfg, get_store
+from api.live import LiveHub, stream as live_stream, with_market
 from options.config import OptionsSettings
 from options.core.calendar import NseCalendar, at_ist, now_ist
 from options.core.schemas import OPEN_STATES, Signal
@@ -162,6 +163,38 @@ def _signal_json(sig: Signal, bands: dict[str, dict] | None = None) -> dict:
     out = sig.model_dump(mode="json")
     out["confidence"] = confidence.with_band(confidence.breakdown(sig), bands or {})
     return out
+
+
+# ── Live NIFTY 50 / SENSEX (pushed; see api/live.py) ────────────────────────
+
+_live_hub: LiveHub | None = None
+
+
+def live_hub() -> LiveHub:
+    global _live_hub
+    if _live_hub is None:
+        _live_hub = LiveHub(get_store)
+    return _live_hub
+
+
+def stop_live_hub() -> None:
+    if _live_hub is not None:
+        _live_hub.stop()
+
+
+@router.get("/api/options/live/indices", dependencies=[Depends(current_user)])
+def live_indices(store: Store = Depends(get_store), cal: NseCalendar = Depends(get_calendar)) -> dict:
+    """The latest levels at once (first paint, and the fallback while a stream reconnects)."""
+    return with_market(store.live_snapshot(), cal)
+
+
+@router.get("/api/options/live/indices/stream", dependencies=[Depends(current_user)])
+async def live_indices_stream(request: Request, cal: NseCalendar = Depends(get_calendar)) -> StreamingResponse:
+    """Server-sent events: `levels` with every update (≤ 4 a second), `ping` every 15 s when quiet."""
+    return StreamingResponse(live_stream(live_hub(), lambda: cal, request.is_disconnected),
+                             media_type="text/event-stream",
+                             # no-transform: proxies (and Next's gzip) must not compress, which holds small events back
+                             headers={"Cache-Control": "no-cache, no-store, no-transform", "X-Accel-Buffering": "no"})
 
 
 @router.get("/api/options/board", dependencies=[Depends(current_user)])

@@ -3,7 +3,8 @@
     python ui/e2e/seed.py <sqlite path> <admin password> <viewer password>
 
 Creates an admin ("e2e-admin") and a viewer ("e2e-viewer") with the given passwords (generated
-fresh by the test run, never stored), and one synthetic signal so the signal pages have content.
+fresh by the test run, never stored), one synthetic signal so the signal pages have content, and
+live NIFTY 50 / SENSEX levels for the ticker.
 Never point this at a real database: it refuses anything but a local SQLite file.
 """
 
@@ -45,6 +46,8 @@ def main(db_path: str, admin_pw: str, viewer_pw: str) -> None:
     SignalEngine({"NIFTY": ctx.ref}, ctx.state, store, LogNotifier(), OptionsSettings(_env_file=None), ctx.calendar,
                  vix_token=ctx.vix_token, constituents={"NIFTY": ctx.constituents}, vix_history=ctx.vix_history,
                  events=[], now_fn=lambda: ctx.now, setups=[AlwaysBull()]).evaluate(ctx.now)
+    from live_tick import publish                     # the live ticker's first levels
+    publish(str(path), 23096.95, 75512.10)
     print(f"seeded {path}")
 
 

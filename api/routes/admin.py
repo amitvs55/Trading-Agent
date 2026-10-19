@@ -466,7 +466,7 @@ def admin_audit(limit: int = Query(100, ge=1, le=1000), _: dict = Depends(requir
 @router.get("/api/admin/metrics")
 def admin_metrics(hours: int = Query(8, ge=1, le=72), _: dict = Depends(require_admin),
                   store: Store = Depends(get_store)) -> dict:
-    """Per-minute session metrics (ticks, bars, bad ticks, evaluation time, alert delay)."""
+    """Per-minute session metrics (ticks, bars, bad ticks, evaluation time, alert delay, live-price delay)."""
     rows = [_iso(r, "ts") for r in store.metrics_since(now_ist() - timedelta(hours=hours))]
 
     def peak(key):
@@ -475,7 +475,7 @@ def admin_metrics(hours: int = Query(8, ge=1, le=72), _: dict = Depends(require_
     return {"rows": rows, "summary": {
         "minutes": len(rows), "ticks_per_min_last": rows[-1]["ticks"] if rows else None,
         "rejected_ticks": sum(r["rejected_ticks"] for r in rows),
-        "eval_ms": peak("eval_ms"), "alert_delay_s": peak("alert_delay_s")}}
+        "eval_ms": peak("eval_ms"), "alert_delay_s": peak("alert_delay_s"), "live_lag_ms": peak("live_lag_ms")}}
 
 
 @router.get("/api/admin/recorder/events")

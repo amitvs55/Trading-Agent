@@ -10,11 +10,14 @@ from pathlib import Path
 import json
 
 from sqlalchemy import (BigInteger, Column, Date, DateTime, Float, Index, Integer, MetaData, String,
-                        Table, Text, create_engine, delete, func, select, update)
+                        Table, Text, create_engine, delete, func, select, text, update)
 from sqlalchemy.engine import Engine
 
 from options.core.schemas import OPEN_STATES, Signal
 from options.reference import as_date
+
+LIVE_KEY = "live_indices"           # app_meta row with the latest index levels
+LIVE_CHANNEL = "live_indices"       # Postgres NOTIFY channel the API listens on
 
 metadata = MetaData()
 
@@ -239,6 +242,7 @@ session_metrics = Table(
     Column("eval_ms", Float),                            # slowest signal evaluation in the minute
     Column("alert_delay_s", Float),                      # slowest alert delivery in the minute
     Column("open_signals", Integer),
+    Column("live_lag_ms", Float),                        # exchange tick → pushed to the dashboard, p95
 )
 
 # Failed sign-in and setup attempts, so the brute-force limit survives an API restart or redeploy
@@ -292,7 +296,8 @@ def _add_missing_indexes(engine: Engine) -> None:
 
 # Columns added after a table already existed in production: create_all() only creates
 # missing tables, so these are added in place (nullable or with a default, so it is safe).
-_LATER_COLUMNS = {"users": [("full_name", "VARCHAR(80)"), ("disabled", "INTEGER NOT NULL DEFAULT 0")]}
+_LATER_COLUMNS = {"users": [("full_name", "VARCHAR(80)"), ("disabled", "INTEGER NOT NULL DEFAULT 0")],
+                  "session_metrics": [("live_lag_ms", "FLOAT")]}
 
 
 def _add_missing_columns(engine: Engine) -> None:
@@ -471,6 +476,24 @@ class Store:
             done = conn.execute(update(app_meta).where(app_meta.c.key == key).values(value=raw, updated_at=now)).rowcount
             if not done:
                 conn.execute(app_meta.insert().values(key=key, value=raw, updated_at=now))
+
+    # ── Live index levels (recorder → API → dashboard) ───────────────────────
+
+    def publish_live(self, payload: dict, now: datetime, persist: bool = True) -> None:
+        """The latest index levels: saved as LIVE_KEY (for a page that has just opened, and for an
+        API restart) and, on Postgres, pushed on LIVE_CHANNEL at once, so the API never polls."""
+        raw = json.dumps(payload, separators=(",", ":"), default=str)
+        with self.engine.begin() as conn:
+            if persist:
+                done = conn.execute(update(app_meta).where(app_meta.c.key == LIVE_KEY)
+                                    .values(value=raw, updated_at=now)).rowcount
+                if not done:
+                    conn.execute(app_meta.insert().values(key=LIVE_KEY, value=raw, updated_at=now))
+            if self.engine.dialect.name == "postgresql":
+                conn.execute(text("SELECT pg_notify(:channel, :payload)"), {"channel": LIVE_CHANNEL, "payload": raw})
+
+    def live_snapshot(self) -> dict | None:
+        return self.get_meta_json(LIVE_KEY)
 
     # ── Alerts outbox ────────────────────────────────────────────────────────
 

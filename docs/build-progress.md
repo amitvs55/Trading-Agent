@@ -151,6 +151,31 @@ The user asked: "use that report and build what is missing, production grade". T
   - Deployed 10:02 IST: "History: 4/5 loaded", missing only India VIX daily; the 10:05 check ran clean.
   - Still open: previous closes and VIX daily keep hitting the rate limit. Move previous closes to the quote API (`getMarketData` returns the previous `close`), which is also needed for the live-ticker % change. Pace history requests ≥ 1 s apart.
 
+## Live NIFTY 50 + SENSEX ticker (19 Oct 2026)
+Requirement: smooth, no lag, no time mismatch.
+
+**Path from tick to screen, with no polling:**
+- **Recorder:** `options/market_data/live.py` `LiveIndexFeed` takes every accepted index tick on the WebSocket thread. SENSEX comes over the BSE channel (`BSE_OFFSET` = 3e9, exchange type 3, token from the scrip master with fallback 99919000). The NIFTY future is included so the Signals card's spot, future and basis come from the same moment. A publisher thread sends on the leading edge, at most 4 a second, coalescing bursts. `Store.publish_live` saves `app_meta.live_indices` (once a second) and runs `pg_notify('live_indices')` on Postgres.
+- **API:** `api/live.py` `LiveHub` uses one LISTEN thread per process. Each stream has a one-slot mailbox, so the newest update wins and nothing backs up. On SQLite, or while the listener reconnects, it reads the saved copy every 250 ms.
+  - `GET /api/options/live/indices` returns the snapshot.
+  - `GET /api/options/live/indices/stream` is SSE: `levels`, `ping` every 15 s, and `bye` after 10 min, so no proxy cuts it mid-update.
+- **UI:**
+  - `ui/src/lib/liveIndices.ts` keeps one shared fetch stream (authenticated) and repaints on animation frames.
+  - A level never goes backwards (exchange timestamps).
+  - Reconnect backoff is 0.5–5 s; after 3 failures it polls every second. A hidden tab closes the stream.
+  - The last levels are cached in localStorage for an instant first paint, shown dimmed until live.
+  - `components/layout/LiveTicker.tsx`: inline in the navbar at 2xl, a fixed-height strip below it otherwise. Digits are tabular with fixed widths, and changes flash with CSS only.
+
+**Time:** the "as of" time is the exchange's. Live, delayed (> 5 s) and stale (> 60 s) are judged with the server-synced clock (`lib/clock.ts`). Open and closed flip at 09:15:00 and 15:30:00 from `market_window` times.
+
+**Previous close (fixed per session):** `CloseKeeper` takes it from the quote API in market hours, checked against ltp − net change. Otherwise it comes from the previous session's last saved bar. The same keeper fills the breadth heavyweights' missing previous closes. At 15:36 the session publishes the official closing levels.
+
+**Other fixes:**
+- "Market data 78s ago" counted from the bar's start. It now counts from the last tick, or the bar's end, and reads "live".
+- `session_metrics.live_lag_ms` holds the p95 delay from exchange tick to push, and the Operations panel shows it.
+
+**Tests:** `tests/options/test_live.py`, plus E2E `ui/e2e/live.spec.ts`, which checks updates in place with zero layout shift and runs axe.
+
 ## User setup still pending
 - Done 16 Oct 2026: admin account created; Angel One connected on the Connectors page (health check logs in).
 - **Telegram:** bot token saved; the Chat ID must be the user's numeric Telegram ID (from @userinfobot), not the bot's username. Then press **Send test message**.

@@ -5,6 +5,7 @@ import type { Board, BoardPillar } from "@/types/options";
 import { cn } from "@/lib/utils";
 import { fmtDate, fmtNum, PILLAR_LABELS } from "@/lib/optionsFormat";
 import { LiveAge } from "@/components/common/LiveAge";
+import { useLiveIndices } from "@/lib/liveIndices";
 import { BiasMark } from "./StatusBits";
 
 const SPOT_NAMES: Record<string, string> = { NIFTY: "NIFTY 50", BANKNIFTY: "NIFTY BANK", FINNIFTY: "NIFTY FIN SERVICE" };
@@ -72,6 +73,25 @@ function LevelsLadder({ board }: { board: Board }) {
   );
 }
 
+/** Spot, future and basis from the live feed when it is newer than the 5-minute board, so the three
+ *  always come from the same moment (a live spot beside a 5-minute-old future would fake the basis). */
+function LivePrice({ board }: { board: Board }) {
+  const live = useLiveIndices();
+  const spot = live.levels[SPOT_NAMES[board.index] ?? board.index];
+  const fut = live.levels[`${board.index} FUT`];
+  const boardMs = new Date(board.as_of).getTime();
+  const fresh = (l: typeof spot) => l?.ltp != null && l.ts != null && l.ts > boardMs;
+  const useLive = fresh(spot) && fresh(fut) && Math.abs((spot!.ts ?? 0) - (fut!.ts ?? 0)) < 10_000;
+  const s = useLive ? spot!.ltp : board.spot, f = useLive ? fut!.ltp : board.fut;
+  const basis = useLive && s != null && f != null ? f - s : board.basis;
+  return (
+    <div className="flex items-baseline gap-3 mt-1">
+      <span className="text-3xl font-bold text-[#e2e8f0] leading-none tabular-nums">{fmtNum(s, 2)}</span>
+      <span className="text-xs text-[#8391a7]">fut <span className="font-mono tabular-nums text-[#94a3b8]">{fmtNum(f, 1)}</span> · basis <span className="font-mono tabular-nums text-[#94a3b8]">{basis >= 0 ? "+" : ""}{fmtNum(basis, 1)}</span></span>
+    </div>
+  );
+}
+
 // Memoised: SWR keeps the same object when a poll returns identical data, so an unchanged board skips rendering.
 export const IndexBoard = memo(function IndexBoard({ board }: { board: Board }) {
   const TrendIcon = board.htf_trend === "up" ? TrendingUp : board.htf_trend === "down" ? TrendingDown : Minus;
@@ -81,10 +101,7 @@ export const IndexBoard = memo(function IndexBoard({ board }: { board: Board }) 
       <div className="px-5 py-4 border-b border-[#1e2d45] flex flex-wrap items-end justify-between gap-4">
         <div>
           <div className="text-[10px] tracking-widest text-[#8391a7]">{SPOT_NAMES[board.index] ?? board.index}</div>
-          <div className="flex items-baseline gap-3 mt-1">
-            <span className="text-3xl font-bold text-[#e2e8f0] leading-none">{fmtNum(board.spot, 2)}</span>
-            <span className="text-xs text-[#8391a7]">fut <span className="font-mono text-[#94a3b8]">{fmtNum(board.fut, 1)}</span> · basis <span className="font-mono text-[#94a3b8]">{board.basis >= 0 ? "+" : ""}{fmtNum(board.basis, 1)}</span></span>
-          </div>
+          <LivePrice board={board} />
         </div>
         <div className="flex flex-wrap gap-1.5">
           <span className="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-md bg-card border border-[#1e2d45] text-[#e2e8f0]">

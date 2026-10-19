@@ -465,7 +465,7 @@ def test_session_metrics_record_each_minute_and_slow_checks_are_reported(store):
     eng.eval_ms_peak, note.delay_peak = 412.0, 1.8
     row = m.sample(ist(2026, 10, 19, 10, 1, 7))
     assert row == {"ts": ist(2026, 10, 19, 10, 1), "ticks": 120, "bars": 40, "rejected_ticks": 1, "eval_ms": 412.0,
-                   "alert_delay_s": 1.8, "open_signals": 2}
+                   "alert_delay_s": 1.8, "open_signals": 2, "live_lag_ms": None}
     assert eng.eval_ms_peak == 0 and note.delay_peak == 0          # peaks reset for the next minute
     rec.agg.tick_count = 150
     assert m.sample(ist(2026, 10, 19, 10, 2, 7))["ticks"] == 30

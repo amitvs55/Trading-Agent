@@ -19,11 +19,14 @@ from typing import Callable
 
 from options.core.calendar import IST
 
+logger = logging.getLogger("options.angel")
+
 SCRIP_MASTER_URL = "https://margincalculator.angelone.in/OpenAPI_File/files/OpenAPIScripMaster.json"
 
 # Angel numbers instruments per exchange; Kite's tokens are unique across exchanges, and the
-# bar store keys on the token alone. F&O tokens are shifted out of the cash market's range.
+# bar store keys on the token alone. F&O and BSE tokens are shifted out of the NSE cash range.
 NFO_OFFSET = 1_000_000_000
+BSE_OFFSET = 3_000_000_000
 
 # Angel's index tokens → the tradingsymbols the rest of the tool uses (Kite's names)
 INDEX_SYMBOLS = {
@@ -33,6 +36,7 @@ INDEX_SYMBOLS = {
     "99926017": "INDIA VIX",
 }
 INDEX_TOKENS = {symbol: int(token) for token, symbol in INDEX_SYMBOLS.items()}
+BSE_INDEX_SYMBOLS = {"99919000": "SENSEX"}            # display only: the dashboard's live ticker
 
 INTERVALS = {"minute": "ONE_MINUTE", "3minute": "THREE_MINUTE", "5minute": "FIVE_MINUTE",
              "15minute": "FIFTEEN_MINUTE", "30minute": "THIRTY_MINUTE", "60minute": "ONE_HOUR",
@@ -42,7 +46,7 @@ MAX_SPAN_DAYS = {"ONE_MINUTE": 30, "THREE_MINUTE": 60, "FIVE_MINUTE": 100, "FIFT
                  "THIRTY_MINUTE": 200, "ONE_HOUR": 400, "ONE_DAY": 2000}
 
 # WebSocket exchange types and modes (SmartWebSocketV2)
-NSE_CM, NSE_FO = 1, 2
+NSE_CM, NSE_FO, BSE_CM = 1, 2, 3
 LTP_MODE, QUOTE_MODE, SNAP_QUOTE_MODE = 1, 2, 3
 
 
@@ -64,11 +68,13 @@ def brief_error(e: Exception) -> str:
 # ── Pure translation (no SDK, no network) ─────────────────────────────────────
 
 def to_internal(exchange: str, token: str | int) -> int:
-    return int(token) + (NFO_OFFSET if exchange == "NFO" else 0)
+    return int(token) + {"NFO": NFO_OFFSET, "BSE": BSE_OFFSET}.get(exchange, 0)
 
 
 def to_angel(internal: int) -> tuple[str, str]:
     """Internal token → (exchange, Angel token string)."""
+    if internal >= BSE_OFFSET:
+        return "BSE", str(internal - BSE_OFFSET)
     if internal >= NFO_OFFSET:
         return "NFO", str(internal - NFO_OFFSET)
     return "NSE", str(internal)
@@ -144,7 +150,7 @@ def tick_to_kite(msg: dict) -> dict | None:
     """One parsed SmartWebSocketV2 message → a Kite FULL-mode tick dict (prices in rupees)."""
     if msg.get("token") in (None, "") or not msg.get("last_traded_price"):
         return None
-    exchange = "NFO" if msg.get("exchange_type") == NSE_FO else "NSE"
+    exchange = {NSE_FO: "NFO", BSE_CM: "BSE"}.get(msg.get("exchange_type"), "NSE")
     tick: dict = {"instrument_token": to_internal(exchange, msg["token"]),
                   "last_price": msg["last_traded_price"] / 100}
     if msg.get("exchange_timestamp"):
@@ -174,6 +180,8 @@ def subscription_groups(tokens: list[int]) -> dict[int, list[dict]]:
         exchange, token = to_angel(internal)
         if exchange == "NFO":
             mode, ex_type = SNAP_QUOTE_MODE, NSE_FO
+        elif exchange == "BSE":
+            mode, ex_type = (LTP_MODE if token in BSE_INDEX_SYMBOLS else QUOTE_MODE), BSE_CM
         elif token in INDEX_SYMBOLS:
             mode, ex_type = LTP_MODE, NSE_CM
         else:
@@ -287,6 +295,44 @@ class AngelBroker:
         if missing:
             raise AngelError(f"no price for {', '.join(missing)}")
         return {tokens[t]: price for t, price in fetched.items() if t in tokens}
+
+    def live_index_tokens(self) -> dict[str, int]:
+        """The dashboard ticker's indices → internal tokens. SENSEX is looked up in the scrip master
+        (BSE, AMXIDX) and falls back to Angel's long-standing token if the lookup finds nothing."""
+        sensex = next(iter(BSE_INDEX_SYMBOLS))
+        try:
+            for r in self._scrip_master():
+                if (r.get("exch_seg") == "BSE" and r.get("instrumenttype") == "AMXIDX"
+                        and "SENSEX" in {(r.get("symbol") or "").upper(), (r.get("name") or "").upper()}):
+                    sensex = str(r["token"])
+                    break
+        except Exception as e:
+            logger.warning("SENSEX lookup in the scrip master failed (%s); using token %s", brief_error(e), sensex)
+        BSE_INDEX_SYMBOLS.setdefault(sensex, "SENSEX")
+        return {"NIFTY 50": INDEX_TOKENS["NIFTY 50"], "SENSEX": to_internal("BSE", sensex)}
+
+    def quotes(self, tokens: dict[str, int]) -> dict[str, dict]:
+        """name → internal token, to name → {ltp, close, net_change} from one FULL market-data call per
+        50 instruments. In market hours `close` is the previous session's close (ltp − net change)."""
+        wanted: dict[tuple[str, str], str] = {}
+        for name, internal in tokens.items():
+            wanted[to_angel(internal)] = name
+        out: dict[str, dict] = {}
+        keys = list(wanted)
+        for i in range(0, len(keys), 50):
+            req: dict[str, list[str]] = {}
+            for ex, tok in keys[i:i + 50]:
+                req.setdefault(ex, []).append(tok)
+            data = self._checked(self.api.getMarketData("FULL", req), "quotes")
+            for row in (data or {}).get("fetched", []):
+                name = wanted.get((row.get("exchange"), str(row.get("symbolToken"))))
+                if name is None:
+                    continue
+                def num(key):
+                    v = row.get(key)
+                    return float(v) if v not in (None, "") else None
+                out[name] = {"ltp": num("ltp"), "close": num("close"), "net_change": num("netChange")}
+        return out
 
     def previous_closes(self, symbols: list[str]) -> dict[str, float]:
         """Previous session close of NSE equities, from daily candles (unambiguous semantics)."""

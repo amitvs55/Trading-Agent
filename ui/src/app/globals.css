@@ -94,6 +94,18 @@ html.auth-out [data-app-shell] { visibility: hidden; }
   .skeleton::after { display: none; }
 }
 
+/* Live ticker: a brief tint on each new level (two names per direction, so every change replays) */
+.tick-up-0   { animation: tick-up-0 700ms ease-out; }
+.tick-up-1   { animation: tick-up-1 700ms ease-out; }
+.tick-down-0 { animation: tick-down-0 700ms ease-out; }
+.tick-down-1 { animation: tick-down-1 700ms ease-out; }
+@keyframes tick-up-0   { from { background-color: rgba(34, 197, 94, 0.28); } to { background-color: transparent; } }
+@keyframes tick-up-1   { from { background-color: rgba(34, 197, 94, 0.28); } to { background-color: transparent; } }
+@keyframes tick-down-0 { from { background-color: rgba(239, 68, 68, 0.28); } to { background-color: transparent; } }
+@keyframes tick-down-1 { from { background-color: rgba(239, 68, 68, 0.28); } to { background-color: transparent; } }
+.live-pulse { animation: live-pulse 2s ease-in-out infinite; }
+@keyframes live-pulse { 50% { opacity: 0.35; } }
+
 /* Menus open with a quick settle from their anchor */
 .menu-pop { transform-origin: top right; animation: menu-pop 140ms cubic-bezier(0.2, 0, 0, 1) both; }
 @keyframes menu-pop { from { opacity: 0; transform: translateY(-4px) scale(0.98); } to { opacity: 1; transform: none; } }

@@ -13,7 +13,7 @@ from api.routes.admin import router as admin_router
 from api.routes.agents import install_research_sink, router as agents_router
 from api.routes.analyze import router as analyze_router
 from api.routes.history import import_legacy_log, router as history_router
-from api.routes.options import router as options_router
+from api.routes.options import router as options_router, stop_live_hub
 from api.routes.paper import ensure_account, router as paper_router
 from api.routes.pricehistory import router as pricehistory_router
 from api.routes.usage import router as usage_router
@@ -57,6 +57,7 @@ async def lifespan(_: FastAPI):
     yield
     if dog:
         dog.stop()
+    stop_live_hub()
 
 
 app = FastAPI(

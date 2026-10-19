@@ -28,6 +28,11 @@ function subscribe(listener: () => void) {
   };
 }
 
+/** Server-corrected epoch ms right now (outside React, e.g. to time a message's arrival). */
+export function serverNow(): number {
+  return Date.now() + offsetMs;
+}
+
 /** Server-corrected epoch ms, rounded down to `stepMs`. 0 during server rendering. */
 export function useNow(stepMs = 1000): number {
   return useSyncExternalStore(subscribe, () => Math.floor(now / stepMs) * stepMs, () => 0);

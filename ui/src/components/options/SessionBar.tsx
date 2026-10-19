@@ -4,10 +4,11 @@ import Link from "next/link";
 import { Activity, Clock, LogIn, PauseCircle, Send, Shield, Wifi, WifiOff } from "lucide-react";
 import type { OptionsStatus } from "@/types/options";
 import { API_URL, cn } from "@/lib/utils";
-import { ageSeconds, fmtDate, fmtNum, PHASE_LABELS } from "@/lib/optionsFormat";
+import { fmtAge, fmtDate, fmtNum, PHASE_LABELS } from "@/lib/optionsFormat";
 import { SessionBarSkeleton } from "./Skeletons";
-import { LiveAge } from "@/components/common/LiveAge";
 import { useAuth } from "@/components/auth/AuthGate";
+import { useNow } from "@/lib/clock";
+import { DELAYED_AFTER_MS, useLiveIndices } from "@/lib/liveIndices";
 
 function Chip({ children, tone = "neutral" }: { children: ReactNode; tone?: "good" | "warn" | "bad" | "neutral" }) {
   return (
@@ -26,12 +27,29 @@ function SetupLink({ admin, href, children }: { admin: boolean; href: string; ch
   return admin ? <Link href={href} className="group">{children}</Link> : <>{children}</>;
 }
 
+/** Newest market data we know of: the live NIFTY tick, or the end of the last saved 1-minute bar
+ *  (a bar is stamped with its start, so counting from that read "78s ago" when it was 18 s old). */
+function useNewestData(lastBarAt: string | null | undefined): number | null {
+  const tick = useLiveIndices().levels["NIFTY 50"]?.ts ?? 0;
+  const barEnd = lastBarAt ? new Date(lastBarAt).getTime() + 60_000 : 0;
+  return Math.max(tick, barEnd) || null;
+}
+
+function DataAge({ at }: { at: number | null }) {
+  const now = useNow(1000);
+  if (!at) return <>never</>;
+  if (!now) return <>…</>;
+  const ms = Math.max(0, now - at);
+  return <>{ms <= DELAYED_AFTER_MS ? "live" : fmtAge(Math.round(ms / 1000))}</>;
+}
+
 export function SessionBar({ status }: { status: OptionsStatus | undefined }) {
   const admin = useAuth()?.user?.role === "admin";
+  const newest = useNewestData(status?.last_bar_at);
+  const coarse = useNow(15_000);
   if (!status) return <SessionBarSkeleton />;
   const open = ["opening", "main", "late", "closing"].includes(status.session_phase);
-  const dataAge = ageSeconds(status.last_bar_at);
-  const fresh = dataAge != null && dataAge < 180;
+  const fresh = newest != null && coarse > 0 && coarse - newest < 180_000;
 
   return (
     <div className="fade-in flex gap-2 flex-wrap">
@@ -79,7 +97,7 @@ export function SessionBar({ status }: { status: OptionsStatus | undefined }) {
       <Chip tone={fresh ? "good" : open ? "warn" : "neutral"}>
         <Activity size={13} className={fresh ? "text-green" : "text-[#8391a7]"} />
         <span className="text-[#94a3b8]">Market data</span>
-        <span className="font-mono text-[#e2e8f0]"><LiveAge iso={status.last_bar_at} /></span>
+        <span className="font-mono text-[#e2e8f0] inline-block min-w-[7ch]"><DataAge at={newest} /></span>
         <span className="text-[#8391a7]">· {fmtNum(status.bars_today)} bars today</span>
       </Chip>
 
