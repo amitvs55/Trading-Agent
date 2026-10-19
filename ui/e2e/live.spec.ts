@@ -67,3 +67,16 @@ test("live NIFTY 50 and SENSEX update in place without moving anything", async (
   expect(result.violations.filter(v => v.impact === "serious" || v.impact === "critical").map(v => v.id)).toEqual([]);
   await page.screenshot({ path: path.join(__dirname, ".data", `ticker-${test.info().project.name}.png`) });
 });
+
+test("against an API without the live feed, the strip stays hidden and nothing breaks", async ({ page }) => {
+  let asked = 0;
+  await page.route("**/api/options/live/indices**", route => { asked += 1; return route.fulfill({ status: 404, body: "{}" }); });
+  await signIn(page);
+  await expect(page.getByRole("heading", { name: "Live Signals" })).toBeVisible();
+  await expect.poll(() => asked).toBeGreaterThan(0);
+  await expect(page.getByRole("group", { name: "Live index levels" })).toHaveCount(0);
+  const before = asked;
+  await page.waitForTimeout(3000);
+  expect(asked - before).toBeLessThanOrEqual(1);                 // no hammering: it looks again once a minute
+  await expect(page.getByRole("link", { name: "Signals", exact: true }).filter({ visible: true }).first()).toBeVisible();
+});

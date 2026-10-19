@@ -20,9 +20,7 @@ function useTickFlash(ltp: number | null | undefined): string {
   return seen.cls;
 }
 
-function Level({ meta, level, dim, variant }: {
-  meta: (typeof INDICES)[number]; level: LiveLevel | undefined; dim: boolean; variant: "bar" | "strip";
-}) {
+function Level({ meta, level, dim }: { meta: (typeof INDICES)[number]; level: LiveLevel | undefined; dim: boolean }) {
   const ltp = level?.ltp ?? null;
   const prev = level?.prev_close ?? null;
   const chg = ltp != null && prev ? ltp - prev : null;
@@ -35,27 +33,22 @@ function Level({ meta, level, dim, variant }: {
   const fullText = chg != null ? `${arrow} ${fmtNum(Math.abs(chg), 2)} (${fmtNum(Math.abs(pct ?? 0), 2)}%)` : "";
   const label = ltp == null ? `${meta.symbol}: no level yet`
     : `${meta.symbol} ${fmtNum(ltp, 2)}` + (chg != null ? `, ${up ? "up" : down ? "down" : "unchanged"} ${fmtNum(Math.abs(chg), 2)} points, ${fmtNum(Math.abs(pct ?? 0), 2)} percent` : "");
-  const strip = variant === "strip";
   return (
-    <div className={cn("min-w-0 flex", strip ? "flex-col sm:flex-row sm:items-baseline sm:gap-2" : "items-baseline gap-2")}
-         aria-label={label} role="group" title={variant === "bar" && fullText ? `${meta.symbol} ${fullText}` : undefined}>
+    <div className="min-w-0 flex flex-col sm:flex-row sm:items-baseline sm:gap-2" aria-label={label} role="group">
       <div className="flex items-baseline gap-1.5 leading-4">
         <span className="text-[10px] font-medium tracking-wider text-[#8391a7]">
-          {strip ? <><span className="sm:hidden">{meta.short}</span><span className="hidden sm:inline">{meta.symbol}</span></> : meta.symbol}
+          <span className="sm:hidden">{meta.short}</span><span className="hidden sm:inline">{meta.symbol}</span>
         </span>
         {/* phones: the % sits on the label line, so the price gets the full width below */}
-        {strip && <span className={cn("sm:hidden font-mono tabular-nums text-[10px]", tone)} aria-hidden>{pctText}</span>}
+        <span className={cn("sm:hidden font-mono tabular-nums text-[10px]", tone)} aria-hidden>{pctText}</span>
       </div>
-      <span aria-hidden className={cn("font-mono tabular-nums font-semibold leading-5 rounded px-0.5 -mx-0.5 min-w-[9ch]",
-                                      strip ? "text-[14px] sm:text-[13px]" : "text-[13px]",
+      <span aria-hidden className={cn("font-mono tabular-nums font-semibold leading-5 rounded px-0.5 -mx-0.5 min-w-[9ch] text-[14px] sm:text-[13px]",
                                       dim ? "text-[#94a3b8]" : "text-[#e2e8f0]", flash)}>
         {ltp != null ? fmtNum(ltp, 2) : "—"}
       </span>
       {/* fixed widths, so a longer change never pushes the next index along */}
-      <span aria-hidden className={cn("font-mono tabular-nums text-[11px] min-w-[7ch]", tone, strip ? "hidden sm:inline md:hidden" : "inline")}>
-        {pctText}
-      </span>
-      {strip && <span aria-hidden className={cn("hidden md:inline font-mono tabular-nums text-[11px] min-w-[18ch]", tone)}>{fullText}</span>}
+      <span aria-hidden className={cn("hidden sm:inline md:hidden font-mono tabular-nums text-[11px] min-w-[7ch]", tone)}>{pctText}</span>
+      <span aria-hidden className={cn("hidden md:inline font-mono tabular-nums text-[11px] min-w-[18ch]", tone)}>{fullText}</span>
     </div>
   );
 }
@@ -84,14 +77,14 @@ function statusText(f: Freshness, s: LiveState, ts: number | null | undefined, n
 }
 
 /**
- * NIFTY 50 and SENSEX, pushed live. `bar` sits inside the wide navbar; `strip` is the slim row under
- * the navbar on phones, tablets and laptops. Both hold a fixed footprint (tabular digits, fixed
- * widths), so a new level never moves anything; "as of" is the exchange's time, and freshness is
- * judged against the server-synced clock.
+ * NIFTY 50 and SENSEX, pushed live, in a slim fixed-height row under the navbar at every width. It
+ * holds a fixed footprint (tabular digits, fixed widths), so a new level never moves anything; "as
+ * of" is the exchange's time, and freshness is judged against the server-synced clock.
  */
-export function LiveTicker({ variant }: { variant: "bar" | "strip" }) {
+export function LiveTicker() {
   const s = useLiveIndices();
   const now = useNow(1000);
+  const hidden = s.unavailable;                    // no live feed on this server yet
   const nifty = s.levels["NIFTY 50"];
   const f = freshness(nifty, s.market, now);
   const st = statusText(f, s, nifty?.ts, now);
@@ -101,8 +94,8 @@ export function LiveTicker({ variant }: { variant: "bar" | "strip" }) {
 
   const status = (
     // Fixed width, text anchored left: "Live · 10:42:07" turning into "Delayed 6s · …" moves nothing
-    <div className={cn("flex items-center gap-1.5 flex-shrink-0 text-[11px] text-[#94a3b8] whitespace-nowrap overflow-hidden",
-                       variant === "bar" ? "w-[25ch]" : "w-[10ch] sm:w-[25ch]")} title={title}>
+    <div className="flex items-center gap-1.5 flex-shrink-0 text-[11px] text-[#94a3b8] whitespace-nowrap overflow-hidden w-[10ch] sm:w-[25ch]"
+         title={title}>
       <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", DOT[f], f === "live" && s.link === "live" && "live-pulse")} aria-hidden />
       <span className="font-mono tabular-nums">
         <span className="sm:hidden">{st.short}</span>
@@ -112,26 +105,13 @@ export function LiveTicker({ variant }: { variant: "bar" | "strip" }) {
     </div>
   );
 
-  if (variant === "bar") {
-    return (
-      <div className="flex items-center gap-5" role="group" aria-label="Live index levels">
-        {INDICES.map((meta, i) => (
-          <div key={meta.symbol} className="flex items-center gap-5">
-            {i > 0 && <div className="w-px h-3.5 bg-[#1e2d45]" />}
-            <Level meta={meta} level={s.levels[meta.symbol]} dim={dim} variant="bar" />
-          </div>
-        ))}
-        <div className="w-px h-3.5 bg-[#1e2d45]" />
-        {status}
-      </div>
-    );
-  }
+  if (hidden) return null;
   return (
     <div className="border-t border-[#1e2d45] bg-[#0b1220]">
       <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 h-10 sm:h-8 flex items-center justify-between gap-3"
            role="group" aria-label="Live index levels">
         <div className="flex items-center gap-4 sm:gap-6 min-w-0">
-          {INDICES.map(meta => <Level key={meta.symbol} meta={meta} level={s.levels[meta.symbol]} dim={dim} variant="strip" />)}
+          {INDICES.map(meta => <Level key={meta.symbol} meta={meta} level={s.levels[meta.symbol]} dim={dim} />)}
         </div>
         {status}
       </div>

@@ -103,8 +103,6 @@ function NavMore({ items, path }: { items: NavItem[]; path: string }) {
   );
 }
 
-// Live values only: nothing is shown until the signal engine has published a board. The slot it
-// sits in is always there (see Navbar), so the links beside it never move when it fills in.
 export function Navbar() {
   const path = usePathname();
   const auth = useAuth();
@@ -126,8 +124,6 @@ export function Navbar() {
             <span className="text-[#8391a7] text-xs ml-1 hidden min-[400px]:inline">India</span>
           </div>
         </Link>
-
-        <div className="hidden 2xl:flex flex-1 min-w-0 justify-center"><LiveTicker variant="bar" /></div>
 
         {/* Nav links: desktop only (phones and tablets use MobileNav's bottom bar) */}
         <div className="hidden lg:flex items-center gap-0.5">
@@ -156,8 +152,9 @@ export function Navbar() {
           <div className="hidden lg:block"><UserMenu /></div>
         </div>
       </div>
-      {/* Below 2xl the bar has no room: NIFTY 50 and SENSEX get their own fixed-height row */}
-      <div className="2xl:hidden"><LiveTicker variant="strip" /></div>
+      {/* NIFTY 50 and SENSEX get their own fixed-height row at every width: inside the bar they
+          competed with the links (an admin's nine at 2xl) and spilled over the logo and Signals */}
+      <LiveTicker />
     </nav>
   );
 }

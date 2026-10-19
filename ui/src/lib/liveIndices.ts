@@ -43,6 +43,7 @@ export interface LiveState {
   link: LinkState;
   lagMs: number | null;           // how far the newest level trailed the exchange when it arrived
   fromCache: boolean;             // painted from the last visit, not yet confirmed live
+  unavailable: boolean;           // this API has no live feed (404): show nothing, check again each minute
 }
 
 interface Payload {
@@ -51,7 +52,7 @@ interface Payload {
   server_ms?: number;
 }
 
-const EMPTY: LiveState = { levels: {}, market: null, link: "connecting", lagMs: null, fromCache: false };
+const EMPTY: LiveState = { levels: {}, market: null, link: "connecting", lagMs: null, fromCache: false, unavailable: false };
 const CACHE_KEY = "live.indices.v1";
 const BACKOFF_MS = [500, 1000, 2000, 5000];
 const POLL_MS = 1000;
@@ -59,6 +60,7 @@ const SILENCE_MS = 35_000;        // no data and no heartbeat for this long: the
 const PROVE_MS = 3000;            // a new stream must deliver its first event within this, or we poll meanwhile
 const MIN_PAINT_GAP_MS = 100;
 const LINGER_MS = 5000;           // keep the stream open briefly after the last component unmounts
+const PROBE_MS = 60_000;          // with no live feed on the server, look again this often
 
 let state: LiveState = EMPTY;
 const listeners = new Set<() => void>();
@@ -110,7 +112,7 @@ function merge(p: Payload, link: LinkState) {
     }
   }
   // A snapshot or poll that lands after the stream came up must not flip the state back
-  commit({ levels, market: p.market ?? s.market, link: streamUp ? "live" : link, lagMs, fromCache: false });
+  commit({ levels, market: p.market ?? s.market, link: streamUp ? "live" : link, lagMs, fromCache: false, unavailable: false });
 }
 
 // ── Cache (per browser, best effort) ──────────────────────────────────────────
@@ -141,14 +143,34 @@ let pollTimer: ReturnType<typeof setInterval> | null = null;
 let lingerTimer: ReturnType<typeof setTimeout> | null = null;
 let running = false;
 let signedOut = false;
+let probeTimer: ReturnType<typeof setTimeout> | null = null;
 let streamUp = false;
 let rotating = false;               // the server ended the stream on purpose (every 10 min)
 let generation = 0;                 // bumped by stop(): a stream from before it never acts afterwards
+
+/** The server has no live feed (an API from before it existed): hide the strip, look again each minute. */
+function markUnavailable() {
+  stop("paused");
+  const s = current();
+  if (!s.unavailable) commit({ ...s, unavailable: true });
+  if (probeTimer == null) probeTimer = setTimeout(probe, PROBE_MS);
+}
+
+async function probe() {
+  probeTimer = null;
+  if (!listeners.size) return;
+  try {
+    const res = await fetch(`${API_URL}/api/options/live/indices`, { headers: authHeaders(), cache: "no-store" });
+    if (res.ok) { merge(await res.json() as Payload, "connecting"); start(); return; }
+  } catch { /* try again later */ }
+  probeTimer = setTimeout(probe, PROBE_MS);
+}
 
 async function snapshot(link: LinkState) {
   try {
     const res = await fetch(`${API_URL}/api/options/live/indices`, { headers: authHeaders(), cache: "no-store" });
     if (res.status === 401) { signedOut = true; stop("paused"); return; }
+    if (res.status === 404) { markUnavailable(); return; }
     if (res.ok) merge(await res.json() as Payload, link);
   } catch { /* the stream or the next poll will catch up */ }
 }
@@ -192,6 +214,7 @@ async function connect() {
       headers: authHeaders({ Accept: "text/event-stream" }), cache: "no-store", signal: mine.signal,
     });
     if (res.status === 401) { signedOut = true; stop("paused"); return; }
+    if (res.status === 404) { markUnavailable(); return; }
     if (!res.ok || !res.body) throw new Error(`stream ${res.status}`);
     alive();
     const reader = res.body.getReader();
@@ -228,7 +251,7 @@ async function connect() {
 }
 
 function start() {
-  if (running || signedOut || document.visibilityState === "hidden") return;
+  if (running || signedOut || probeTimer != null || document.visibilityState === "hidden") return;
   running = true;
   if (current().link === "paused") setLink("connecting");
   void snapshot("connecting");                                        // current levels at once
@@ -268,6 +291,7 @@ function subscribe(listener: () => void) {
       lingerTimer = null;
       if (listeners.size) return;
       document.removeEventListener("visibilitychange", onVisibility);
+      if (probeTimer != null) { clearTimeout(probeTimer); probeTimer = null; }
       stop("paused");
     }, LINGER_MS);
   };
