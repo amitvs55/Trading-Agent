@@ -182,3 +182,44 @@ def _bar(token, ts, px, volume_day, oi):
     return {"instrument_token": token, "ts": ts, "open": px, "high": px * 1.0003, "low": px * 0.9997,
             "close": px, "volume_day": volume_day, "oi": oi, "bid": None, "ask": None,
             "bid_qty": 650, "ask_qty": 650, "ticks": 3}
+
+
+def save_market(store, ctx: AgentContext, extra_expiries: tuple = (), width: int = 10) -> int:
+    """Write the synthetic market into a store as if it had been recorded: the contract list for TODAY,
+    every bar the state holds (history and today, with cumulative day volume as live bars carry), and
+    bars for options of every other listed expiry near the money, priced off today's spot path. For the
+    API and browser tests of pages that read saved data (Option Check)."""
+    from options.reference import index_rows
+
+    nfo = nfo_rows() + [_option(e, k, rt) for e in extra_expiries for k in _strikes() for rt in ("CE", "PE")]
+    store.save_instruments(TODAY, list(NSE_ROWS) + index_rows(nfo, "NIFTY", TODAY))
+    rows, cum = [], {}
+    for token, by_ts in ctx.state._rows.items():
+        for ts in sorted(by_ts):
+            b = by_ts[ts]
+            key = (token, ts.date())
+            cum[key] = cum.get(key, 0) + int(b.get("volume") or 0)
+            rows.append({"instrument_token": token, "ts": ts.to_pydatetime(), "open": b["open"], "high": b["high"],
+                         "low": b["low"], "close": b["close"], "volume_day": cum[key] or None, "oi": b.get("oi"),
+                         "bid": b.get("bid"), "ask": b.get("ask"), "bid_qty": None, "ask_qty": None, "ticks": 1})
+    spot = ctx.state.today(ctx.ref.spot_token, "1min")["close"]
+    full = build_reference("NIFTY", NSE_ROWS, nfo, TODAY, spot_price=float(spot.iloc[-1]))
+    for exp in full.expiries:
+        if exp == ctx.ref.expiries[0]:
+            continue                                    # recorded by build_market already
+        strikes = full.strikes(exp)
+        for ts, px in spot.items():
+            t = b76.year_fraction(ts.to_pydatetime(), exp)
+            fwd = px * np.exp(R * t)
+            i = strikes.index(min(strikes, key=lambda s: abs(s - px)))
+            for k in strikes[max(0, i - width): i + width + 1]:
+                for right in ("CE", "PE"):
+                    opt = full.options.get((exp, k, right))
+                    if opt is None:
+                        continue
+                    prem = b76.price(fwd, k, t, R, IV, right)
+                    spread = max(0.05, prem * 0.004)
+                    rows.append({**_bar(opt.token, ts.to_pydatetime(), prem, None, 1_500_000.0),
+                                 "bid": round(prem - spread / 2, 2), "ask": round(prem + spread / 2, 2)})
+    store.write_bars(rows)
+    return len(rows)

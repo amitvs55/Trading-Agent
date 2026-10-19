@@ -2,9 +2,7 @@
 
 The session saves the closing levels itself at 15:36. When the recorder starts outside a session
 (a deploy in the evening, a restart on a holiday) and nothing is saved for the last session yet,
-the supervisor runs this once:
-
-    python -m options.live_levels
+the supervisor runs this once (as part of `python -m options.offhours`).
 
 Out of market hours a quote describes the last session, and its last price minus its net change is
 that session's previous close, so the ticker shows the right close, points and % ("Closed · 15:30").
@@ -51,27 +49,8 @@ def publish_closing_levels(store, broker, calendar: NseCalendar, now: datetime) 
 
 
 def main() -> int:
-    from options.admin.connectors import load_effective_settings
-    from options.brokers import make_broker
-    from options.session import load_calendar
-    from options.storage import Store, make_engine
-
-    cfg = load_effective_settings()
-    store = Store(make_engine(cfg.DATABASE_URL))
-    calendar = load_calendar(store)
-    now = now_ist()
-    if due(store, calendar, now) is None or cfg.missing_provider_keys():
-        return 0
-    broker = make_broker(cfg)
-    if not (getattr(broker, "auto_login", False) and hasattr(broker, "quotes")):
-        return 0                                    # Kite needs the person's daily login
-    try:
-        broker.login()
-        publish_closing_levels(store, broker, calendar, now)
-    except Exception as e:
-        from options.brokers.angel import brief_error
-        logger.warning("Closing levels not saved: %s", brief_error(e))
-    return 0
+    from options.offhours import main as run
+    return run()                                     # one login for all the evening jobs
 
 
 if __name__ == "__main__":

@@ -39,6 +39,10 @@ def epoch_ms(ts: datetime) -> int:
 class Level:
     ltp: float
     exchange_ts: datetime
+    bid: float | None = None
+    ask: float | None = None
+
+MAX_WATCHED = 20                # option contracts followed live after an Option Check
 
 
 class LiveIndexFeed:
@@ -53,6 +57,7 @@ class LiveIndexFeed:
         self.min_gap_s, self.persist_every_s = min_gap_s, persist_every_s
         self.prev_close: dict[str, float] = {}
         self.prev_source: dict[str, str] = {}
+        self.options: list[str] = []                                # watched contracts, oldest first
         self.seq = 0
         self.published = 0
         self.errors = 0
@@ -98,7 +103,22 @@ class LiveIndexFeed:
         return True
 
     def missing_quote_close(self) -> list[str]:
-        return [s for s in self.tokens if self.prev_source.get(s) != "quote"]
+        return [s for s in self.tokens if s not in self.options and self.prev_source.get(s) != "quote"]
+
+    def watch(self, symbol: str, token: int) -> bool:
+        """Publish one option contract too (its bid, ask and last price), for live P&L on a check.
+        Keeps the MAX_WATCHED most recent."""
+        with self._lock:
+            if symbol in self.tokens:
+                return False
+            self.tokens[symbol] = token
+            self.by_token[token] = symbol
+            self.options.append(symbol)
+            while len(self.options) > MAX_WATCHED:
+                old = self.options.pop(0)
+                self.by_token.pop(self.tokens.pop(old, None), None)
+                self._levels.pop(old, None)
+        return True
 
     def load_quote_closes(self, quotes: dict[str, dict], now: datetime, calendar: NseCalendar) -> list[str]:
         """quotes: symbol → {ltp, close, net_change}. Before the open a quote may still describe the
@@ -131,11 +151,13 @@ class LiveIndexFeed:
         if sym is None or not price:
             return
         ts = tick_time(tick, received_at)
+        depth = tick.get("depth") or {}
+        buy, sell = (depth.get("buy") or [{}])[0], (depth.get("sell") or [{}])[0]
         with self._lock:
             cur = self._levels.get(sym)
             if cur is not None and ts < cur.exchange_ts:
                 return                                              # an older tick never replaces a newer one
-            self._levels[sym] = Level(float(price), ts)
+            self._levels[sym] = Level(float(price), ts, buy.get("price") or None, sell.get("price") or None)
             self._dirty = True
         self._wake.set()
 
@@ -145,11 +167,14 @@ class LiveIndexFeed:
         with self._lock:
             self.seq += 1
             items = []
-            for sym in self.tokens:
+            for sym in list(self.tokens):
                 lvl = self._levels.get(sym)
-                items.append({"symbol": sym, "ltp": lvl.ltp if lvl else None,
-                              "ts": epoch_ms(lvl.exchange_ts) if lvl else None,
-                              "prev_close": self.prev_close.get(sym), "prev_source": self.prev_source.get(sym)})
+                item = {"symbol": sym, "ltp": lvl.ltp if lvl else None,
+                        "ts": epoch_ms(lvl.exchange_ts) if lvl else None,
+                        "prev_close": self.prev_close.get(sym), "prev_source": self.prev_source.get(sym)}
+                if sym in self.options:
+                    item.update(kind="option", bid=lvl.bid if lvl else None, ask=lvl.ask if lvl else None)
+                items.append(item)
             self._dirty = False
             return {"v": 1, "seq": self.seq, "session": self.session_date.isoformat(),
                     "sent_ms": epoch_ms(now), "items": items}

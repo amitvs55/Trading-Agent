@@ -12,6 +12,7 @@ from api.deps import base_settings, current_user, get_calendar, get_repo, get_st
 from api.routes.admin import router as admin_router
 from api.routes.agents import install_research_sink, router as agents_router
 from api.routes.analyze import router as analyze_router
+from api.routes.check import router as check_router, start_warmer
 from api.routes.history import import_legacy_log, router as history_router
 from api.routes.options import router as options_router, stop_live_hub
 from api.routes.paper import ensure_account, router as paper_router
@@ -54,9 +55,16 @@ async def lifespan(_: FastAPI):
             dog.start()                             # alerts if the recorder goes quiet in market hours
         except Exception:
             logger.exception("Recorder watchdog didn't start")
+    warmer = None
+    try:
+        warmer = start_warmer(get_store, lambda: effective_settings(get_repo(), base_settings()))
+    except Exception:
+        logger.exception("Option Check warm-up didn't start")
     yield
     if dog:
         dog.stop()
+    if warmer:
+        warmer.set()
     stop_live_hub()
 
 
@@ -106,6 +114,7 @@ app.include_router(history_router, prefix="/api", dependencies=admins_only)
 app.include_router(pricehistory_router, prefix="/api", dependencies=admins_only)
 app.include_router(usage_router, prefix="/api", dependencies=admins_only)
 app.include_router(options_router)  # /kite/* login flow + /api/options/* (signed-in)
+app.include_router(check_router)    # /api/options/check* (signed-in: admins and viewers)
 app.include_router(admin_router)    # /api/auth/* + /api/admin/* (admin)
 app.include_router(agents_router)   # /api/agents + /api/admin/agents/selftest (admin)
 app.include_router(paper_router)    # /api/paper (signed-in) + /api/admin/paper

@@ -28,6 +28,8 @@ from options.core.constituents import HEAVYWEIGHTS
 from options.daemon import EXIT_CONFIG, EXIT_FAILED, EXIT_LOGIN, EXIT_OK
 from options.engine.engine import SignalEngine
 from options.engine.state import MarketState
+from options.check.worker import CHANNEL as CHECK_CHANNEL, CheckWorker
+from options.core.pglisten import Listener
 from options.market_data.live import CloseKeeper, LiveIndexFeed
 from options.market_data.metrics import SessionMetrics
 from options.market_data.recorder import Recorder
@@ -224,13 +226,23 @@ def _run(cfg: OptionsSettings, now_fn, sleep, store: Store, notifier: Notifier, 
     engine = SignalEngine({r.index: r for r in refs}, state, store, notifier, cfg, calendar, vix_token=vix_token,
                           constituents=constituents, vix_history=history.vix_closes, macro=macro.snapshot,
                           events=load_events(store), news=news.snapshot, quote_fn=recorder.agg.quote, now_fn=now_fn)
-    recorder.on_bars, recorder.on_tick = engine.on_bars, engine.on_tick
+    checks = CheckWorker(engine, recorder, broker, store, live)
+
+    def on_tick(now: datetime) -> None:
+        try:
+            engine.on_tick(now)
+        finally:
+            checks.maybe(now)                   # Option Check requests, on the main thread
+    recorder.on_bars, recorder.on_tick = engine.on_bars, on_tick
     metrics = SessionMetrics(store, recorder, engine, notifier)
     retry = HistoryRetry(broker, history, state, store, notifier, today)
     closes = CloseKeeper(broker, live, constituents, calendar)
     recorder.on_minute = lambda now: (metrics.sample(now), retry.maybe(now), closes.maybe(now))
 
     recorder.start(prices)
+    checks.follow_open(now_fn())
+    listener = Listener(store.engine, CHECK_CHANNEL, checks.poke)
+    listener.start()
     fill_previous_closes(broker, constituents, store=store, calendar=calendar, today=today)
     try:
         closes.maybe(now_fn())                  # a restart mid-session gets the rest from quotes at once
@@ -245,6 +257,7 @@ def _run(cfg: OptionsSettings, now_fn, sleep, store: Store, notifier: Notifier, 
         logger.exception("Morning brief failed")
 
     recorder.run_until(at_ist(today, RECORD_UNTIL), sleep=sleep)
+    listener.stop()
     macro.stop()
     news.stop()
     try:

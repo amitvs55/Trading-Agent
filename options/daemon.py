@@ -34,6 +34,7 @@ MANAGE_ONLY_UNTIL = time(15, 20)     # …and until here when intraday signals a
 CRASH_RESTART_UNTIL = time(15, 20)   # a session that dies before this is restarted
 RESTART_BACKOFF_S = (30, 120, 300)   # waits before the 1st, 2nd and 3rd restart of the day
 POLL_S = 15                          # heartbeat and command check interval
+EVENING_JOBS_AT = time(16, 30)       # after the session's own end-of-day work
 STATUS_KEY, COMMAND_KEY = "recorder_status", "recorder_command"
 
 # Session exit codes (options.session)
@@ -64,13 +65,13 @@ def spawn_session() -> Process:
     return subprocess.Popen([sys.executable, "-m", "options.session"])
 
 
-def spawn_closing_levels() -> None:
-    """Started outside a session (an evening deploy, a holiday restart): saves the last session's
-    closing NIFTY 50 / SENSEX for the dashboard ticker if they aren't saved yet. Fire and forget."""
+def spawn_offhours() -> None:
+    """Evening and holiday jobs (options/offhours.py): the last session's closing NIFTY 50 / SENSEX for
+    the dashboard ticker, and topping up the Option Check history. Fire and forget."""
     try:
-        subprocess.Popen([sys.executable, "-m", "options.live_levels"])
+        subprocess.Popen([sys.executable, "-m", "options.offhours"])
     except Exception:
-        logger.exception("Closing levels helper didn't start")
+        logger.exception("Off-hours jobs didn't start")
 
 
 def can_start_now(now: datetime, calendar: NseCalendar) -> bool:
@@ -112,6 +113,8 @@ class Supervisor:
         self._restart_day: date | None = None
         self.restart_at: datetime | None = None     # a crashed session is due to restart then
         self.gave_up = False
+        self.spawn_offhours: Callable[[], None] | None = None   # evening jobs; main() sets it
+        self._offhours_day: date | None = None
 
     # ── Database (best effort: scheduling must survive a database outage) ──
 
@@ -220,6 +223,10 @@ class Supervisor:
                 self._start(now)
         elif self.proc is None and next_start(now, self.calendar, self.last_run, self._late_until(now)) <= now:
             self._start(now)
+        if (self.spawn_offhours and self.proc is None and now.time() >= EVENING_JOBS_AT
+                and self._offhours_day != now.date()):
+            self._offhours_day = now.date()
+            self.spawn_offhours()
         if self.proc is None and self.restart_at is None:
             target = next_start(now, self.calendar, self.last_run)
             if target != self._announced:
@@ -258,8 +265,9 @@ def main() -> int:
     if cmd := sup._read_command():
         # A restart requested while this container was down is stale: start-up runs today's session anyway
         sup._handled_command = cmd.get("requested_at")
+    sup.spawn_offhours = spawn_offhours            # each evening after the close (see Supervisor.step)
     if repo is not None and next_start(now_ist(), sup.calendar, None) > now_ist():
-        spawn_closing_levels()                    # no session now: make sure the ticker has the last close
+        spawn_offhours()                           # no session now: the ticker's last close, the history
     sup.run()
     return 0
 

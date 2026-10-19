@@ -232,6 +232,37 @@ research_llm_calls = Table(
     Column("is_retry", Integer, nullable=False, server_default="0"),
 )
 
+# Option Check: one row per check. During market hours the API leaves it "pending" and the recorder
+# fills in the market facts from the live engine; the report is rebuilt from facts + parameters, so
+# what-ifs never touch the recorder. Outcomes are filled in later from the saved bars (the checker's
+# own track record), and a check can be followed as a paper trade.
+option_checks = Table(
+    "option_checks", metadata,
+    Column("id", String(16), primary_key=True),
+    Column("created_at", DateTime(timezone=True), nullable=False, index=True),
+    Column("username", String(64)),
+    Column("query", String(200), nullable=False),
+    Column("index_name", String(16)),
+    Column("symbol", String(64)),
+    Column("token", BigInteger),
+    Column("expiry", Date),
+    Column("strike", Float),
+    Column("option_right", String(2)),
+    Column("lot_size", Integer),
+    Column("status", String(12), nullable=False),          # pending | done | error
+    Column("error", Text),
+    Column("params", Text),                                # JSON: amount, entry, horizon, …
+    Column("facts", Text),                                 # JSON from options/check/facts.py
+    Column("summary", Text),                               # JSON: verdict, entry, units, probabilities, horizon end
+    Column("outcome", Text),                               # JSON: what actually happened
+    Column("outcome_done", Integer, nullable=False, default=0),
+    Column("paper", Integer, nullable=False, default=0),
+    Column("paper_entry", Float),
+    Column("paper_units", Integer),
+    Column("paper_exit", Float),
+    Column("paper_closed_at", DateTime(timezone=True)),
+)
+
 # One row per minute of a recording session: is the machine keeping up? (review F-28 / roadmap R-28)
 session_metrics = Table(
     "session_metrics", metadata,
@@ -434,6 +465,14 @@ class Store:
             v = conn.execute(q.limit(1)).scalar()
         return float(v) if v is not None else None
 
+    def bar_counts_per_day(self, token: int, start: datetime, end: datetime) -> dict[date, int]:
+        """Saved minutes per day for one instrument (market hours fall on the same date in UTC and IST)."""
+        day = func.date(bars_1m.c.ts)
+        q = (select(day, func.count()).where(bars_1m.c.instrument_token == token, bars_1m.c.ts >= start,
+                                             bars_1m.c.ts < end).group_by(day))
+        with self.engine.connect() as conn:
+            return {(d if isinstance(d, date) else date.fromisoformat(str(d)[:10])): n for d, n in conn.execute(q)}
+
     def bar_counts_between(self, start: datetime, end: datetime) -> dict[int, int]:
         """Minutes recorded per instrument: the daily completeness report."""
         q = (select(bars_1m.c.instrument_token, func.count())
@@ -580,6 +619,75 @@ class Store:
     def research_has_order(self, order_id: str) -> bool:
         with self.engine.connect() as conn:
             return conn.execute(select(research_runs.c.run_id).where(research_runs.c.order_id == order_id)).first() is not None
+
+    # ── Option Check ─────────────────────────────────────────────────────────
+
+    _CHECK_JSON = ("params", "facts", "summary", "outcome")
+
+    def _check_row(self, r) -> dict:
+        d = dict(r._mapping)
+        for k in self._CHECK_JSON:
+            try:
+                d[k] = json.loads(d[k]) if d.get(k) else None
+            except ValueError:
+                d[k] = None
+        return d
+
+    def check_add(self, row: dict) -> None:
+        values = {k: (json.dumps(v, separators=(",", ":"), default=str) if k in self._CHECK_JSON and v is not None else v)
+                  for k, v in row.items()}
+        with self.engine.begin() as conn:
+            conn.execute(option_checks.insert().values(**values))
+
+    def check_update(self, check_id: str, **values) -> None:
+        values = {k: (json.dumps(v, separators=(",", ":"), default=str) if k in self._CHECK_JSON and v is not None else v)
+                  for k, v in values.items()}
+        with self.engine.begin() as conn:
+            conn.execute(update(option_checks).where(option_checks.c.id == check_id).values(**values))
+
+    def check_claim(self, check_id: str, from_status: str, to_status: str) -> bool:
+        """Move a check from one status to another only if nobody else has: True if this call did."""
+        with self.engine.begin() as conn:
+            done = conn.execute(update(option_checks).where(option_checks.c.id == check_id,
+                                                            option_checks.c.status == from_status)
+                                .values(status=to_status)).rowcount
+        return bool(done)
+
+    def check_get(self, check_id: str) -> dict | None:
+        with self.engine.connect() as conn:
+            r = conn.execute(select(option_checks).where(option_checks.c.id == check_id)).first()
+        return self._check_row(r) if r else None
+
+    def checks_pending(self, since: datetime) -> list[dict]:
+        q = (select(option_checks).where(option_checks.c.status == "pending", option_checks.c.created_at >= since)
+             .order_by(option_checks.c.created_at))
+        with self.engine.connect() as conn:
+            return [self._check_row(r) for r in conn.execute(q)]
+
+    def checks_recent(self, username: str | None = None, limit: int = 50, done_only: bool = True) -> list[dict]:
+        q = select(option_checks).order_by(option_checks.c.created_at.desc()).limit(limit)
+        if username:
+            q = q.where(option_checks.c.username == username)
+        if done_only:
+            q = q.where(option_checks.c.status == "done")
+        with self.engine.connect() as conn:
+            return [self._check_row(r) for r in conn.execute(q)]
+
+    def checks_open_paper(self) -> list[dict]:
+        q = select(option_checks).where(option_checks.c.paper == 1, option_checks.c.paper_closed_at.is_(None))
+        with self.engine.connect() as conn:
+            return [self._check_row(r) for r in conn.execute(q)]
+
+    def checks_since(self, since: datetime) -> list[dict]:
+        q = select(option_checks).where(option_checks.c.created_at >= since, option_checks.c.status == "done")
+        with self.engine.connect() as conn:
+            return [self._check_row(r) for r in conn.execute(q)]
+
+    def notify(self, channel: str, payload: str) -> None:
+        """Postgres NOTIFY (a no-op elsewhere): wakes whoever LISTENs on `channel` at once."""
+        if self.engine.dialect.name == "postgresql":
+            with self.engine.begin() as conn:
+                conn.execute(text("SELECT pg_notify(:channel, :payload)"), {"channel": channel, "payload": payload})
 
     # ── Session metrics ──────────────────────────────────────────────────────
 

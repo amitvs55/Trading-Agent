@@ -72,7 +72,8 @@ def test_sensex_token_comes_from_the_scrip_master_and_quotes_parse_both_exchange
     tokens = b.live_index_tokens()
     assert tokens == {"NIFTY 50": NIFTY, "SENSEX": BSE_OFFSET + 99919001}
     q = b.quotes(tokens)
-    assert q["SENSEX"] == {"ltp": 75512.1, "close": 75261.8, "net_change": 250.3} and q["NIFTY 50"]["close"] == 23010.2
+    assert {k: q["SENSEX"][k] for k in ("ltp", "close", "net_change")} == {"ltp": 75512.1, "close": 75261.8, "net_change": 250.3}
+    assert q["NIFTY 50"]["close"] == 23010.2 and q["SENSEX"]["bid"] is None          # no depth in this reply
 
 
 # ── The recorder's feed ──────────────────────────────────────────────────────

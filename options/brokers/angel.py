@@ -316,8 +316,9 @@ class AngelBroker:
         return {"NIFTY 50": INDEX_TOKENS["NIFTY 50"], "SENSEX": to_internal("BSE", sensex)}
 
     def quotes(self, tokens: dict[str, int]) -> dict[str, dict]:
-        """name → internal token, to name → {ltp, close, net_change} from one FULL market-data call per
-        50 instruments. In market hours `close` is the previous session's close (ltp − net change)."""
+        """name → internal token, to name → {ltp, close, net_change, bid, ask, oi, volume} from one FULL
+        market-data call per 50 instruments. In market hours `close` is the previous session's close
+        (ltp − net change); bid and ask are the best of the 5-level depth (prices in rupees)."""
         wanted: dict[tuple[str, str], str] = {}
         for name, internal in tokens.items():
             wanted[to_angel(internal)] = name
@@ -332,10 +333,16 @@ class AngelBroker:
                 name = wanted.get((row.get("exchange"), str(row.get("symbolToken"))))
                 if name is None:
                     continue
-                def num(key):
-                    v = row.get(key)
+                def num(key, src=row):
+                    v = src.get(key) if src else None
                     return float(v) if v not in (None, "") else None
-                out[name] = {"ltp": num("ltp"), "close": num("close"), "net_change": num("netChange")}
+                depth = row.get("depth") or {}
+                best = {side: max((lvl for lvl in depth.get(side) or [] if num("price", lvl)),
+                                  key=lambda lvl: num("price", lvl) * (1 if side == "buy" else -1), default=None)
+                        for side in ("buy", "sell")}
+                out[name] = {"ltp": num("ltp"), "close": num("close"), "net_change": num("netChange"),
+                             "bid": num("price", best["buy"]), "ask": num("price", best["sell"]),
+                             "oi": num("opnInterest"), "volume": num("tradeVolume")}
         return out
 
     def previous_closes(self, symbols: list[str]) -> dict[str, float]:

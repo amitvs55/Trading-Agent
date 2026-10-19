@@ -63,6 +63,7 @@ class Recorder:
         self._pending: list[dict] = []
         self._events: list[tuple[datetime, str, str]] = []
         self._events_lock = threading.Lock()
+        self._wake = threading.Event()                  # set from other threads to run the loop at once
 
     # ── WebSocket callbacks (run on the ticker thread) ───────────────────────
 
@@ -108,6 +109,19 @@ class Recorder:
         self.subscribed |= self.window_tokens(prices)
         logger.info("Subscribing %d instruments", len(self.subscribed))
         self.ticker.start(on_ticks=self._on_ticks, on_connect=self._on_connect, on_event=self._on_event)
+
+    def wake(self) -> None:
+        """Run the main loop now instead of at its next one-second turn (e.g. an Option Check request)."""
+        self._wake.set()
+
+    def watch(self, token: int) -> bool:
+        """Record one more instrument from now on (main thread). True if it was new."""
+        if token in self.subscribed:
+            return False
+        self.subscribed.add(token)
+        self.ticker.subscribe([token])
+        logger.info("Watching one more instrument (%s)", token)
+        return True
 
     def recentre(self) -> int:
         prices = {}
@@ -189,7 +203,11 @@ class Recorder:
                 self.check_stale(now)
                 if self.on_tick:
                     self._safe(self.on_tick, now)
-                sleep(poll_s)
+                if sleep is _time.sleep:                # real time: a wake() cuts the wait short
+                    self._wake.wait(poll_s)
+                    self._wake.clear()
+                else:
+                    sleep(poll_s)
         finally:
             self.flush(self.now_fn(), final=True)
             self.ticker.stop()
