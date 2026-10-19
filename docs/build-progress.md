@@ -149,7 +149,11 @@ The user asked: "use that report and build what is missing, production grade". T
   - Failed series are retried every 10 minutes.
   - Angel's reply is now logged.
   - Deployed 10:02 IST: "History: 4/5 loaded", missing only India VIX daily; the 10:05 check ran clean.
-  - Still open: previous closes and VIX daily keep hitting the rate limit. Move previous closes to the quote API (`getMarketData` returns the previous `close`), which is also needed for the live-ticker % change. Pace history requests ≥ 1 s apart.
+  - Follow-ups done the same day:
+    - Previous closes also come from the quote API in market hours (`CloseKeeper`, d0b731f).
+    - Every Angel history request goes through one gate, `HISTORY_GAP_S` = 1 s after the previous one ends (570c8b9).
+    - The previous-close requests run after recording starts.
+    - The branch is pushed, so CI runs on every push.
 
 ## Live NIFTY 50 + SENSEX ticker (19 Oct 2026)
 Requirement: smooth, no lag, no time mismatch.
