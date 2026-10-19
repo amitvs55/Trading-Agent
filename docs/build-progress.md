@@ -168,7 +168,7 @@ Requirement: smooth, no lag, no time mismatch.
   - A level never goes backwards (exchange timestamps).
   - Reconnect backoff is 0.5–5 s; after 3 failures it polls every second. A hidden tab closes the stream.
   - The last levels are cached in localStorage for an instant first paint, shown dimmed until live.
-  - `components/layout/LiveTicker.tsx`: inline in the navbar at 2xl, a fixed-height strip below it otherwise. Digits are tabular with fixed widths, and changes flash with CSS only.
+  - `components/layout/LiveTicker.tsx`: a fixed-height strip under the navbar at every width. It was briefly inline in the bar at 2xl, where it covered the logo and Signals for admins; that was fixed in a330246, guarded by E2E `nav.spec.ts`. Against an API without the feed (404), the strip stays hidden from the first paint (`html.live-off`) and checks again each minute. Digits are tabular with fixed widths, and changes flash with CSS only.
 
 **Time:** the "as of" time is the exchange's. Live, delayed (> 5 s) and stale (> 60 s) are judged with the server-synced clock (`lib/clock.ts`). Open and closed flip at 09:15:00 and 15:30:00 from `market_window` times.
 
