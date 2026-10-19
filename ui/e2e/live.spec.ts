@@ -79,4 +79,16 @@ test("against an API without the live feed, the strip stays hidden and nothing b
   await page.waitForTimeout(3000);
   expect(asked - before).toBeLessThanOrEqual(1);                 // no hammering: it looks again once a minute
   await expect(page.getByRole("link", { name: "Signals", exact: true }).filter({ visible: true }).first()).toBeVisible();
+
+  // Reloading: hidden from the very first paint (no strip that appears and then vanishes)
+  await page.reload({ waitUntil: "commit" });
+  await page.waitForFunction(() => document.body !== null);
+  expect(await page.evaluate(() => document.documentElement.classList.contains("live-off"))).toBe(true);
+
+  // Once the server has the feed, the strip comes back on the next load
+  await page.unroute("**/api/options/live/indices**");
+  publish(23096.95, 75512.10);
+  await page.reload();
+  await expect(page.getByRole("group", { name: "Live index levels" }).filter({ visible: true })).toHaveCount(1);
+  expect(await page.evaluate(() => document.documentElement.classList.contains("live-off"))).toBe(false);
 });

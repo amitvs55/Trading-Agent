@@ -32,9 +32,11 @@ export const viewport: Viewport = {
 
 // Runs before first paint: when this browser has no session, hide the app shell so a signed-out
 // visitor never sees it flash before the sign-in screen. It also marks the cached role (role-admin /
-// role-viewer), so role-only placeholders can hold their space from the server-rendered first paint.
+// role-viewer), so role-only placeholders can hold their space from the server-rendered first paint, and
+// hides the index strip when this server had no live feed last time (live-off), so it never flashes.
 const AUTH_HINT = `try{var d=document.documentElement;if(!localStorage.getItem("auth.session"))d.classList.add("auth-out");`
-  + `var u=JSON.parse(localStorage.getItem("auth.user")||"null");if(u&&/^[a-z]+$/.test(u.role))d.classList.add("role-"+u.role)}catch(e){}`;
+  + `var u=JSON.parse(localStorage.getItem("auth.user")||"null");if(u&&/^[a-z]+$/.test(u.role))d.classList.add("role-"+u.role);`
+  + `if(localStorage.getItem("live.indices.off"))d.classList.add("live-off")}catch(e){}`;
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (

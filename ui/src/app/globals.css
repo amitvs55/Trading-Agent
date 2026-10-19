@@ -103,6 +103,7 @@ html.auth-out [data-app-shell] { visibility: hidden; }
 @keyframes tick-up-1   { from { background-color: rgba(34, 197, 94, 0.28); } to { background-color: transparent; } }
 @keyframes tick-down-0 { from { background-color: rgba(239, 68, 68, 0.28); } to { background-color: transparent; } }
 @keyframes tick-down-1 { from { background-color: rgba(239, 68, 68, 0.28); } to { background-color: transparent; } }
+.live-off [data-live-strip] { display: none; }      /* no live feed on this server (see lib/liveIndices.ts) */
 .live-pulse { animation: live-pulse 2s ease-in-out infinite; }
 @keyframes live-pulse { 50% { opacity: 0.35; } }
 

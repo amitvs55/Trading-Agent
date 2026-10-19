@@ -111,6 +111,7 @@ function merge(p: Payload, link: LinkState) {
       if (it.ts != null && (!cur || cur.ts !== it.ts)) lagMs = Math.max(0, arrived - it.ts);
     }
   }
+  if (s.unavailable || document.documentElement.classList.contains("live-off")) setOff(false);
   // A snapshot or poll that lands after the stream came up must not flip the state back
   commit({ levels, market: p.market ?? s.market, link: streamUp ? "live" : link, lagMs, fromCache: false, unavailable: false });
 }
@@ -148,11 +149,20 @@ let streamUp = false;
 let rotating = false;               // the server ended the stream on purpose (every 10 min)
 let generation = 0;                 // bumped by stop(): a stream from before it never acts afterwards
 
+const OFF_KEY = "live.indices.off";   // read before first paint (app/layout.tsx), so a hidden strip never flashes
+
+/** Remembers whether this server has a live feed, and applies it at once (html.live-off hides the strip). */
+function setOff(off: boolean) {
+  try { if (off) localStorage.setItem(OFF_KEY, "1"); else localStorage.removeItem(OFF_KEY); } catch { /* private mode */ }
+  document.documentElement.classList.toggle("live-off", off);
+}
+
 /** The server has no live feed (an API from before it existed): hide the strip, look again each minute. */
 function markUnavailable() {
   stop("paused");
   const s = current();
   if (!s.unavailable) commit({ ...s, unavailable: true });
+  setOff(true);
   if (probeTimer == null) probeTimer = setTimeout(probe, PROBE_MS);
 }
 

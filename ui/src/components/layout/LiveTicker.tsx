@@ -84,7 +84,6 @@ function statusText(f: Freshness, s: LiveState, ts: number | null | undefined, n
 export function LiveTicker() {
   const s = useLiveIndices();
   const now = useNow(1000);
-  const hidden = s.unavailable;                    // no live feed on this server yet
   const nifty = s.levels["NIFTY 50"];
   const f = freshness(nifty, s.market, now);
   const st = statusText(f, s, nifty?.ts, now);
@@ -105,9 +104,9 @@ export function LiveTicker() {
     </div>
   );
 
-  if (hidden) return null;
+  // Hidden while this server has no live feed: by html.live-off from the first paint, or at once here
   return (
-    <div className="border-t border-[#1e2d45] bg-[#0b1220]">
+    <div data-live-strip className={cn("border-t border-[#1e2d45] bg-[#0b1220]", s.unavailable && "hidden")}>
       <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 h-10 sm:h-8 flex items-center justify-between gap-3"
            role="group" aria-label="Live index levels">
         <div className="flex items-center gap-4 sm:gap-6 min-w-0">
