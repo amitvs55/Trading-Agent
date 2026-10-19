@@ -266,3 +266,40 @@ def test_a_stream_ends_itself_with_bye_before_any_proxy_limit(store):
 
     events = asyncio.run(run())
     assert events[-1].startswith("event: bye") and any(e.startswith("event: ping") for e in events)
+
+
+# ── Off hours: the last session's close for the ticker ───────────────────────
+
+class QuoteBroker:
+    calls = 0
+
+    def live_index_tokens(self):
+        return {"NIFTY 50": NIFTY, "SENSEX": SENSEX}
+
+    def quotes(self, tokens):
+        QuoteBroker.calls += 1
+        return {"NIFTY 50": {"ltp": 23096.95, "close": 23096.95, "net_change": 86.75},     # after the close
+                "SENSEX": {"ltp": 75512.1, "close": 75261.8, "net_change": 250.3}}
+
+
+def test_an_evening_start_saves_the_sessions_close_once(store):
+    from options import live_levels
+
+    QuoteBroker.calls = 0
+    evening = ist(2026, 10, 19, 15, 47)
+    assert live_levels.publish_closing_levels(store, QuoteBroker(), CAL, evening)
+    snap = store.live_snapshot()
+    by = {i["symbol"]: i for i in snap["items"]}
+    assert snap["session"] == "2026-10-19"
+    assert by["NIFTY 50"]["ltp"] == 23096.95 and by["NIFTY 50"]["prev_close"] == 23010.2   # ltp − net change
+    assert by["SENSEX"]["prev_close"] == 75261.8
+    assert not live_levels.publish_closing_levels(store, QuoteBroker(), CAL, ist(2026, 10, 20, 11, 0))  # holiday: saved
+    assert QuoteBroker.calls == 1
+
+
+def test_the_closing_levels_helper_keeps_out_of_the_live_session(store):
+    from options import live_levels
+
+    assert live_levels.due(store, CAL, ist(2026, 10, 19, 10, 0)) is None             # market hours: the session's job
+    assert live_levels.due(store, CAL, ist(2026, 10, 19, 9, 5)) is None              # pre-open quotes aren't a close
+    assert live_levels.due(store, CAL, ist(2026, 10, 21, 8, 0)) == date(2026, 10, 19)  # before Wednesday's open

@@ -64,6 +64,15 @@ def spawn_session() -> Process:
     return subprocess.Popen([sys.executable, "-m", "options.session"])
 
 
+def spawn_closing_levels() -> None:
+    """Started outside a session (an evening deploy, a holiday restart): saves the last session's
+    closing NIFTY 50 / SENSEX for the dashboard ticker if they aren't saved yet. Fire and forget."""
+    try:
+        subprocess.Popen([sys.executable, "-m", "options.live_levels"])
+    except Exception:
+        logger.exception("Closing levels helper didn't start")
+
+
 def can_start_now(now: datetime, calendar: NseCalendar) -> bool:
     return calendar.is_trading_day(now.date()) and now.time() < LATE_START_UNTIL
 
@@ -249,6 +258,8 @@ def main() -> int:
     if cmd := sup._read_command():
         # A restart requested while this container was down is stale: start-up runs today's session anyway
         sup._handled_command = cmd.get("requested_at")
+    if repo is not None and next_start(now_ist(), sup.calendar, None) > now_ist():
+        spawn_closing_levels()                    # no session now: make sure the ticker has the last close
     sup.run()
     return 0
 
