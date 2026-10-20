@@ -35,20 +35,28 @@ export function contractText(c: CheckContractRef): string {
   return `NIFTY ${day} ${c.strike} ${c.right}`;
 }
 
-export function ContractInput({ value, onChange, onPick, disabled }: {
+export function ContractInput({ value, onChange, onPick, disabled, onResolved, id = "check-contract" }: {
   value: string; onChange: (v: string) => void; onPick: (text: string) => void; disabled?: boolean;
+  onResolved?: (c: CheckContractRef | null) => void; id?: string;
 }) {
   const { res, busy } = useResolve(value);
   const ok = res?.ok && res.contract;
+  const picked = ok ? res!.contract! : null;
+  const lastToken = useRef<number | null | undefined>(undefined);
+  useEffect(() => {
+    if (!onResolved || busy || lastToken.current === (picked?.token ?? null)) return;
+    lastToken.current = picked?.token ?? null;
+    onResolved(picked);
+  }, [picked, busy, onResolved]);
   return (
     <div>
-      <label htmlFor="check-contract" className="text-[10px] tracking-widest text-[#8391a7]">CONTRACT</label>
-      <input id="check-contract" value={value} onChange={e => onChange(e.target.value)} disabled={disabled}
+      <label htmlFor={id} className="text-[10px] tracking-widest text-[#8391a7]">CONTRACT</label>
+      <input id={id} value={value} onChange={e => onChange(e.target.value)} disabled={disabled}
              autoComplete="off" spellCheck={false} placeholder="e.g. Nifty 27th Oct 25000 ce"
-             aria-describedby="check-contract-status"
+             aria-describedby={`${id}-status`}
              className="mt-1.5 w-full bg-card border border-[#1e2d45] rounded-lg px-3 h-11 text-[15px] text-[#e2e8f0] placeholder:text-[#64748b] focus:outline-none focus:border-[#ff9933] focus:ring-2 focus:ring-[#ff993333]" />
       {/* One fixed-height line, so the form never jumps while it reads what you type */}
-      <div id="check-contract-status" aria-live="polite" className="h-5 mt-1.5 flex items-center gap-1.5 text-[12px] min-w-0">
+      <div id={`${id}-status`} aria-live="polite" className="h-5 mt-1.5 flex items-center gap-1.5 text-[12px] min-w-0">
         {value.trim().length < 3 ? <span className="text-[#8391a7] truncate">Index, expiry, strike and CE/PE, in any order</span>
           : busy && !res ? <><Loader2 size={12} className="animate-spin text-[#8391a7]" aria-hidden /><span className="text-[#8391a7]">Reading…</span></>
           : ok ? <><CheckCircle2 size={13} className="text-green flex-shrink-0" aria-hidden />

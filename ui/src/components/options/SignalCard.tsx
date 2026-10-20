@@ -10,6 +10,13 @@ import { ConfidenceRow } from "./Confidence";
 
 const OPEN = new Set(["TRIGGERED", "ACTIVE", "T1_HIT"]);
 
+/** The Trade page's ticket, filled in from the signal: its contract, lots and entry as a limit. */
+function tradeLink(s: Signal): string {
+  const q = new URLSearchParams({ q: s.contract.tradingsymbol, lots: String(s.lots), type: "LIMIT",
+    price: String(s.fill_price ?? s.entry_high), product: s.horizon === "positional" ? "NRML" : "MIS", signal: s.signal_id });
+  return `/trade?${q}`;
+}
+
 /** Where the premium sits between the stop and target 2: risk zone left of entry, reward zone right. */
 function PriceTrack({ s, current }: { s: Signal; current: number | null }) {
   const entry = s.fill_price ?? s.entry_high;
@@ -145,9 +152,16 @@ export const SignalCard = memo(function SignalCard({ s, quote, setupLabel, compa
           <CheckCounts s={s} />
           {open && quote && <span className="text-[#8391a7]">quote {fmtTime(quote.ts)} · bid {fmtPremium(quote.bid)} / ask {fmtPremium(quote.ask)}</span>}
         </div>
-        <Link href={`/signals/${s.signal_id}`} className="inline-flex items-center gap-0.5 text-[#ff9933] hover:underline font-medium">
-          Full analysis <ChevronRight size={13} />
-        </Link>
+        <span className="inline-flex items-center gap-3">
+          {open && (
+            <Link href={tradeLink(s)} className="inline-flex items-center gap-1 h-7 px-2.5 rounded-md border border-[#22c55e55] text-[#4ade80] hover:bg-[#22c55e14] font-semibold">
+              Trade this
+            </Link>
+          )}
+          <Link href={`/signals/${s.signal_id}`} className="inline-flex items-center gap-0.5 text-[#ff9933] hover:underline font-medium">
+            Full analysis <ChevronRight size={13} />
+          </Link>
+        </span>
       </div>
     </article>
   );

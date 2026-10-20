@@ -58,6 +58,7 @@ class LiveIndexFeed:
         self.prev_close: dict[str, float] = {}
         self.prev_source: dict[str, str] = {}
         self.options: list[str] = []                                # watched contracts, oldest first
+        self.pinned: set[str] = set()
         self.seq = 0
         self.published = 0
         self.errors = 0
@@ -105,17 +106,22 @@ class LiveIndexFeed:
     def missing_quote_close(self) -> list[str]:
         return [s for s in self.tokens if s not in self.options and self.prev_source.get(s) != "quote"]
 
-    def watch(self, symbol: str, token: int) -> bool:
-        """Publish one option contract too (its bid, ask and last price), for live P&L on a check.
-        Keeps the MAX_WATCHED most recent."""
+    def watch(self, symbol: str, token: int, pin: bool = False) -> bool:
+        """Publish one option contract too (its bid, ask and last price), for live P&L on a check or
+        a desk position. Keeps the MAX_WATCHED most recent; a pinned one (a desk order or position)
+        is never dropped."""
         with self._lock:
+            if pin:
+                self.pinned.add(symbol)
             if symbol in self.tokens:
                 return False
             self.tokens[symbol] = token
             self.by_token[token] = symbol
             self.options.append(symbol)
-            while len(self.options) > MAX_WATCHED:
-                old = self.options.pop(0)
+            loose = [s for s in self.options if s not in self.pinned]
+            while len(loose) > MAX_WATCHED:
+                old = loose.pop(0)
+                self.options.remove(old)
                 self.by_token.pop(self.tokens.pop(old, None), None)
                 self._levels.pop(old, None)
         return True

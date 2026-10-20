@@ -10,7 +10,7 @@ const ADMIN = { user: "e2e-admin", pw: process.env.E2E_ADMIN_PW! };
 const VIEWER = { user: "e2e-viewer", pw: process.env.E2E_VIEWER_PW! };
 const WIDTHS = [360, 390, 768, 1024, 1280, 1536, 1920];
 const SIGNAL = "/signals/NF-261016-001";
-const VIEWER_PAGES = ["/signals", SIGNAL, "/check", "/paper", "/performance", "/account"];
+const VIEWER_PAGES = ["/signals", SIGNAL, "/trade", "/check", "/paper", "/performance", "/account"];
 const ADMIN_PAGES = [...VIEWER_PAGES, "/agents", "/", "/history", "/usage", "/operations", "/connectors"];
 
 async function signIn(page: Page, who: { user: string; pw: string }) {

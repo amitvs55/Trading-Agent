@@ -73,7 +73,15 @@ All pages, including the old research pages, now need a signed-in user. Sessions
 
 **On the dashboard:**
 - **Signals** shows the live board, open signals with a live premium marker, and the decision log ("why no trade").
+- **Trade** is your own paper trading desk (see below).
 - **Performance** shows the full track record.
+
+### The Trade page (paper orders on live prices)
+Every signed-in user gets a virtual ₹1,00,000 account (top up or reset it on the page). Type any listed NIFTY option, pick Buy, Intraday (MIS) or Carry (NRML), Market / Limit / SL / SL-M and the lots; the ticket shows the live bid, ask and LTP, the order value, every charge (₹20 brokerage an order, STT on the sell, exchange, SEBI, stamp on the buy, 18% GST), the funds it holds and the breakeven.
+- **Fills**, done by the recorder from the live feed: a buy at the ask, a sell at the bid; a limit at your price or better; a stop when the LTP crosses its trigger. A market order fills within about a second.
+- **Outside market hours** an order is an after-market order and goes in at 09:15. **In market hours with the recorder down** orders are refused rather than filled at a stale price.
+- **15:20**: intraday positions are squared off at the live bid. **15:30**: unfilled day orders are cancelled. **Expiry**: carried positions settle at intrinsic value from NIFTY's close.
+- **Buy-only**: you can sell what you hold, not sell short. "Trade this" on an open signal fills the ticket from the signal (its contract, lots and entry as a limit).
 
 ## 4. Shadow → Live
 Every setup starts in **SHADOW**: signals are sent and tracked, but marked "not for trading yet".

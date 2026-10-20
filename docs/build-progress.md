@@ -225,6 +225,19 @@ Check is in the nav, tier 1, with a phone tab; Agents moves into the phone "More
   - /check 200; check routes answer 401 without sign-in.
   - First backfill: 53,500 NIFTY and 14,605 VIX minutes saved. Each series stopped after 3 Angel DataException refusals; the rest is topped up on later evenings (covered spans are skipped).
 
+## Paper trading desk (20 Oct 2026: "place any order, show the P&L in the live market, ₹20 a trade with GST"; buy-only)
+- [x] Charges per order (₹20 brokerage + STT on the sell, exchange, SEBI, stamp on the buy, 18% GST); a buy's and a sell's add up exactly to the round trip — `options/engine/costs.py` (`order_charges`)
+- [x] Tables `desk_accounts` (per user, epoch for resets) and `desk_orders`; conditional status updates so a cancel and a fill can't both win — `options/storage.py`
+- [x] Order rules: Market / Limit / SL / SL-M, Intraday (MIS) / Carry (NRML), whole lots, ≤ 20 lots, ₹0.05 ticks, stop triggers on LTP, buy at the ask, sell at the bid, marketable limits at the live price, resting ones at their limit; buy-only (sell what you hold) — `options/desk/rules.py`
+- [x] Account rebuilt from fills on every read (average price, charges split across partial sells, cash, held funds, positions at LTP, trades, P&L by day, curve) — `options/desk/ledger.py`
+- [x] End-of-session rules, run by the recorder and again on every read: day orders cancelled at 15:30, an AMO that never got a live price cancelled after its session, MIS squared off at 15:20 (live bid; else the last recorded price before 15:20), carried positions settled at expiry at intrinsic value — `options/desk/service.py`
+- [x] Matcher in the recorder (NOTIFY `desk_order`, every loop turn ≤ 1 s, broker quote for a contract without a tick, funds re-checked at the fill, desk contracts pinned in the live feed) — `options/desk/worker.py`, wired in `options/session.py`; `LiveIndexFeed.watch(pin=True)`
+- [x] API `/api/desk`, `/api/desk/ticket` (price, itemised charges, funds, breakeven, the reason it can't be placed), `POST /api/desk/orders` (waits ≤ 4 s for a market fill), modify, cancel, `/api/desk/positions/exit`, `/api/desk/account` (add funds / reset) — `api/routes/desk.py`. In market hours without a live feed orders are refused (503), never filled at a made-up price
+- [x] Trade page `/trade` (ticket, tiles, Positions / Orders / Trades / By day, balance curve), live P&L from the price stream; "Trade this" on open signal cards; nav: Trade is a phone tab, Performance moves to More — `ui/src/app/trade`, `ui/src/components/desk/`
+- [x] Tests: `tests/options/test_desk.py` (33), E2E `ui/e2e/trade.spec.ts`, `/trade` in the layout guard
+- [ ] Watch it fill against the live market on the first trading day after deploy (the matcher has only run against fakes)
+- Later: selling options (short) with a margin estimate; BANKNIFTY/SENSEX/stock options; bracket orders
+
 ## User setup still pending
 - Done 16 Oct 2026: admin account created; Angel One connected on the Connectors page (health check logs in).
 - **Telegram:** bot token saved; the Chat ID must be the user's numeric Telegram ID (from @userinfobot), not the bot's username. Then press **Send test message**.

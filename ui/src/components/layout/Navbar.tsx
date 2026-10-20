@@ -82,10 +82,10 @@ function NavMore({ items, path }: { items: NavItem[]; path: string }) {
   if (!items.length) return null;
   const activeTier = items.find(i => isActive(path, i.href))?.tier;
   return (
-    <div className="relative hidden lg:inline-flex 2xl:hidden" ref={ref}>
+    <div className={cn("relative hidden lg:inline-flex", !items.some(i => i.tier === 4) && "2xl:hidden")} ref={ref}>
       <button type="button" onClick={() => setOpen(o => !o)} aria-haspopup="menu" aria-expanded={open}
               className={cn("inline-flex items-center gap-1 px-2 xl:px-2.5 py-1 text-sm font-medium border-b-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff9933] rounded-sm",
-                activeTier === 3 ? "text-[#ff9933]" : activeTier === 2 ? "text-[#ff9933] xl:text-[#94a3b8]" : "text-[#94a3b8] hover:text-[#e2e8f0]")}>
+                activeTier === 4 ? "text-[#ff9933]" : activeTier === 3 ? "text-[#ff9933] 2xl:text-[#94a3b8]" : activeTier === 2 ? "text-[#ff9933] xl:text-[#94a3b8]" : "text-[#94a3b8] hover:text-[#e2e8f0]")}>
         <MoreHorizontal size={15} aria-hidden /> More <ChevronDown size={12} className={cn("transition-transform duration-200", open && "rotate-180")} aria-hidden />
       </button>
       {open && (

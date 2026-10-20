@@ -263,6 +263,49 @@ option_checks = Table(
     Column("paper_closed_at", DateTime(timezone=True)),
 )
 
+# The paper trading desk (options/desk): each user's virtual funds, and every order they place.
+# Positions, P&L and cash are rebuilt from the filled orders on every read, so they can't drift.
+# A reset starts a new epoch: older orders stay in the table but no longer count.
+desk_accounts = Table(
+    "desk_accounts", metadata,
+    Column("username", String(64), primary_key=True),
+    Column("funds", Float, nullable=False),                  # starting funds of the current epoch
+    Column("added", Float, nullable=False, server_default="0"),
+    Column("epoch", Integer, nullable=False, server_default="1"),
+    Column("started_at", DateTime(timezone=True), nullable=False),
+)
+
+desk_orders = Table(
+    "desk_orders", metadata,
+    Column("id", String(64), primary_key=True),
+    Column("username", String(64), nullable=False, index=True),
+    Column("epoch", Integer, nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False, index=True),
+    Column("updated_at", DateTime(timezone=True), nullable=False),
+    Column("index_name", String(16)),
+    Column("symbol", String(64), nullable=False),
+    Column("token", BigInteger, nullable=False),
+    Column("spot_token", BigInteger),                        # the index, for expiry settlement
+    Column("expiry", Date),
+    Column("strike", Float),
+    Column("option_right", String(2)),
+    Column("lot_size", Integer, nullable=False),
+    Column("side", String(4), nullable=False),               # BUY | SELL
+    Column("product", String(4), nullable=False),            # MIS (intraday) | NRML (carry)
+    Column("order_type", String(6), nullable=False),         # MARKET | LIMIT | SL | SL-M
+    Column("qty", Integer, nullable=False),                  # units, a whole number of lots
+    Column("price", Float),                                  # limit price (LIMIT, SL)
+    Column("trigger_price", Float),                          # SL, SL-M
+    Column("status", String(10), nullable=False, index=True),
+    Column("reason", Text),                                  # why rejected or cancelled
+    Column("block", Float),                                  # funds held for a buy until it fills or ends
+    Column("fill_price", Float),
+    Column("filled_at", DateTime(timezone=True)),
+    Column("fill_source", String(40)),                       # live ask, live bid, settlement, …
+    Column("charges", Text),                                 # JSON breakdown of this order's charges
+    Column("source", String(40)),                            # ticket | signal:<id> | exit | squareoff | expiry
+)
+
 # One row per minute of a recording session: is the machine keeping up? (review F-28 / roadmap R-28)
 session_metrics = Table(
     "session_metrics", metadata,
@@ -682,6 +725,81 @@ class Store:
         q = select(option_checks).where(option_checks.c.created_at >= since, option_checks.c.status == "done")
         with self.engine.connect() as conn:
             return [self._check_row(r) for r in conn.execute(q)]
+
+    # ── Paper trading desk ───────────────────────────────────────────────────
+
+    def desk_account(self, username: str) -> dict | None:
+        with self.engine.connect() as conn:
+            r = conn.execute(select(desk_accounts).where(desk_accounts.c.username == username)).first()
+        return self._ist(dict(r._mapping)) if r else None
+
+    def desk_account_save(self, row: dict) -> None:
+        self._upsert(desk_accounts, [row], ["username"])
+
+    def desk_order_add(self, row: dict) -> bool:
+        """False if an order with this id exists already (settlements and square-offs use fixed ids)."""
+        values = {k: (json.dumps(v, separators=(",", ":")) if k == "charges" and v is not None else v)
+                  for k, v in row.items()}
+        dialect = self.engine.dialect.name
+        if dialect == "postgresql":
+            from sqlalchemy.dialects.postgresql import insert
+        else:
+            from sqlalchemy.dialects.sqlite import insert
+        with self.engine.begin() as conn:
+            res = conn.execute(insert(desk_orders).values(**values).on_conflict_do_nothing(index_elements=["id"]))
+        return bool(res.rowcount)
+
+    def desk_order_update(self, order_id: str, from_status: tuple[str, ...] | None = None, **values) -> bool:
+        """Change an order; with `from_status`, only if it is still in one of those (True if this call did)."""
+        if "charges" in values and values["charges"] is not None:
+            values["charges"] = json.dumps(values["charges"], separators=(",", ":"))
+        q = update(desk_orders).where(desk_orders.c.id == order_id)
+        if from_status:
+            q = q.where(desk_orders.c.status.in_(from_status))
+        with self.engine.begin() as conn:
+            return bool(conn.execute(q.values(**values)).rowcount)
+
+    @staticmethod
+    def _ist(d: dict) -> dict:
+        """SQLite hands back naive datetimes (as written, in IST) and Postgres aware UTC ones: both as IST."""
+        from options.core.calendar import IST
+        for k, v in d.items():
+            if isinstance(v, datetime):
+                d[k] = v.replace(tzinfo=IST) if v.tzinfo is None else v.astimezone(IST)
+        return d
+
+    @staticmethod
+    def _desk_row(r) -> dict:
+        d = Store._ist(dict(r._mapping))
+        try:
+            d["charges"] = json.loads(d["charges"]) if d.get("charges") else None
+        except ValueError:
+            d["charges"] = None
+        return d
+
+    def desk_order(self, order_id: str) -> dict | None:
+        with self.engine.connect() as conn:
+            r = conn.execute(select(desk_orders).where(desk_orders.c.id == order_id)).first()
+        return self._desk_row(r) if r else None
+
+    def desk_orders(self, username: str, epoch: int) -> list[dict]:
+        q = (select(desk_orders).where(desk_orders.c.username == username, desk_orders.c.epoch == epoch)
+             .order_by(desk_orders.c.created_at, desk_orders.c.id))
+        with self.engine.connect() as conn:
+            return [self._desk_row(r) for r in conn.execute(q)]
+
+    def desk_orders_current(self) -> list[dict]:
+        """Every user's orders in their current account (the recorder's view of the whole desk)."""
+        j = desk_orders.join(desk_accounts, (desk_orders.c.username == desk_accounts.c.username)
+                             & (desk_orders.c.epoch == desk_accounts.c.epoch))
+        q = select(desk_orders).select_from(j).order_by(desk_orders.c.created_at, desk_orders.c.id)
+        with self.engine.connect() as conn:
+            return [self._desk_row(r) for r in conn.execute(q)]
+
+    def desk_orders_active(self, statuses: tuple[str, ...]) -> list[dict]:
+        q = select(desk_orders).where(desk_orders.c.status.in_(statuses)).order_by(desk_orders.c.created_at)
+        with self.engine.connect() as conn:
+            return [self._desk_row(r) for r in conn.execute(q)]
 
     def notify(self, channel: str, payload: str) -> None:
         """Postgres NOTIFY (a no-op elsewhere): wakes whoever LISTENs on `channel` at once."""

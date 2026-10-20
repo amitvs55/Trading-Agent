@@ -30,6 +30,7 @@ from options.engine.engine import SignalEngine
 from options.engine.state import MarketState
 from options.check.worker import CHANNEL as CHECK_CHANNEL, CheckWorker
 from options.core.pglisten import Listener
+from options.desk.worker import CHANNEL as DESK_CHANNEL, DeskWorker
 from options.market_data.live import CloseKeeper, LiveIndexFeed
 from options.market_data.metrics import SessionMetrics
 from options.market_data.recorder import Recorder
@@ -227,12 +228,17 @@ def _run(cfg: OptionsSettings, now_fn, sleep, store: Store, notifier: Notifier, 
                           constituents=constituents, vix_history=history.vix_closes, macro=macro.snapshot,
                           events=load_events(store), news=news.snapshot, quote_fn=recorder.agg.quote, now_fn=now_fn)
     checks = CheckWorker(engine, recorder, broker, store, live)
+    desk = DeskWorker(recorder, broker, store, calendar, live)
 
     def on_tick(now: datetime) -> None:
         try:
             engine.on_tick(now)
         finally:
             checks.maybe(now)                   # Option Check requests, on the main thread
+            try:
+                desk.maybe(now)                 # paper desk orders: fills, stops, square-off
+            except Exception:
+                logger.exception("Desk orders failed")
     recorder.on_bars, recorder.on_tick = engine.on_bars, on_tick
     metrics = SessionMetrics(store, recorder, engine, notifier)
     retry = HistoryRetry(broker, history, state, store, notifier, today)
@@ -241,8 +247,11 @@ def _run(cfg: OptionsSettings, now_fn, sleep, store: Store, notifier: Notifier, 
 
     recorder.start(prices)
     checks.follow_open(now_fn())
+    desk.follow_open()
     listener = Listener(store.engine, CHECK_CHANNEL, checks.poke)
     listener.start()
+    desk_listener = Listener(store.engine, DESK_CHANNEL, desk.poke)
+    desk_listener.start()
     fill_previous_closes(broker, constituents, store=store, calendar=calendar, today=today)
     try:
         closes.maybe(now_fn())                  # a restart mid-session gets the rest from quotes at once
@@ -258,6 +267,7 @@ def _run(cfg: OptionsSettings, now_fn, sleep, store: Store, notifier: Notifier, 
 
     recorder.run_until(at_ist(today, RECORD_UNTIL), sleep=sleep)
     listener.stop()
+    desk_listener.stop()
     macro.stop()
     news.stop()
     try:

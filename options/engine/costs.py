@@ -42,3 +42,9 @@ def charges(buy_value: float, sell_value: float, orders: int) -> Charges:
         stamp=buy_value * STAMP_BUY_PCT / 100,
         gst=(brokerage + exchange + sebi) * GST_PCT / 100,
     )
+
+
+def order_charges(side: str, value: float, orders: int = 1) -> Charges:
+    """Charges for one executed order: a "BUY" or "SELL" of `value` (₹) of premium. Every rate is linear,
+    so a buy's and a sell's charges add up exactly to charges(buy, sell, 2)."""
+    return charges(value if side == "BUY" else 0.0, value if side == "SELL" else 0.0, orders)

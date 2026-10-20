@@ -13,6 +13,7 @@ from api.routes.admin import router as admin_router
 from api.routes.agents import install_research_sink, router as agents_router
 from api.routes.analyze import router as analyze_router
 from api.routes.check import router as check_router, start_warmer
+from api.routes.desk import router as desk_router
 from api.routes.history import import_legacy_log, router as history_router
 from api.routes.options import router as options_router, stop_live_hub
 from api.routes.paper import ensure_account, router as paper_router
@@ -118,6 +119,7 @@ app.include_router(check_router)    # /api/options/check* (signed-in: admins and
 app.include_router(admin_router)    # /api/auth/* + /api/admin/* (admin)
 app.include_router(agents_router)   # /api/agents + /api/admin/agents/selftest (admin)
 app.include_router(paper_router)    # /api/paper (signed-in) + /api/admin/paper
+app.include_router(desk_router)     # /api/desk* (signed-in: each user's own paper trading desk)
 
 
 @app.get("/health")

@@ -1,4 +1,4 @@
-import { BarChart3, Bot, Coins, Crosshair, FlaskConical, History, PlugZap, Radio, ShieldCheck, UserRound, Wallet, type LucideIcon } from "lucide-react";
+import { ArrowLeftRight, BarChart3, Bot, Coins, Crosshair, FlaskConical, History, PlugZap, Radio, ShieldCheck, UserRound, Wallet, type LucideIcon } from "lucide-react";
 
 export type Role = "admin" | "viewer";
 
@@ -8,7 +8,7 @@ export interface NavItem {
   icon: LucideIcon;
   roles: Role[];
   primary?: boolean;            // gets its own tab in the mobile bottom bar
-  tier: 1 | 2 | 3;              // desktop bar: 1 from lg, 2 from xl, 3 from 2xl; narrower bars list it under "More"
+  tier: 1 | 2 | 3 | 4;          // desktop bar: 1 from lg, 2 from xl, 3 from 2xl, 4 never; narrower bars list it under "More"
 }
 
 // One list for the desktop bar, the mobile bottom bar and the "More" sheet.
@@ -16,13 +16,14 @@ export interface NavItem {
 // (the API enforces the same split: see api/main.py and require_admin).
 export const NAV: NavItem[] = [
   { href: "/signals",     label: "Signals",     icon: Radio,        roles: ["admin", "viewer"], primary: true, tier: 1 },
+  { href: "/trade",       label: "Trade",       icon: ArrowLeftRight, roles: ["admin", "viewer"], primary: true, tier: 1 },
   { href: "/check",       label: "Check",       icon: Crosshair,    roles: ["admin", "viewer"], primary: true, tier: 1 },
   { href: "/paper",       label: "Paper",       icon: Wallet,       roles: ["admin", "viewer"], primary: true, tier: 1 },
-  { href: "/performance", label: "Performance", icon: BarChart3,    roles: ["admin", "viewer"], primary: true, tier: 1 },
+  { href: "/performance", label: "Performance", icon: BarChart3,    roles: ["admin", "viewer"], tier: 3 },        // phones: in More
   { href: "/agents",      label: "Agents",      icon: Bot,          roles: ["admin"],           tier: 1 },   // phones: in More
   { href: "/",            label: "Research",    icon: FlaskConical, roles: ["admin"], tier: 2 },
-  { href: "/history",     label: "History",     icon: History,      roles: ["admin"], tier: 3 },
-  { href: "/usage",       label: "Usage",       icon: Coins,        roles: ["admin"], tier: 3 },
+  { href: "/history",     label: "History",     icon: History,      roles: ["admin"], tier: 4 },
+  { href: "/usage",       label: "Usage",       icon: Coins,        roles: ["admin"], tier: 4 },
   { href: "/operations",  label: "Operations",  icon: ShieldCheck,  roles: ["admin"], tier: 2 },
   { href: "/connectors",  label: "Connectors",  icon: PlugZap,      roles: ["admin"], tier: 3 },
 ];
@@ -30,8 +31,8 @@ export const NAV: NavItem[] = [
 export const ACCOUNT_ITEM: NavItem = { href: "/account", label: "Your account", icon: UserRound, roles: ["admin", "viewer"], tier: 1 };
 
 // Tailwind needs the class names spelled out in full
-export const BAR_CLASS: Record<NavItem["tier"], string> = { 1: "inline-flex", 2: "hidden xl:inline-flex", 3: "hidden 2xl:inline-flex" };
-export const MORE_CLASS: Record<NavItem["tier"], string> = { 1: "hidden", 2: "flex xl:hidden", 3: "flex 2xl:hidden" };
+export const BAR_CLASS: Record<NavItem["tier"], string> = { 1: "inline-flex", 2: "hidden xl:inline-flex", 3: "hidden 2xl:inline-flex", 4: "hidden" };
+export const MORE_CLASS: Record<NavItem["tier"], string> = { 1: "hidden", 2: "flex xl:hidden", 3: "flex 2xl:hidden", 4: "flex" };
 
 // Pages only admins may open; anything else (including an unknown URL, which gets the 404 page) is open
 const ADMIN_PATHS = NAV.filter(i => !i.roles.includes("viewer")).map(i => i.href);
