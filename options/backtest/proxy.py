@@ -103,6 +103,10 @@ class ProxyMarket:
     def recorded_days(self) -> list[date]:
         return list(self.days)
 
+    def daily_bars(self, token: int, start: datetime, end: datetime) -> list[dict]:
+        """Day candles for the replay's warm-up: spot and VIX come straight from the saved history."""
+        return self.history.daily_bars(token, start, end)
+
     def _expiry_on_or_before(self, d: date) -> date:
         while not self.calendar.is_trading_day(d):
             d -= timedelta(days=1)
