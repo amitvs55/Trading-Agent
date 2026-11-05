@@ -55,6 +55,9 @@ def signal_card(sig: Signal, capital: float, setup_stats: str | None = None, con
     mode = "\n<i>SHADOW TEST: tracked automatically, not for trading yet</i>" if sig.mode == "SHADOW" else ""
     if confidence:
         mode = f"\n📊 {escape(confidence)}{mode}"
+    if sig.over_budget:
+        mode += (f"\n⚠️ <b>Over your risk limit</b>: 1 lot risks {_rupees(sig.risk_rupees)}, more than your "
+                 "per-trade budget. Sent so you see the setup; skip it unless you accept the larger risk.")
     t1_note = "book half" if sig.lots >= 2 else "lock half the gain"
     rr1 = (sig.t1 - sig.entry_high) / (sig.entry_high - sig.stop_loss)
     rr2 = (sig.t2 - sig.entry_high) / (sig.entry_high - sig.stop_loss)

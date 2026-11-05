@@ -162,7 +162,9 @@ def test_paper_account_respects_its_daily_stop_and_cash():
     later = closed_signal(2, 140, 200, 120)
     acct = build([loss, later], PaperSettings(100_000, START), 3, 2, {}, START + timedelta(hours=5))   # 2% stop
     assert acct["stats"]["trades"] == 1 and "daily loss stop" in acct["skipped"][0]["reason"]
-    poor = build([later], PaperSettings(5_000, START), 3, 10, {}, START + timedelta(hours=5))
+    small = build([later], PaperSettings(5_000, START), 3, 10, {}, START + timedelta(hours=5))   # ₹150 budget
+    assert small["stats"]["trades"] == 0 and "over the 3% risk rule" in small["skipped"][0]["reason"]
+    poor = build([later], PaperSettings(5_000, START), 100, 10, {}, START + timedelta(hours=5))  # risk fits, cash doesn't
     assert poor["stats"]["trades"] == 0 and "not enough paper cash" in poor["skipped"][0]["reason"]
 
 

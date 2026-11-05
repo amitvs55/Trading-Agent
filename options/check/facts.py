@@ -17,7 +17,7 @@ from options.agents.option_chain import ChainRow, build_chain
 from options.agents.volatility import price_chain
 from options.core.calendar import IST
 from options.engine import grading
-from options.engine.levels import plan
+from options.engine.levels import plan, target_room
 from options.engine.snapshot import Snapshot
 from options.quant import black76 as b76
 from options.reference import OptionInfo
@@ -122,7 +122,7 @@ def market_facts(snap: Snapshot, opt: OptionInfo, horizon: str, now: datetime, q
                 g = b76.greeks(fwd, opt.strike, t, ctx.r, iv, opt.right)
                 row.greeks = {"iv": iv, "delta": g.delta, "gamma": g.gamma, "vega": g.vega, "theta_day": g.theta_day}
                 contract.update(iv=iv, greeks={"delta": g.delta, "gamma": g.gamma, "vega": g.vega, "theta_day": g.theta_day})
-        room = snap.tech.room(side, cand.trigger)[0]
+        room = target_room(snap.tech, side, cand.trigger)
         trade = plan(row, side, cand.horizon, cand.trigger, cand.invalidation, fwd, t, ctx.r, room) if fwd else None
         checks = grading.checks(snap, cand, row)
         if trade is not None:

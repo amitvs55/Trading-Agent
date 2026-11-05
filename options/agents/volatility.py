@@ -15,7 +15,13 @@ from options.core.schemas import PillarCheck, PillarView
 from options.quant import black76 as b76
 
 BUY_IV_PASS_PCT = 50       # buyers want premium cheap or fair
-BUY_IV_FAIL_PCT = 70       # above this, buying premium is a NO TRADE (plan §4)
+BUY_IV_HIGH_PCT = 70       # VIX in the top 30% of its year: costs points, but is not a NO TRADE by itself
+BUY_IV_FAIL_PCT = 90       # with no IV/RV to judge by, only an extreme VIX rank blocks a buy
+IV_RV_WARN, IV_RV_FAIL = 1.15, 1.3   # premium priced well above how much NIFTY really moves: NO TRADE
+
+# Why the rank alone isn't the test (decision log, 19 Oct – 5 Nov 2026): VIX sat at its 73rd percentile
+# while ATM IV (15.6%) was below 20-day realised vol (16.0%), so options were fairly priced for the
+# moves NIFTY was making. The old rule (fail at rank 70) blocked all 102 candidates in that stretch.
 
 
 @dataclass
@@ -88,15 +94,21 @@ def analyse(ctx: AgentContext, chain: Chain | None) -> VolView:
     if rv20:
         parts.append(f"RV20 {rv20 * 100:.1f}%")
 
+    ratio = atm_iv / rv20 if atm_iv and rv20 else None
     if vix_pct is not None:
         parts.append(f"VIX pct {vix_pct:.0f}")
-        status = "pass" if vix_pct < BUY_IV_PASS_PCT else "warn" if vix_pct < BUY_IV_FAIL_PCT else "fail"
-        regime = "cheap" if vix_pct < 40 else "fair" if vix_pct < BUY_IV_FAIL_PCT else "rich"
-    elif atm_iv and rv20:
-        ratio = atm_iv / rv20
+    if ratio is not None:
         parts.append(f"IV/RV {ratio:.2f}")
-        status = "pass" if ratio < 1.2 else "warn" if ratio < 1.5 else "fail"
-        regime = "cheap" if ratio < 1.0 else "fair" if ratio < 1.5 else "rich"
+        # Premium against the moves NIFTY is actually making decides; a high VIX rank only costs points
+        if ratio >= IV_RV_FAIL:
+            status, regime = "fail", "rich"
+        elif ratio >= IV_RV_WARN or (vix_pct is not None and vix_pct >= BUY_IV_PASS_PCT):
+            status, regime = "warn", "fair"
+        else:
+            status, regime = "pass", "cheap" if ratio < 1.0 else "fair"
+    elif vix_pct is not None:
+        status = "pass" if vix_pct < BUY_IV_PASS_PCT else "warn" if vix_pct < BUY_IV_FAIL_PCT else "fail"
+        regime = "cheap" if vix_pct < 40 else "fair" if vix_pct < BUY_IV_HIGH_PCT else "rich"
     else:
         status, regime = "na", "unknown"
     if vix_chg is not None and vix_chg > 3 and status == "warn":

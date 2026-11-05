@@ -12,6 +12,14 @@ from options.quant import black76 as b76
 TICK = 0.05
 PREMIUM_STOP_CAP = {"intraday": 0.30, "positional": 0.35}   # never risk more than this share of premium
 HOLD_YEARS = {"intraday": 0.5 / (365 * 24), "positional": 1 / 365}
+# Target 1 is the nearest level at least this many 5-minute ATRs away. With ~15 tracked levels (every
+# minor swing, the opening range, VWAP, pivots) the nearest one is usually a few points off, which put
+# the median reward:risk at 0.5 and failed 72 of 102 candidates (19 Oct – 5 Nov 2026).
+TARGET_MIN_ATR = 1.0
+
+
+def target_room(tech, side: int, price: float) -> float | None:
+    return tech.room(side, price, min_atr=TARGET_MIN_ATR)[0]
 
 
 def tick(x: float) -> float:

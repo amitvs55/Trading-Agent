@@ -184,3 +184,20 @@ def test_close_session_never_carries_intraday_signals_overnight(engine):
     final = store.get_signal(sig.signal_id)
     assert final.state is SignalState.CLOSED and final.exit_reason == "SQUARE_OFF"
     assert eng.open == [] and store.open_signals() == []
+
+
+def test_a_trade_over_the_risk_budget_is_sent_marked_not_dropped(tmp_path):
+    ctx = build_market(trend=1)
+    store = Store(make_engine(f"sqlite:///{tmp_path}/o.db"))
+    notifier = RecordingNotifier()
+    tiny = OptionsSettings(OPTIONS_RISK_PER_TRADE_PCT=0.1)                               # ₹100 a trade
+    eng = SignalEngine({"NIFTY": ctx.ref}, ctx.state, store, notifier, tiny, ctx.calendar,
+                       vix_token=ctx.vix_token, constituents={"NIFTY": ctx.constituents},
+                       vix_history=ctx.vix_history, events=[], quote_fn=lambda t: (None, None),
+                       now_fn=lambda: ctx.now, setups=[AlwaysBull()])
+    eng.evaluate(ctx.now)
+    [sig] = store.signals_since(ctx.now - timedelta(hours=1))
+    assert sig.over_budget and sig.lots == 1 and sig.risk_rupees > 100
+    assert "Over your risk limit" in notifier.texts()[-1]
+    [ev] = store.evaluations_since(ctx.now - timedelta(hours=1))
+    assert ev["outcome"] == "SIGNAL" and "over budget" in ev["reasons"]

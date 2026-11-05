@@ -24,7 +24,7 @@ from options.core.events import EVENTS, Event
 from options.core.schemas import OPEN_STATES, Action, Contract, Grade, Signal, SignalState
 from options.delivery import cards
 from options.engine import confidence, controls, grading, lifecycle, performance
-from options.engine.levels import plan
+from options.engine.levels import plan, target_room
 from options.engine.risk import RiskConfig, budget_gate, size
 from options.engine.selection import oi_unit, pick_expiry, pick_strike
 from options.engine.snapshot import Snapshot, SnapshotError, take
@@ -294,7 +294,7 @@ class SignalEngine:
         if row is None:
             return self._log(now, index, cand, "NO_TRADE", [why])
 
-        room = cand.room if cand.room_unit else snap.tech.room(cand.side, cand.trigger)[0]
+        room = cand.room if cand.room_unit else target_room(snap.tech, cand.side, cand.trigger)
         trade = plan(row, cand.side, cand.horizon, cand.trigger, cand.invalidation, forward, t, ctx.r, room)
         if trade is None:
             return self._log(now, index, cand, "NO_TRADE", ["could not price the contract"])
@@ -317,10 +317,10 @@ class SignalEngine:
         if grade is Grade.C:
             return self._log(now, index, cand, "GRADE_C", [f"score {score:.0f}"], "C", score)
         self._signalled.add(key)
-        if sizing.over_budget:
-            return self._log(now, index, cand, "OVER_BUDGET",
-                             [f"1 lot risks ₹{sizing.risk_rupees:,.0f} > ₹{self.risk.per_trade_budget:,.0f} budget"],
-                             grade.value, score)
+        # A trade that passed every rule but whose single lot risks more than the budget is still sent,
+        # marked as over the limit, so you see the setup and decide (it used to be dropped silently)
+        over = ([f"over budget: 1 lot risks ₹{sizing.risk_rupees:,.0f} > ₹{self.risk.per_trade_budget:,.0f}"]
+                if sizing.over_budget else [])
 
         # An opposite grade-A signal ends any open trade in the other direction
         if grade is Grade.A:
@@ -334,7 +334,7 @@ class SignalEngine:
         sig = self._build(snap, setup, cand, row, expiry, trade, sizing, grade, score, pillar, seq, now)
         self.store.save_signal(sig, now)
         self.store.signal_event(sig.signal_id, "CREATED", sig.entry_high, f"{sig.action.value} grade {grade.value}", now)
-        self._log(now, index, cand, "SIGNAL", [sig.signal_id], grade.value, score)
+        self._log(now, index, cand, "SIGNAL", [sig.signal_id, *over], grade.value, score)
         self.open.append(sig)
 
         everything = self.store.signals_since(today_start - timedelta(days=3650))

@@ -81,7 +81,8 @@ def build(signals: list[Signal], st: PaperSettings, risk_pct: float, daily_stop_
             cfg = RiskConfig(capital=balance, risk_per_trade_pct=risk_pct, daily_loss_stop_pct=daily_stop_pct,
                              max_lots=max_lots)
             stop = sig.initial_stop if sig.initial_stop is not None else sig.stop_loss
-            lots = size(cfg, sig.fill_price, stop, sig.contract.lot_size, sig.horizon == "positional").lots
+            sizing = size(cfg, sig.fill_price, stop, sig.contract.lot_size, sig.horizon == "positional")
+            lots = 0 if sizing.over_budget else sizing.lots
             loss_today = -min(realised_by_day.get(day, 0.0), 0.0)
             daily_limit = day_start[day] * daily_stop_pct / 100
             unit_cost = sig.fill_price * sig.contract.lot_size
@@ -90,7 +91,8 @@ def build(signals: list[Signal], st: PaperSettings, risk_pct: float, daily_stop_
             if loss_today >= daily_limit:
                 reason = f"daily loss stop hit (₹{loss_today:,.0f} of ₹{daily_limit:,.0f})"
             elif lots < 1:
-                reason = "no position size fits the risk rule"
+                reason = (f"over the {risk_pct:g}% risk rule: 1 lot risks ₹{sizing.risk_rupees:,.0f} "
+                          f"of ₹{cfg.per_trade_budget:,.0f}")
             elif affordable < 1:
                 reason = f"not enough paper cash (₹{cash:,.0f} free, 1 lot costs ₹{unit_cost:,.0f})"
             if reason:

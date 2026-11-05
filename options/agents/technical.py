@@ -40,9 +40,10 @@ class TechView:
     or_low: float | None = None
     levels: dict[str, float] = field(default_factory=dict)   # named levels, futures points
 
-    def room(self, side: int, price: float) -> tuple[float | None, str | None]:
-        """Distance to the nearest level beyond `price` in the trade direction."""
-        min_gap = 0.1 * (self.atr_5m or 0)
+    def room(self, side: int, price: float, min_atr: float = 0.1) -> tuple[float | None, str | None]:
+        """Distance to the nearest level beyond `price` in the trade direction, ignoring levels closer
+        than `min_atr` 5-minute ATRs (the levels pillar looks at every barrier; targets skip minor ones)."""
+        min_gap = min_atr * (self.atr_5m or 0)
         beyond = [(abs(v - price), k) for k, v in self.levels.items()
                   if (v - price) * side > min_gap]
         return min(beyond) if beyond else (None, None)

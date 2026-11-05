@@ -131,3 +131,46 @@ def test_regime_classification_and_timing(bull):
     assert regime.classify(TechView(htf_trend="flat", adx_15m=None, **base)) == "neutral"
     rv = regime.analyse(bull, technical.analyse(bull))
     assert rv.phase == "main" and rv.timing.status == "pass" and not rv.expiry_day
+
+
+def _vol_with(bull, vix_pct, atm_iv, rv20, monkeypatch):
+    """The volatility pillar for a given VIX rank, ATM IV and realised vol."""
+    monkeypatch.setattr(volatility, "percentile_rank", lambda v, h: vix_pct)
+    monkeypatch.setattr(volatility, "realized_vol", lambda closes, window=20: rv20)
+    chain = option_chain.build_chain(bull, bull.ref.expiries[0])
+    real = volatility.price_chain
+
+    def priced(ctx, ch):
+        fwd, t = real(ctx, ch)
+        for row in ch.rows.values():
+            if row.greeks:
+                row.greeks["iv"] = atm_iv
+        return fwd, t
+    monkeypatch.setattr(volatility, "price_chain", priced)
+    return volatility.analyse(bull, chain).pillar
+
+
+def test_a_high_vix_rank_alone_no_longer_blocks_a_buy(bull, monkeypatch):
+    # 5 Nov 2026: VIX at its 73rd percentile, ATM IV 15.6% below realised 16.0%: fairly priced
+    p = _vol_with(bull, 73, 0.156, 0.160, monkeypatch)
+    assert p.status == "warn" and "IV/RV 0.97" in p.detail
+
+
+def test_premium_well_above_realised_moves_still_blocks_a_buy(bull, monkeypatch):
+    assert _vol_with(bull, 40, 0.20, 0.14, monkeypatch).status == "fail"               # IV/RV 1.43
+    assert _vol_with(bull, 30, 0.12, 0.13, monkeypatch).status == "pass"               # cheap and calm
+    assert _vol_with(bull, 30, 0.155, 0.13, monkeypatch).status == "warn"              # IV/RV 1.19
+
+
+def test_without_realised_vol_only_an_extreme_vix_rank_blocks(bull, monkeypatch):
+    assert _vol_with(bull, 80, 0.15, None, monkeypatch).status == "warn"
+    assert _vol_with(bull, 95, 0.15, None, monkeypatch).status == "fail"
+
+
+def test_target_one_skips_levels_closer_than_one_atr():
+    from options.agents.technical import TechView
+    from options.engine.levels import target_room
+    t = TechView.__new__(TechView)
+    t.atr_5m, t.levels = 20.0, {"minor swing": 24_505.0, "PDH": 24_560.0}
+    assert t.room(1, 24_500.0) == (5.0, "minor swing")                  # the levels pillar still sees it
+    assert target_room(t, 1, 24_500.0) == 60.0                         # the target goes to the next real level
