@@ -523,6 +523,25 @@ class Store:
         with self.engine.connect() as conn:
             return {int(t): int(n) for t, n in conn.execute(q)}
 
+    def daily_bars(self, token: int, start: datetime, end: datetime) -> list[dict]:
+        """Day candles built from the saved 1-minute bars (oldest first, Kite's day-candle shape), for a
+        replay to warm up VIX rank, realised vol and daily trends as the live session does from the
+        broker's day candles. Streamed, so two years of minutes never sit in memory at once."""
+        from options.core.calendar import IST
+        q = (select(bars_1m.c.ts, bars_1m.c.open, bars_1m.c.high, bars_1m.c.low, bars_1m.c.close)
+             .where(bars_1m.c.instrument_token == token, bars_1m.c.ts >= start, bars_1m.c.ts < end)
+             .order_by(bars_1m.c.ts))
+        days: dict[date, dict] = {}
+        with self.engine.connect() as conn:
+            for ts, o, h, lo, c in conn.execution_options(yield_per=5000).execute(q):
+                d = (ts.replace(tzinfo=IST) if ts.tzinfo is None else ts.astimezone(IST)).date()
+                day = days.get(d)
+                if day is None:
+                    days[d] = {"date": d, "open": o, "high": h, "low": lo, "close": c, "volume": 0}
+                else:
+                    day["high"], day["low"], day["close"] = max(day["high"], h), min(day["low"], lo), c
+        return list(days.values())
+
     def purge_before(self, bars_cutoff: datetime, logs_cutoff: datetime) -> dict[str, int]:
         """Retention: 1-minute bars older than bars_cutoff; delivered alerts, session events and research
         prompts older than logs_cutoff. Signals, their events, evaluations and research run results are

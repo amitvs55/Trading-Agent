@@ -10,6 +10,7 @@ import { AlertsPanel } from "@/components/operations/AlertsPanel";
 import { CalendarPanel } from "@/components/operations/CalendarPanel";
 import { AuditPanel, RecorderEventsPanel } from "@/components/operations/LogPanels";
 import { MetricsPanel } from "@/components/operations/MetricsPanel";
+import { ReplayPanel } from "@/components/operations/ReplayPanel";
 
 const OPEN = new Set(["TRIGGERED", "ACTIVE", "T1_HIT"]);
 
@@ -48,6 +49,7 @@ export default function OperationsPage() {
           <AlertsPanel data={alerts.data} />
         </div>
         <div className="flex flex-col gap-5 min-w-0">
+          <ReplayPanel />
           <CalendarPanel data={calendar.data} onChange={c => { calendar.refresh(c, { revalidate: false }); audit.refresh(); }} />
           <AuditPanel entries={audit.data?.entries} />
           <RecorderEventsPanel events={events.data?.events} />

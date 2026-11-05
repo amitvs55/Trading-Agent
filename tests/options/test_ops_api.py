@@ -157,3 +157,21 @@ def test_public_recorder_health_endpoint(ops):
     api, _, repo, _ = ops
     r = api.get("/health/recorder")
     assert r.status_code in (200, 503) and set(r.json()) == {"status", "problems", "recorder_state", "checked_at"}
+
+
+def test_a_replay_is_queued_for_the_recorder_and_guarded(ops):
+    from datetime import date
+    api, h, _, store = ops
+    assert api.get("/api/admin/replay", headers=h).json()["report"]["status"] == "none"
+    assert api.post("/api/admin/replay", headers=h, json={"from": "2026-10-01", "to": "2026-10-30"}).status_code == 422
+    store.save_instruments(date(2026, 10, 16), [{"instrument_token": 1, "tradingsymbol": "NIFTY 50", "name": "NIFTY 50",
+                                                 "segment": "INDICES", "instrument_type": "EQ", "expiry": None,
+                                                 "strike": 0, "lot_size": 1, "tick_size": 0.05}])
+    r = api.post("/api/admin/replay", headers=h, json={"from": "2026-10-01", "to": "2026-10-30"})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["report"]["status"] == "queued" and body["report"]["request"]["days"] == 1
+    assert body["recorded"] == {"first": "2026-10-16", "last": "2026-10-16", "days": 1}
+    assert api.post("/api/admin/replay", headers=h, json={"from": "2026-10-01", "to": "2026-10-30"}).status_code == 409
+    assert api.post("/api/admin/replay", headers=h, json={"from": "2026-10-30", "to": "2026-10-01"}).status_code == 422
+    assert "replay_requested" in [e["action"] for e in api.get("/api/admin/audit", headers=h).json()["entries"]]

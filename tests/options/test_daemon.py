@@ -115,3 +115,38 @@ def test_scheduling_survives_without_a_database():
     sup.run(sleep=clock.sleep, steps=2)
     assert len(spawned) == 1
     assert isinstance(sup.session_started_at, datetime)
+
+
+def test_a_replay_waits_for_the_session_to_end_and_is_stopped_by_the_next_one(setup):
+    from options.daemon import REPLAY_REPORT_KEY, REPLAY_REQUEST_KEY
+    sup, repo, clock, spawned = setup
+    replays: list[FakeProcess] = []
+    sup.spawn_replay = lambda: replays.append(FakeProcess()) or replays[-1]
+    clock.now = ist(2026, 10, 16, 10, 0)
+    sup.step(clock())                                                       # today's session is running
+    req = {"from": "2026-10-01", "to": "2026-10-16", "requested_at": clock().isoformat()}
+    repo.set_meta_json(REPLAY_REQUEST_KEY, req)
+    repo.set_meta_json(REPLAY_REPORT_KEY, {"status": "queued", "request": req})
+    sup.step(clock())
+    assert replays == []                                                    # never alongside a live session
+
+    clock.now = ist(2026, 10, 16, 15, 31)
+    spawned[0].code = 0
+    sup.step(clock())
+    assert len(replays) == 1
+    sup.step(clock())
+    assert len(replays) == 1                                                # the same request runs once
+
+    replays[0].code = 1                                                     # died without writing a report
+    sup.step(clock())
+    assert repo.get_meta_json(REPLAY_REPORT_KEY)["status"] == "error"
+
+    req2 = {**req, "requested_at": ist(2026, 10, 19, 8, 0).isoformat()}
+    repo.set_meta_json(REPLAY_REQUEST_KEY, req2)
+    repo.set_meta_json(REPLAY_REPORT_KEY, {"status": "queued", "request": req2})
+    clock.now = ist(2026, 10, 19, 8, 0)
+    sup.step(clock())
+    assert len(replays) == 2
+    clock.now = ist(2026, 10, 19, 8, 30, 5)
+    sup.step(clock())                                                       # the session starts: the replay yields
+    assert replays[1].terminated and repo.get_meta_json(REPLAY_REPORT_KEY)["status"] == "stopped"

@@ -173,3 +173,33 @@ export interface CalendarResponse {
   events: MarketEvent[];
   warning: string | null;
 }
+
+// Replays of recorded days with today's rules (api/routes/admin.py, options/backtest/replay_job.py)
+export interface ReplayStats {
+  trades: number; wins: number; win_rate: number | null; avg_r: number | null; expectancy_rupees: number | null;
+  total_rupees: number; max_drawdown_rupees: number; profit_factor: number | null;
+}
+
+export interface ReplaySignal {
+  id: string; created_at: string; setup: string; horizon: string; action: "BUY_CE" | "BUY_PE"; grade: string;
+  score: number; symbol: string; entry_high: number; stop: number; t1: number; t2: number; fill: number | null;
+  exit: number | null; exit_reason: string | null; state: string; pnl: number | null; r: number | null;
+  over_budget: boolean; risk: number;
+}
+
+export interface ReplayReport {
+  status: "none" | "queued" | "running" | "done" | "error" | "stopped";
+  request?: { from: string; to: string; by: string; requested_at: string; days: number };
+  started_at?: string; finished_at?: string; updated_at?: string;
+  done?: number; total?: number | null; current?: string | null; stalled?: boolean;
+  days?: string[]; signals?: ReplaySignal[]; overall?: ReplayStats; by_setup?: Record<string, ReplayStats>;
+  decisions?: { candidates: number; by_outcome: Record<string, number>; reasons: [string, number][] };
+  rules?: { risk_per_trade_pct: number; capital: number; indices: string[] };
+  notes?: string[]; error?: string; setup_labels?: Record<string, string>;
+}
+
+export interface ReplayView {
+  report: ReplayReport;
+  recorded: { first: string | null; last: string | null; days: number };
+  session_running: boolean;
+}

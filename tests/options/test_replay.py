@@ -53,3 +53,32 @@ def test_replay_report_and_cli_guard(source, tmp_path):
     assert report["days"] == [TODAY.isoformat()] and report["signals"] >= 1
     assert main(["--from", "2026-10-16", "--to", "2026-10-16", "--source", f"sqlite:///{path}",
                  "--out", f"sqlite:///{path}"]) == 2
+
+
+def test_the_replay_job_reports_signals_decisions_and_progress(source, tmp_path):
+    from options.backtest.replay_job import REPORT_KEY, run
+    src, _ = source
+    steps = []
+    real = src.set_meta_json
+    src.set_meta_json = lambda k, v, now: (steps.append(dict(v)), real(k, v, now))
+    req = {"from": TODAY.isoformat(), "to": TODAY.isoformat(), "requested_at": "x", "by": "admin"}
+    report = run(src, req, cfg=OptionsSettings(OPTIONS_INDICES=["NIFTY"]), calendar=NseCalendar(),
+                 workdir=str(tmp_path))
+    src.set_meta_json = real
+    assert report["status"] == "done" and report["days"] == [TODAY.isoformat()]
+    assert report["decisions"]["candidates"] >= len(report["signals"])
+    assert all(r["symbol"].startswith("NIFTY") for r in report["signals"])
+    assert any(s.get("total") == 1 and s.get("done") == 0 for s in steps)      # progress before the day
+    assert src.get_meta_json(REPORT_KEY)["status"] == "done"
+    assert not (tmp_path / "replay.db").samefile(src.engine.url.database)      # never the live database
+
+
+def test_day_candles_come_from_saved_minutes(source):
+    from datetime import datetime, time, timedelta
+    from options.core.calendar import IST
+    src, _ = source
+    token = NSE_ROWS[0]["instrument_token"]
+    days = src.daily_bars(token, datetime.combine(TODAY - timedelta(days=60), time(0), IST),
+                          datetime.combine(TODAY + timedelta(days=1), time(0), IST))
+    assert days and all(d["low"] <= d["close"] <= d["high"] for d in days)
+    assert [d["date"] for d in days] == sorted(d["date"] for d in days)

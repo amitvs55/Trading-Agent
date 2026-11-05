@@ -36,6 +36,7 @@ RESTART_BACKOFF_S = (30, 120, 300)   # waits before the 1st, 2nd and 3rd restart
 POLL_S = 15                          # heartbeat and command check interval
 EVENING_JOBS_AT = time(16, 30)       # after the session's own end-of-day work
 STATUS_KEY, COMMAND_KEY = "recorder_status", "recorder_command"
+REPLAY_REQUEST_KEY, REPLAY_REPORT_KEY = "replay_request", "replay_report"   # options/backtest/replay_job.py
 
 # Session exit codes (options.session)
 EXIT_OK, EXIT_FAILED, EXIT_CONFIG, EXIT_LOGIN = 0, 1, 2, 3
@@ -72,6 +73,10 @@ def spawn_offhours() -> None:
         subprocess.Popen([sys.executable, "-m", "options.offhours"])
     except Exception:
         logger.exception("Off-hours jobs didn't start")
+
+
+def spawn_replay() -> Process:
+    return subprocess.Popen([sys.executable, "-m", "options.backtest.replay_job"])
 
 
 def can_start_now(now: datetime, calendar: NseCalendar) -> bool:
@@ -115,6 +120,9 @@ class Supervisor:
         self.gave_up = False
         self.spawn_offhours: Callable[[], None] | None = None   # evening jobs; main() sets it
         self._offhours_day: date | None = None
+        self.spawn_replay: Callable[[], Process] = spawn_replay
+        self.replay_proc: Process | None = None
+        self._handled_replay: str | None = None
 
     # ── Database (best effort: scheduling must survive a database outage) ──
 
@@ -144,6 +152,7 @@ class Supervisor:
     # ── Session control ──────────────────────────────────────────────────
 
     def _start(self, now: datetime) -> None:
+        self._stop_replay(now, "stopped when today's session started; run it again after the close")
         self.last_run = now.date()
         self.session_started_at = now
         logger.info("Starting session for %s", self.last_run)
@@ -175,6 +184,52 @@ class Supervisor:
         self.restarts_today = 0
         self._start(now)
         self.last_command = f"restarted at {now:%d %b %H:%M} by {cmd.get('by') or 'admin'}"
+
+    # ── Replays from the Operations page (only while no session runs) ────────
+
+    def _set_report(self, now: datetime, **values) -> None:
+        try:
+            report = self.repo.get_meta_json(REPLAY_REPORT_KEY) or {}
+            self.repo.set_meta_json(REPLAY_REPORT_KEY, {**report, **values, "updated_at": now.isoformat(timespec="seconds")})
+        except Exception:
+            logger.exception("Writing the replay status failed")
+
+    def _stop_replay(self, now: datetime, why: str) -> None:
+        if self.replay_proc is None or self.replay_proc.poll() is not None:
+            return
+        self.replay_proc.terminate()
+        try:
+            self.replay_proc.wait(timeout=10)
+        except Exception:
+            self.replay_proc.kill()
+        self.replay_proc = None
+        self._set_report(now, status="stopped", error=why)
+
+    def handle_replay(self, now: datetime) -> None:
+        if self.replay_proc is not None:
+            code = self.replay_proc.poll()
+            if code is None:
+                return
+            self.replay_proc = None
+            if code != 0:
+                report = (self.repo.get_meta_json(REPLAY_REPORT_KEY) if self.repo else None) or {}
+                if report.get("status") not in ("error", "done"):
+                    self._set_report(now, status="error", error=f"the replay process exited with code {code}")
+        if not self.repo or self.proc is not None:
+            return                                   # queued: a replay never competes with a live session
+        try:
+            req = self.repo.get_meta_json(REPLAY_REQUEST_KEY)
+        except Exception:
+            logger.exception("Reading the replay request failed")
+            return
+        if not req or req.get("requested_at") == self._handled_replay:
+            return
+        self._handled_replay = req.get("requested_at")
+        report = self.repo.get_meta_json(REPLAY_REPORT_KEY) or {}
+        if report.get("status") != "queued" or report.get("request", {}).get("requested_at") != req.get("requested_at"):
+            return                                   # already run (a restarted supervisor sees the old request)
+        logger.info("Starting replay %s – %s", req.get("from"), req.get("to"))
+        self.replay_proc = self.spawn_replay()
 
     def _open_intraday_in_db(self) -> bool:
         if not self.repo:
@@ -223,6 +278,7 @@ class Supervisor:
                 self._start(now)
         elif self.proc is None and next_start(now, self.calendar, self.last_run, self._late_until(now)) <= now:
             self._start(now)
+        self.handle_replay(now)
         if (self.spawn_offhours and self.proc is None and now.time() >= EVENING_JOBS_AT
                 and self._offhours_day != now.date()):
             self._offhours_day = now.date()

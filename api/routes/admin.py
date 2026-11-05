@@ -438,6 +438,61 @@ def admin_exit_all(user: dict = Depends(require_admin), store: Store = Depends(g
     return _controls_view(store)
 
 
+# ── Replay recorded days with today's rules (run by the recorder: options/backtest/replay_job.py) ──
+
+REPLAY_STALE = timedelta(minutes=20)           # a running replay that hasn't reported for this long has died
+
+
+class ReplayBody(BaseModel):
+    start: date = Field(alias="from")
+    end: date = Field(alias="to")
+
+
+def _replay_view(store: Store) -> dict:
+    from options.backtest.replay_job import REPORT_KEY
+    report = store.get_meta_json(REPORT_KEY) or {"status": "none"}
+    stamp = report.get("updated_at") or report.get("started_at") or (report.get("request") or {}).get("requested_at")
+    if report.get("status") in ("queued", "running") and stamp:
+        try:
+            age = now_ist() - datetime.fromisoformat(stamp)
+            report["stalled"] = report["status"] == "running" and age > REPLAY_STALE
+        except ValueError:
+            pass
+    days = store.recorded_days()
+    rec = store.get_meta_json("recorder_status") or {}
+    return {"report": report, "recorded": {"first": days[0].isoformat() if days else None,
+                                           "last": days[-1].isoformat() if days else None, "days": len(days)},
+            "session_running": rec.get("state") == "running"}
+
+
+@router.get("/api/admin/replay")
+def admin_replay(_: dict = Depends(require_admin), store: Store = Depends(get_store)) -> dict:
+    return _replay_view(store)
+
+
+@router.post("/api/admin/replay")
+def admin_replay_start(body: ReplayBody, user: dict = Depends(require_admin), store: Store = Depends(get_store)) -> dict:
+    """Queue a replay of the recorded days in the range; the recorder runs it when no session is running."""
+    from options.backtest.replay_job import MAX_DAYS, REPORT_KEY, REQUEST_KEY
+    if body.end < body.start:
+        raise HTTPException(422, {"code": "invalid", "message": "The end date is before the start date."})
+    if (body.end - body.start).days > MAX_DAYS:
+        raise HTTPException(422, {"code": "invalid", "message": f"At most {MAX_DAYS} days in one replay."})
+    view = _replay_view(store)
+    if view["report"].get("status") in ("queued", "running") and not view["report"].get("stalled"):
+        raise HTTPException(409, {"code": "busy", "message": "A replay is already queued or running."})
+    days = [d for d in store.recorded_days() if body.start <= d <= body.end]
+    if not days:
+        raise HTTPException(422, {"code": "no_data", "message": "No recorded sessions in that range."})
+    now = now_ist()
+    request = {"from": body.start.isoformat(), "to": body.end.isoformat(), "by": user["username"],
+               "requested_at": now.isoformat(timespec="seconds"), "days": len(days)}
+    store.set_meta_json(REQUEST_KEY, request, now)
+    store.set_meta_json(REPORT_KEY, {"status": "queued", "request": request, "updated_at": request["requested_at"]}, now)
+    _audit(store, user, "replay_requested", f"{body.start} to {body.end} ({len(days)} recorded days)")
+    return _replay_view(store)
+
+
 # ── Alerts, audit log, recorder events ───────────────────────────────────────
 
 def _iso(row: dict, *keys: str) -> dict:
